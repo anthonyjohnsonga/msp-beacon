@@ -30,7 +30,7 @@ body { background: var(--bg0); color: var(--text0); font-family: -apple-system, 
 .app-header span { font-size: 20px; font-weight: 600; color: var(--g2); }
 .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 1rem 0 0.75rem; border-bottom: 1.5px solid var(--g5); margin-bottom: 1rem; }
 input[type=text] { height: 36px; padding: 0 10px; border-radius: 8px; border: 0.5px solid var(--border0); background: var(--bg2); color: var(--text0); font-size: 14px; font-family: inherit; }
-input[type=text]:focus { outline: none; border-color: var(--g4); box-shadow: 0 0 0 2px rgba(29,158,117,.2); }
+input[type=text]:focus { outline: none; border-color: var(--g4); box-shadow: 0 0 0 2px var(--g4-glow); }
 select { height: 36px; padding: 0 10px; border-radius: 8px; border: 0.5px solid var(--border0); background: var(--bg2); color: var(--text0); font-size: 14px; cursor: pointer; font-family: inherit; }
 select:focus { outline: none; border-color: var(--g4); }
 .toolbar input[type=text] { flex: 1; min-width: 160px; }
@@ -40,7 +40,7 @@ select:focus { outline: none; border-color: var(--g4); }
 .btn-primary:hover { background: var(--g6); }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; padding-bottom: 1.5rem; }
 .card { background: var(--bg1); border: 0.5px solid var(--border0); border-radius: 12px; padding: 14px; cursor: pointer; transition: border-color .15s; display: flex; flex-direction: column; gap: 8px; position: relative; text-decoration: none; }
-.card:hover { border-color: var(--g4); box-shadow: 0 0 0 2px rgba(29,158,117,.15); }
+.card:hover { border-color: var(--g4); box-shadow: 0 0 0 2px var(--g4-glow); }
 .card-top { display: flex; align-items: flex-start; gap: 10px; }
 .favicon { width: 28px; height: 28px; border-radius: 6px; background: var(--bg3); display: flex; align-items: center; justify-content: center; flex-shrink: 0; overflow: hidden; }
 .favicon img { width: 100%; height: 100%; object-fit: contain; }
@@ -268,7 +268,7 @@ function render() {
   let html = '';
   if (noF.length) html += `<div class="grid">${noF.map(cardHtml).join('')}</div>`;
   Object.keys(byF).sort().forEach(f => {
-    html += `<div class="folder-section"><div class="folder-header"><i class="ti ti-folder" style="font-size:16px;color:#1D9E75"></i><span class="folder-name">${esc(f)}</span><span class="count-pill">${byF[f].length}</span></div><div class="grid">${byF[f].map(cardHtml).join('')}</div></div>`;
+    html += `<div class="folder-section"><div class="folder-header"><i class="ti ti-folder" style="font-size:16px;color:var(--g4)"></i><span class="folder-name">${esc(f)}</span><span class="count-pill">${byF[f].length}</span></div><div class="grid">${byF[f].map(cardHtml).join('')}</div></div>`;
   });
   c.innerHTML = html;
 }
@@ -326,8 +326,9 @@ function saveLink() {
   } else {
     links.unshift({ id: Date.now().toString(36) + Math.random().toString(36).slice(2), url, title, desc, folder, tags });
   }
+  const wasEditing = !!editId;
   save(); closeModal(); render();
-  showToast(editId ? 'Link updated' : 'Link saved');
+  showToast(wasEditing ? 'Link updated' : 'Link saved');
 }
 function editLink(id) { openModal(id); }
 function deleteLink(id) {
@@ -395,12 +396,12 @@ function doImport() {
 }
 
 const THEMES = {
-  Green:  { g1:'#E1F5EE', g2:'#9FE1CB', g3:'#5DCAA5', g4:'#1D9E75', g5:'#0F6E56', g6:'#085041' },
-  Blue:   { g1:'#DBEAFE', g2:'#93C5FD', g3:'#60A5FA', g4:'#2563EB', g5:'#1E40AF', g6:'#1E3A8A' },
-  Purple: { g1:'#EDE9FE', g2:'#C4B5FD', g3:'#A78BFA', g4:'#7C3AED', g5:'#6D28D9', g6:'#4C1D95' },
-  Teal:   { g1:'#CCFBF1', g2:'#5EEAD4', g3:'#2DD4BF', g4:'#0D9488', g5:'#0F766E', g6:'#115E59' },
-  Orange: { g1:'#FEF3C7', g2:'#FCD34D', g3:'#F59E0B', g4:'#D97706', g5:'#B45309', g6:'#92400E' },
-  Red:    { g1:'#FEE2E2', g2:'#FCA5A5', g3:'#F87171', g4:'#DC2626', g5:'#B91C1C', g6:'#7F1D1D' },
+  Green:  { g1:'#E1F5EE', g2:'#9FE1CB', g3:'#5DCAA5', g4:'#1D9E75', g5:'#0F6E56', g6:'#085041', glow:'rgba(29,158,117,.15)' },
+  Blue:   { g1:'#DBEAFE', g2:'#93C5FD', g3:'#60A5FA', g4:'#2563EB', g5:'#1E40AF', g6:'#1E3A8A', glow:'rgba(37,99,235,.15)' },
+  Purple: { g1:'#EDE9FE', g2:'#C4B5FD', g3:'#A78BFA', g4:'#7C3AED', g5:'#6D28D9', g6:'#4C1D95', glow:'rgba(124,58,237,.15)' },
+  Teal:   { g1:'#CCFBF1', g2:'#5EEAD4', g3:'#2DD4BF', g4:'#0D9488', g5:'#0F766E', g6:'#115E59', glow:'rgba(13,148,136,.15)' },
+  Orange: { g1:'#FEF3C7', g2:'#FCD34D', g3:'#F59E0B', g4:'#D97706', g5:'#B45309', g6:'#92400E', glow:'rgba(217,119,6,.15)' },
+  Red:    { g1:'#FEE2E2', g2:'#FCA5A5', g3:'#F87171', g4:'#DC2626', g5:'#B91C1C', g6:'#7F1D1D', glow:'rgba(220,38,38,.15)' },
 };
 
 function applyTheme(name) {
@@ -408,6 +409,7 @@ function applyTheme(name) {
   const r = document.documentElement.style;
   r.setProperty('--g1', t.g1); r.setProperty('--g2', t.g2); r.setProperty('--g3', t.g3);
   r.setProperty('--g4', t.g4); r.setProperty('--g5', t.g5); r.setProperty('--g6', t.g6);
+  r.setProperty('--g4-glow', t.glow);
   localStorage.setItem('msp-theme', name);
   document.querySelectorAll('.theme-swatch').forEach(el => {
     el.classList.toggle('active', el.dataset.theme === name);
