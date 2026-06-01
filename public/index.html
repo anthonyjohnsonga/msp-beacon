@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MSP Beacon</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.6.0/dist/tabler-icons.min.css">
+<style>
+:root {
+  --bg0: #0d1117;
+  --bg1: #161b22;
+  --bg2: #1c2128;
+  --bg3: #21262d;
+  --g1: #E1F5EE;
+  --g2: #9FE1CB;
+  --g3: #5DCAA5;
+  --g4: #1D9E75;
+  --g5: #0F6E56;
+  --g6: #085041;
+  --text0: #e6edf3;
+  --text1: #8b949e;
+  --text2: #6e7681;
+  --border0: #30363d;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg0); color: var(--text0); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; }
+.container { max-width: 1200px; margin: 0 auto; padding: 0 1.5rem 3rem; }
+.app-header { display: flex; align-items: center; gap: 10px; padding: 1.25rem 0 0; margin-bottom: 4px; }
+.app-header i { font-size: 24px; color: var(--g3); }
+.app-header span { font-size: 20px; font-weight: 600; color: var(--g2); }
+.toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 1rem 0 0.75rem; border-bottom: 1.5px solid var(--g5); margin-bottom: 1rem; }
+input[type=text] { height: 36px; padding: 0 10px; border-radius: 8px; border: 0.5px solid var(--border0); background: var(--bg2); color: var(--text0); font-size: 14px; font-family: inherit; }
+input[type=text]:focus { outline: none; border-color: var(--g4); box-shadow: 0 0 0 2px rgba(29,158,117,.2); }
+select { height: 36px; padding: 0 10px; border-radius: 8px; border: 0.5px solid var(--border0); background: var(--bg2); color: var(--text0); font-size: 14px; cursor: pointer; font-family: inherit; }
+select:focus { outline: none; border-color: var(--g4); }
+.toolbar input[type=text] { flex: 1; min-width: 160px; }
+.btn { display: flex; align-items: center; gap: 6px; white-space: nowrap; padding: 0 14px; height: 36px; border-radius: 8px; border: 0.5px solid var(--border0); background: var(--bg2); color: var(--text0); font-size: 14px; cursor: pointer; font-weight: 500; font-family: inherit; }
+.btn:hover { background: var(--bg3); border-color: var(--g5); }
+.btn-primary { background: var(--g5); color: #fff; border-color: var(--g6); }
+.btn-primary:hover { background: var(--g6); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; padding-bottom: 1.5rem; }
+.card { background: var(--bg1); border: 0.5px solid var(--border0); border-radius: 12px; padding: 14px; cursor: pointer; transition: border-color .15s; display: flex; flex-direction: column; gap: 8px; position: relative; text-decoration: none; }
+.card:hover { border-color: var(--g4); box-shadow: 0 0 0 2px rgba(29,158,117,.15); }
+.card-top { display: flex; align-items: flex-start; gap: 10px; }
+.favicon { width: 28px; height: 28px; border-radius: 6px; background: var(--bg3); display: flex; align-items: center; justify-content: center; flex-shrink: 0; overflow: hidden; }
+.favicon img { width: 100%; height: 100%; object-fit: contain; }
+.favicon i { font-size: 14px; color: var(--g3); }
+.card-title { font-size: 14px; font-weight: 500; color: var(--text0); line-height: 1.3; word-break: break-word; }
+.card-url { font-size: 12px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card-desc { font-size: 13px; color: var(--text1); line-height: 1.5; }
+.card-footer { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: auto; padding-top: 4px; }
+.tag { font-size: 11px; padding: 3px 8px; border-radius: 20px; background: rgba(15,110,86,.25); color: var(--g2); border: 0.5px solid var(--g5); }
+.folder-badge { font-size: 11px; padding: 3px 8px; border-radius: 20px; background: rgba(15,110,86,.25); color: var(--g2); border: 0.5px solid var(--g5); margin-left: auto; display: flex; align-items: center; gap: 4px; }
+.card-actions { position: absolute; top: 8px; right: 8px; display: none; gap: 4px; }
+.card:hover .card-actions { display: flex; }
+.icon-btn { width: 26px; height: 26px; border-radius: 8px; border: 0.5px solid var(--g5); background: var(--bg2); color: var(--g3); display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 13px; }
+.icon-btn:hover { background: var(--g5); color: #fff; }
+.empty { text-align: center; padding: 4rem 1rem; color: var(--text2); font-size: 14px; }
+.empty i { font-size: 36px; display: block; margin-bottom: 10px; color: var(--g5); }
+.folder-section { margin-bottom: 1.5rem; }
+.folder-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding: 6px 10px; background: rgba(15,110,86,.15); border-radius: 8px; border: 0.5px solid var(--g5); }
+.folder-name { font-size: 13px; font-weight: 500; color: var(--g2); }
+.count-pill { font-size: 11px; padding: 1px 7px; border-radius: 20px; background: var(--g5); color: #fff; }
+.modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: flex; align-items: center; justify-content: center; z-index: 100; }
+.modal { background: var(--bg1); border-radius: 12px; border: 1px solid var(--g5); padding: 1.25rem; width: min(460px, 92vw); display: flex; flex-direction: column; gap: 12px; max-height: 90vh; overflow-y: auto; }
+.modal-header { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--g6); padding-bottom: 10px; }
+.modal-header i { font-size: 18px; color: var(--g3); }
+.modal h3 { font-size: 16px; font-weight: 500; color: var(--g2); }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field label { font-size: 11px; color: var(--g3); font-weight: 500; text-transform: uppercase; letter-spacing: .06em; }
+.field input[type=text], .field select { width: 100%; }
+.field textarea { width: 100%; height: 72px; resize: vertical; padding: 8px 10px; border-radius: 8px; border: 0.5px solid var(--border0); background: var(--bg2); color: var(--text0); font-size: 14px; font-family: inherit; }
+.field textarea:focus { outline: none; border-color: var(--g4); }
+.modal-footer { display: flex; gap: 8px; justify-content: flex-end; padding-top: 4px; border-top: 0.5px solid var(--bg3); margin-top: 4px; }
+.import-drop { border: 1.5px dashed var(--g5); border-radius: 12px; padding: 2rem 1rem; text-align: center; cursor: pointer; color: var(--text1); font-size: 14px; transition: border-color .15s, background .15s; }
+.import-drop:hover, .import-drop.drag { border-color: var(--g3); background: rgba(15,110,86,.1); }
+.import-drop i { font-size: 28px; display: block; margin-bottom: 8px; color: var(--g3); }
+.import-preview { max-height: 200px; overflow-y: auto; border: 0.5px solid var(--g5); border-radius: 8px; }
+.import-row { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-bottom: 0.5px solid var(--bg3); }
+.import-row:last-child { border-bottom: none; }
+.import-row:nth-child(odd) { background: rgba(255,255,255,.02); }
+.import-row input[type=checkbox] { width: 14px; height: 14px; cursor: pointer; flex-shrink: 0; accent-color: var(--g4); }
+.import-row-info { min-width: 0; flex: 1; }
+.import-row-title { font-size: 13px; color: var(--text0); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.import-row-url { font-size: 11px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.import-row-folder { font-size: 11px; padding: 1px 6px; border-radius: 20px; background: rgba(15,110,86,.25); color: var(--g2); border: 0.5px solid var(--g4); flex-shrink: 0; }
+.import-actions { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--text1); }
+.import-actions a { cursor: pointer; color: var(--g3); text-decoration: none; }
+.import-actions a:hover { text-decoration: underline; }
+.notice { font-size: 12px; color: var(--g2); padding: 8px 12px; background: rgba(15,110,86,.15); border-radius: 8px; display: flex; align-items: center; gap: 8px; border: 0.5px solid var(--g5); }
+.notice i { color: var(--g3); flex-shrink: 0; }
+.toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: var(--bg1); border: 1px solid var(--g5); color: var(--g2); padding: 10px 16px; border-radius: 8px; font-size: 14px; display: flex; align-items: center; gap: 8px; z-index: 200; opacity: 0; transition: opacity .2s; pointer-events: none; }
+.toast.show { opacity: 1; }
+.saving-indicator { font-size: 12px; color: var(--text2); display: flex; align-items: center; gap: 4px; margin-left: auto; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="app-header">
+    <i class="ti ti-bookmarks"></i>
+    <span>MSP Beacon</span>
+    <div class="saving-indicator" id="saveStatus"></div>
+  </div>
+  <div class="toolbar">
+    <input type="text" id="search" placeholder="Search links…" oninput="render()">
+    <select id="folderFilter" onchange="render()"><option value="">All folders</option></select>
+    <select id="tagFilter" onchange="render()"><option value="">All tags</option></select>
+    <button class="btn btn-primary" onclick="openModal()"><i class="ti ti-plus"></i> Add link</button>
+    <button class="btn" onclick="openImport()"><i class="ti ti-file-import"></i> Import</button>
+  </div>
+  <div id="content"></div>
+</div>
+
+<div id="modalBg" class="modal-bg" style="display:none" onclick="if(event.target===this)closeModal()">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-header"><i class="ti ti-link"></i><h3 id="modalTitle">Add link</h3></div>
+    <div class="field"><label>URL</label><input type="text" id="mUrl" placeholder="https://…" oninput="autoTitle()"></div>
+    <div class="field"><label>Title</label><input type="text" id="mTitle" placeholder="Site name"></div>
+    <div class="field"><label>Description</label><textarea id="mDesc" placeholder="What is this?"></textarea></div>
+    <div class="field"><label>Folder</label>
+      <div style="display:flex;gap:8px">
+        <select id="mFolder" style="flex:1"></select>
+        <input type="text" id="mNewFolder" placeholder="New folder…" style="flex:1">
+      </div>
+    </div>
+    <div class="field"><label>Tags (comma separated)</label><input type="text" id="mTags" placeholder="e.g. tools, dev, reference"></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveLink()"><i class="ti ti-check"></i> Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="importBg" class="modal-bg" style="display:none" onclick="if(event.target===this)closeImport()">
+  <div class="modal" role="dialog" aria-modal="true" style="width:min(540px,92vw)">
+    <div class="modal-header"><i class="ti ti-file-import"></i><h3>Import bookmarks</h3></div>
+    <div class="notice"><i class="ti ti-info-circle"></i> Export from Chrome, Edge, or Firefox as an HTML file, then drop it here.</div>
+    <div id="dropZone" class="import-drop" onclick="document.getElementById('fileIn').click()" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="handleDrop(event)">
+      <i class="ti ti-upload"></i>
+      Drop your bookmarks.html here<br><span style="font-size:12px;color:var(--text2)">or click to browse</span>
+    </div>
+    <input type="file" id="fileIn" accept=".html,.htm" style="display:none" onchange="handleFile(this.files[0])">
+    <div id="importPreviewWrap" style="display:none;flex-direction:column;gap:8px">
+      <div class="import-actions">
+        <span id="importCount" style="font-weight:500;color:var(--g2)"></span>&nbsp;
+        <a onclick="toggleAll(true)">Select all</a> · <a onclick="toggleAll(false)">Deselect all</a>
+      </div>
+      <div id="importPreview" class="import-preview"></div>
+      <div class="field"><label>Put all imports in folder (optional)</label>
+        <div style="display:flex;gap:8px">
+          <select id="impFolder" style="flex:1"><option value="">No folder</option></select>
+          <input type="text" id="impNewFolder" placeholder="New folder…" style="flex:1">
+        </div>
+      </div>
+      <div class="field"><label>Add tags to all imports (optional)</label>
+        <input type="text" id="impTags" placeholder="e.g. imported, bookmarks">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeImport()">Cancel</button>
+      <button class="btn btn-primary" id="importBtn" style="display:none" onclick="doImport()"><i class="ti ti-file-import"></i> Import selected</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"><i class="ti ti-check"></i> <span id="toastMsg"></span></div>
+
+<script>
+let links = [];
+let editId = null;
+let parsedBookmarks = [];
+let saveTimer = null;
+
+async function loadLinks() {
+  try {
+    const res = await fetch('/api/links');
+    links = await res.json();
+    render();
+  } catch(e) {
+    console.error('Failed to load links', e);
+    showToast('Failed to load links from server', true);
+  }
+}
+
+async function save() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    const status = document.getElementById('saveStatus');
+    status.innerHTML = '<i class="ti ti-loader" style="animation:spin 1s linear infinite"></i> Saving…';
+    try {
+      await fetch('/api/links', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(links)
+      });
+      status.innerHTML = '<i class="ti ti-circle-check" style="color:var(--g3)"></i> Saved';
+      setTimeout(() => status.innerHTML = '', 2000);
+    } catch(e) {
+      status.innerHTML = '<i class="ti ti-alert-circle" style="color:#E24B4A"></i> Save failed';
+    }
+  }, 400);
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  document.getElementById('toastMsg').textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function getFavicon(u) { try { return 'https://www.google.com/s2/favicons?domain=' + new URL(u).hostname + '&sz=64'; } catch { return null; } }
+function getDomain(u) { try { return new URL(u).hostname.replace('www.', ''); } catch { return u; } }
+function esc(s) { if (!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function allFolders() { return [...new Set(links.map(l => l.folder).filter(Boolean))].sort(); }
+function allTags() { return [...new Set(links.flatMap(l => l.tags))].sort(); }
+
+function render() {
+  const q = document.getElementById('search').value.toLowerCase();
+  const ff = document.getElementById('folderFilter').value;
+  const tf = document.getElementById('tagFilter').value;
+  const fs = document.getElementById('folderFilter'), ts = document.getElementById('tagFilter');
+  fs.innerHTML = '<option value="">All folders</option>' + allFolders().map(f => `<option value="${esc(f)}"${f===ff?' selected':''}>${esc(f)}</option>`).join('');
+  ts.innerHTML = '<option value="">All tags</option>' + allTags().map(t => `<option value="${esc(t)}"${t===tf?' selected':''}>${esc(t)}</option>`).join('');
+  let fil = links.filter(l => {
+    if (ff && l.folder !== ff) return false;
+    if (tf && !l.tags.includes(tf)) return false;
+    if (q && !((l.title+l.url+l.desc+(l.folder||'')+(l.tags||[]).join(' ')).toLowerCase().includes(q))) return false;
+    return true;
+  });
+  const c = document.getElementById('content');
+  if (!fil.length) {
+    c.innerHTML = `<div class="empty"><i class="ti ti-bookmarks"></i>${links.length ? 'No results match your filters.' : 'No links yet — click <strong>Add link</strong> or <strong>Import</strong> to get started.'}</div>`;
+    return;
+  }
+  if (ff || q || tf) { c.innerHTML = `<div class="grid">${fil.map(cardHtml).join('')}</div>`; return; }
+  const byF = {}, noF = [];
+  fil.forEach(l => { l.folder ? (byF[l.folder] = byF[l.folder] || [], byF[l.folder].push(l)) : noF.push(l); });
+  let html = '';
+  if (noF.length) html += `<div class="grid">${noF.map(cardHtml).join('')}</div>`;
+  Object.keys(byF).sort().forEach(f => {
+    html += `<div class="folder-section"><div class="folder-header"><i class="ti ti-folder" style="font-size:16px;color:#1D9E75"></i><span class="folder-name">${esc(f)}</span><span class="count-pill">${byF[f].length}</span></div><div class="grid">${byF[f].map(cardHtml).join('')}</div></div>`;
+  });
+  c.innerHTML = html;
+}
+
+function cardHtml(l) {
+  const fav = getFavicon(l.url);
+  const fi = fav ? `<img src="${fav}" alt="" onerror="this.style.display='none';this.nextSibling.style.display='flex'"><span style="display:none"><i class="ti ti-world"></i></span>` : `<i class="ti ti-world"></i>`;
+  return `<div class="card" onclick="window.open('${esc(l.url)}','_blank')">
+    <div class="card-actions">
+      <button class="icon-btn" title="Edit" onclick="event.stopPropagation();editLink('${l.id}')"><i class="ti ti-edit"></i></button>
+      <button class="icon-btn" title="Delete" onclick="event.stopPropagation();deleteLink('${l.id}')"><i class="ti ti-trash"></i></button>
+    </div>
+    <div class="card-top"><div class="favicon">${fi}</div>
+      <div style="min-width:0"><div class="card-title">${esc(l.title)}</div><div class="card-url">${esc(getDomain(l.url))}</div></div>
+    </div>
+    ${l.desc ? `<div class="card-desc">${esc(l.desc)}</div>` : ''}
+    <div class="card-footer">
+      ${l.tags.map(t => `<span class="tag">${esc(t)}</span>`).join('')}
+      ${l.folder ? `<span class="folder-badge"><i class="ti ti-folder" style="font-size:11px"></i> ${esc(l.folder)}</span>` : ''}
+    </div>
+  </div>`;
+}
+
+function openModal(id) {
+  editId = id || null;
+  const l = id ? links.find(x => x.id === id) : null;
+  document.getElementById('modalTitle').textContent = l ? 'Edit link' : 'Add link';
+  document.getElementById('mUrl').value = l ? l.url : '';
+  document.getElementById('mTitle').value = l ? l.title : '';
+  document.getElementById('mDesc').value = l ? l.desc : '';
+  document.getElementById('mTags').value = l ? l.tags.join(', ') : '';
+  document.getElementById('mNewFolder').value = '';
+  const mf = document.getElementById('mFolder');
+  mf.innerHTML = '<option value="">No folder</option>' + allFolders().map(f => `<option value="${esc(f)}"${l&&l.folder===f?' selected':''}>${esc(f)}</option>`).join('');
+  document.getElementById('modalBg').style.display = 'flex';
+  setTimeout(() => document.getElementById('mUrl').focus(), 50);
+}
+function closeModal() { document.getElementById('modalBg').style.display = 'none'; editId = null; }
+function autoTitle() {
+  const u = document.getElementById('mUrl').value.trim();
+  const t = document.getElementById('mTitle');
+  if (!t.value && u) { try { t.value = new URL(u).hostname.replace('www.', ''); } catch {} }
+}
+function saveLink() {
+  const url = document.getElementById('mUrl').value.trim();
+  const title = document.getElementById('mTitle').value.trim();
+  if (!url || !title) { alert('URL and title are required.'); return; }
+  const nf = document.getElementById('mNewFolder').value.trim();
+  const folder = nf || document.getElementById('mFolder').value || '';
+  const tags = document.getElementById('mTags').value.split(',').map(t => t.trim()).filter(Boolean);
+  const desc = document.getElementById('mDesc').value.trim();
+  if (editId) {
+    const i = links.findIndex(l => l.id === editId);
+    if (i > -1) links[i] = { ...links[i], url, title, desc, folder, tags };
+  } else {
+    links.unshift({ id: Date.now().toString(36) + Math.random().toString(36).slice(2), url, title, desc, folder, tags });
+  }
+  save(); closeModal(); render();
+  showToast(editId ? 'Link updated' : 'Link saved');
+}
+function editLink(id) { openModal(id); }
+function deleteLink(id) {
+  if (!confirm('Delete this link?')) return;
+  links = links.filter(l => l.id !== id);
+  save(); render(); showToast('Link deleted');
+}
+
+function openImport() {
+  parsedBookmarks = [];
+  document.getElementById('importPreviewWrap').style.display = 'none';
+  document.getElementById('importBtn').style.display = 'none';
+  document.getElementById('dropZone').style.display = '';
+  document.getElementById('fileIn').value = '';
+  document.getElementById('impTags').value = '';
+  document.getElementById('impNewFolder').value = '';
+  const fs = document.getElementById('impFolder');
+  fs.innerHTML = '<option value="">No folder</option>' + allFolders().map(f => `<option value="${esc(f)}">${esc(f)}</option>`).join('');
+  document.getElementById('importBg').style.display = 'flex';
+}
+function closeImport() { document.getElementById('importBg').style.display = 'none'; }
+function handleDrop(e) { e.preventDefault(); document.getElementById('dropZone').classList.remove('drag'); const f = e.dataTransfer.files[0]; if (f) handleFile(f); }
+function handleFile(file) { if (!file) return; const r = new FileReader(); r.onload = e => parseBookmarks(e.target.result); r.readAsText(file); }
+function parseBookmarks(html) {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const res = [];
+  function walk(dl, path) {
+    for (const ch of (dl ? dl.children : [])) {
+      if (ch.tagName !== 'DT') continue;
+      const a = ch.querySelector(':scope > A'), h3 = ch.querySelector(':scope > H3'), dl2 = ch.querySelector(':scope > DL');
+      if (a) { const u = a.getAttribute('HREF') || '', t = a.textContent.trim() || getDomain(u); if (u && !u.startsWith('javascript:') && !u.startsWith('place:')) res.push({ url: u, title: t, folder: path }); }
+      else if (h3 && dl2) { const n = h3.textContent.trim(); const skip = ['Bookmarks bar','Bookmarks Bar','Bookmarks toolbar','Bookmarks Toolbar','Other bookmarks','Other Bookmarks','Mobile bookmarks','Mobile Bookmarks']; walk(dl2, skip.includes(n) ? path : (path ? path + ' / ' + n : n)); }
+    }
+  }
+  walk(doc.querySelector('DL'), '');
+  if (!res.length) { alert('No bookmarks found. Make sure this is a valid browser bookmark export.'); return; }
+  parsedBookmarks = res; showPreview();
+}
+function showPreview() {
+  document.getElementById('dropZone').style.display = 'none';
+  document.getElementById('importPreviewWrap').style.display = 'flex';
+  document.getElementById('importBtn').style.display = 'flex';
+  document.getElementById('importCount').textContent = parsedBookmarks.length + ' bookmarks found';
+  document.getElementById('importPreview').innerHTML = parsedBookmarks.map((b, i) => `
+    <div class="import-row"><input type="checkbox" id="imp_${i}" checked>
+      <div class="import-row-info"><div class="import-row-title">${esc(b.title)}</div><div class="import-row-url">${esc(b.url)}</div></div>
+      ${b.folder ? `<span class="import-row-folder">${esc(b.folder)}</span>` : ''}
+    </div>`).join('');
+}
+function toggleAll(v) { parsedBookmarks.forEach((_, i) => { const c = document.getElementById('imp_' + i); if (c) c.checked = v; }); }
+function doImport() {
+  const of2 = document.getElementById('impNewFolder').value.trim() || document.getElementById('impFolder').value || '';
+  const et = document.getElementById('impTags').value.split(',').map(t => t.trim()).filter(Boolean);
+  const eu = new Set(links.map(l => l.url));
+  let added = 0, skipped = 0;
+  parsedBookmarks.forEach((b, i) => {
+    const cb = document.getElementById('imp_' + i);
+    if (!cb || !cb.checked) return;
+    if (eu.has(b.url)) { skipped++; return; }
+    links.unshift({ id: Date.now().toString(36) + Math.random().toString(36).slice(2) + i, url: b.url, title: b.title, desc: '', folder: of2 || b.folder || '', tags: [...et] });
+    eu.add(b.url); added++;
+  });
+  save(); closeImport(); render();
+  showToast(`${added} links imported${skipped ? ', ' + skipped + ' duplicates skipped' : ''}`);
+}
+
+const style = document.createElement('style');
+style.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
+document.head.appendChild(style);
+
+loadLinks();
+</script>
+</body>
+</html>
