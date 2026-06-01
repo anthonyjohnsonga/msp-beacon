@@ -21,6 +21,7 @@
   --text1: #8b949e;
   --text2: #6e7681;
   --border0: #30363d;
+  --g4-glow: rgba(29,158,117,.15);
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { background: var(--bg0); color: var(--text0); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; }
@@ -121,7 +122,7 @@ select:focus { outline: none; border-color: var(--g4); }
   <div class="toolbar">
     <div class="search-wrap">
       <i class="ti ti-search search-icon"></i>
-      <input type="text" id="search" placeholder="Search links\u2026 (press /)" oninput="render()">
+      <input type="text" id="search" placeholder="Search links… (press /)" oninput="render()">
       <button class="search-clear" id="searchClear" style="display:none" onclick="clearSearch()"><i class="ti ti-x"></i></button>
     </div>
     <select id="folderFilter" onchange="render()"><option value="">All folders</option></select>
@@ -142,13 +143,13 @@ select:focus { outline: none; border-color: var(--g4); }
 <div id="modalBg" class="modal-bg" style="display:none" onclick="if(event.target===this)closeModal()">
   <div class="modal" role="dialog" aria-modal="true">
     <div class="modal-header"><i class="ti ti-link"></i><h3 id="modalTitle">Add link</h3></div>
-    <div class="field"><label>URL</label><input type="text" id="mUrl" placeholder="https://\u2026" oninput="autoTitle()"></div>
+    <div class="field"><label>URL</label><input type="text" id="mUrl" placeholder="https://…" oninput="autoTitle()"></div>
     <div class="field"><label>Title</label><input type="text" id="mTitle" placeholder="Site name"></div>
     <div class="field"><label>Description</label><textarea id="mDesc" placeholder="What is this?"></textarea></div>
     <div class="field"><label>Folder</label>
       <div style="display:flex;gap:8px">
         <select id="mFolder" style="flex:1"></select>
-        <input type="text" id="mNewFolder" placeholder="New folder\u2026" style="flex:1">
+        <input type="text" id="mNewFolder" placeholder="New folder…" style="flex:1">
       </div>
     </div>
     <div class="field"><label>Tags (comma separated)</label><input type="text" id="mTags" placeholder="e.g. tools, dev, reference"></div>
@@ -171,13 +172,13 @@ select:focus { outline: none; border-color: var(--g4); }
     <div id="importPreviewWrap" style="display:none;flex-direction:column;gap:8px">
       <div class="import-actions">
         <span id="importCount" style="font-weight:500;color:var(--g2)"></span>&nbsp;
-        <a onclick="toggleAll(true)">Select all</a> \u00b7 <a onclick="toggleAll(false)">Deselect all</a>
+        <a onclick="toggleAll(true)">Select all</a> · <a onclick="toggleAll(false)">Deselect all</a>
       </div>
       <div id="importPreview" class="import-preview"></div>
       <div class="field"><label>Put all imports in folder (optional)</label>
         <div style="display:flex;gap:8px">
           <select id="impFolder" style="flex:1"><option value="">No folder</option></select>
-          <input type="text" id="impNewFolder" placeholder="New folder\u2026" style="flex:1">
+          <input type="text" id="impNewFolder" placeholder="New folder…" style="flex:1">
         </div>
       </div>
       <div class="field"><label>Add tags to all imports (optional)</label>
@@ -224,7 +225,7 @@ async function save() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(async () => {
     const status = document.getElementById('saveStatus');
-    status.innerHTML = '<i class="ti ti-loader" style="animation:spin 1s linear infinite"></i> Saving\u2026';
+    status.innerHTML = '<i class="ti ti-loader" style="animation:spin 1s linear infinite"></i> Saving…';
     try {
       await fetch('/api/links', {
         method: 'POST',
@@ -250,7 +251,7 @@ function getFavicon(u) { try { return 'https://www.google.com/s2/favicons?domain
 function getDomain(u) { try { return new URL(u).hostname.replace('www.', ''); } catch { return u; } }
 function esc(s) { if (!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function allFolders() { return [...new Set(links.map(l => l.folder).filter(Boolean))].sort(); }
-function allTags() { return [...new Set(links.flatMap(l => l.tags))].sort(); }
+function allTags() { return [...new Set(links.flatMap(l => l.tags || []))].sort(); }
 
 function render() {
   const q = document.getElementById('search').value.toLowerCase();
@@ -263,13 +264,13 @@ function render() {
   ts.innerHTML = '<option value="">All tags</option>' + allTags().map(t => `<option value="${esc(t)}"${t===tf?' selected':''}>${esc(t)}</option>`).join('');
   let fil = links.filter(l => {
     if (ff && l.folder !== ff) return false;
-    if (tf && !l.tags.includes(tf)) return false;
+    if (tf && !(l.tags || []).includes(tf)) return false;
     if (q && !((l.title+l.url+l.desc+(l.folder||'')+(l.tags||[]).join(' ')).toLowerCase().includes(q))) return false;
     return true;
   });
   const c = document.getElementById('content');
   if (!fil.length) {
-    c.innerHTML = `<div class="empty"><i class="ti ti-bookmarks"></i>${links.length ? 'No results match your filters.' : 'No links yet \u2014 click <strong>Add link</strong> or <strong>Import</strong> to get started.'}</div>`;
+    c.innerHTML = `<div class="empty"><i class="ti ti-bookmarks"></i>${links.length ? 'No results match your filters.' : 'No links yet — click <strong>Add link</strong> or <strong>Import</strong> to get started.'}</div>`;
     return;
   }
   if (ff || q || tf) { c.innerHTML = `<div class="grid">${fil.map(cardHtml).join('')}</div>`; return; }
@@ -296,7 +297,7 @@ function cardHtml(l) {
     </div>
     ${l.desc ? `<div class="card-desc">${esc(l.desc)}</div>` : ''}
     <div class="card-footer">
-      ${l.tags.map(t => `<span class="tag">${esc(t)}</span>`).join('')}
+      ${(l.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('')}
       ${l.folder ? `<span class="folder-badge"><i class="ti ti-folder" style="font-size:11px"></i> ${esc(l.folder)}</span>` : ''}
     </div>
   </div>`;
@@ -309,7 +310,7 @@ function openModal(id) {
   document.getElementById('mUrl').value = l ? l.url : '';
   document.getElementById('mTitle').value = l ? l.title : '';
   document.getElementById('mDesc').value = l ? l.desc : '';
-  document.getElementById('mTags').value = l ? l.tags.join(', ') : '';
+  document.getElementById('mTags').value = l ? (l.tags || []).join(', ') : '';
   document.getElementById('mNewFolder').value = '';
   const mf = document.getElementById('mFolder');
   mf.innerHTML = '<option value="">No folder</option>' + allFolders().map(f => `<option value="${esc(f)}"${l&&l.folder===f?' selected':''}>${esc(f)}</option>`).join('');
