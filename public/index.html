@@ -213,7 +213,8 @@ let saveTimer = null;
 async function loadLinks() {
   try {
     const res = await fetch('/api/links');
-    links = await res.json();
+    const data = await res.json();
+    links = Array.isArray(data) ? data : [];
     render();
   } catch(e) {
     console.error('Failed to load links', e);
@@ -240,9 +241,11 @@ async function save() {
   }, 400);
 }
 
-function showToast(msg) {
+function showToast(msg, isError) {
   const t = document.getElementById('toast');
   document.getElementById('toastMsg').textContent = msg;
+  t.style.borderColor = isError ? '#E24B4A' : '';
+  t.style.color = isError ? '#E24B4A' : '';
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2500);
 }
@@ -264,7 +267,7 @@ function render() {
   ts.innerHTML = '<option value="">All tags</option>' + allTags().map(t => `<option value="${esc(t)}"${t===tf?' selected':''}>${esc(t)}</option>`).join('');
   let fil = links.filter(l => {
     if (ff && l.folder !== ff) return false;
-    if (tf && !(l.tags || []).includes(tf)) return false;
+    if (tf && !(l.tags || []).some(t => t.toLowerCase() === tf.toLowerCase())) return false;
     if (q && !((l.title+l.url+l.desc+(l.folder||'')+(l.tags||[]).join(' ')).toLowerCase().includes(q))) return false;
     return true;
   });
@@ -370,7 +373,7 @@ function parseBookmarks(html) {
     for (const ch of (dl ? dl.children : [])) {
       if (ch.tagName !== 'DT') continue;
       const a = ch.querySelector(':scope > A'), h3 = ch.querySelector(':scope > H3'), dl2 = ch.querySelector(':scope > DL');
-      if (a) { const u = a.getAttribute('HREF') || '', t = a.textContent.trim() || getDomain(u); if (u && !u.startsWith('javascript:') && !u.startsWith('place:')) res.push({ url: u, title: t, folder: path }); }
+      if (a) { const u = a.getAttribute('HREF') || '', t = a.textContent.trim() || getDomain(u); if (u && !u.startsWith('javascript:') && !u.startsWith('place:') && !u.startsWith('data:')) res.push({ url: u, title: t, folder: path }); }
       else if (h3 && dl2) { const n = h3.textContent.trim(); const skip = ['Bookmarks bar','Bookmarks Bar','Bookmarks toolbar','Bookmarks Toolbar','Other bookmarks','Other Bookmarks','Mobile bookmarks','Mobile Bookmarks']; walk(dl2, skip.includes(n) ? path : (path ? path + ' / ' + n : n)); }
     }
   }
@@ -478,9 +481,10 @@ function exportLinks() {
   let inner = '';
   folders.forEach(f => {
     const items = rows.filter(r => r.folder === f);
-    const itemsHtml = items.map(r => `        <DT><A HREF="${r.url}">${r.title.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</A>`).join('\n');
+    const xmlEsc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    const itemsHtml = items.map(r => `        <DT><A HREF="${xmlEsc(r.url)}">${xmlEsc(r.title)}</A>`).join('\n');
     if (f) {
-      inner += `    <DT><H3>${f.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</H3>\n    <DL><p>\n${itemsHtml}\n    </DL><p>\n`;
+      inner += `    <DT><H3>${xmlEsc(f)}</H3>\n    <DL><p>\n${itemsHtml}\n    </DL><p>\n`;
     } else {
       inner += itemsHtml + '\n';
     }
