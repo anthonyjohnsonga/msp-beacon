@@ -33,7 +33,11 @@ input[type=text] { height: 36px; padding: 0 10px; border-radius: 8px; border: 0.
 input[type=text]:focus { outline: none; border-color: var(--g4); box-shadow: 0 0 0 2px var(--g4-glow); }
 select { height: 36px; padding: 0 10px; border-radius: 8px; border: 0.5px solid var(--border0); background: var(--bg2); color: var(--text0); font-size: 14px; cursor: pointer; font-family: inherit; }
 select:focus { outline: none; border-color: var(--g4); }
-.toolbar input[type=text] { flex: 1; min-width: 160px; }
+.search-wrap { position: relative; display: flex; align-items: center; flex: 1; min-width: 160px; }
+.search-wrap input[type=text] { width: 100%; padding-left: 32px; padding-right: 30px; }
+.search-icon { position: absolute; left: 10px; font-size: 15px; color: var(--text2); pointer-events: none; }
+.search-clear { position: absolute; right: 6px; width: 22px; height: 22px; border-radius: 50%; border: none; background: var(--bg3); color: var(--text1); display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 12px; padding: 0; }
+.search-clear:hover { background: var(--g5); color: #fff; }
 .btn { display: flex; align-items: center; gap: 6px; white-space: nowrap; padding: 0 14px; height: 36px; border-radius: 8px; border: 0.5px solid var(--border0); background: var(--bg2); color: var(--text0); font-size: 14px; cursor: pointer; font-weight: 500; font-family: inherit; }
 .btn:hover { background: var(--bg3); border-color: var(--g5); }
 .btn-primary { background: var(--g5); color: #fff; border-color: var(--g6); }
@@ -115,7 +119,11 @@ select:focus { outline: none; border-color: var(--g4); }
     <div class="saving-indicator" id="saveStatus"></div>
   </div>
   <div class="toolbar">
-    <input type="text" id="search" placeholder="Search links…" oninput="render()">
+    <div class="search-wrap">
+      <i class="ti ti-search search-icon"></i>
+      <input type="text" id="search" placeholder="Search links\u2026 (press /)" oninput="render()">
+      <button class="search-clear" id="searchClear" style="display:none" onclick="clearSearch()"><i class="ti ti-x"></i></button>
+    </div>
     <select id="folderFilter" onchange="render()"><option value="">All folders</option></select>
     <select id="tagFilter" onchange="render()"><option value="">All tags</option></select>
     <button class="btn btn-primary" onclick="openModal()"><i class="ti ti-plus"></i> Add link</button>
@@ -134,13 +142,13 @@ select:focus { outline: none; border-color: var(--g4); }
 <div id="modalBg" class="modal-bg" style="display:none" onclick="if(event.target===this)closeModal()">
   <div class="modal" role="dialog" aria-modal="true">
     <div class="modal-header"><i class="ti ti-link"></i><h3 id="modalTitle">Add link</h3></div>
-    <div class="field"><label>URL</label><input type="text" id="mUrl" placeholder="https://…" oninput="autoTitle()"></div>
+    <div class="field"><label>URL</label><input type="text" id="mUrl" placeholder="https://\u2026" oninput="autoTitle()"></div>
     <div class="field"><label>Title</label><input type="text" id="mTitle" placeholder="Site name"></div>
     <div class="field"><label>Description</label><textarea id="mDesc" placeholder="What is this?"></textarea></div>
     <div class="field"><label>Folder</label>
       <div style="display:flex;gap:8px">
         <select id="mFolder" style="flex:1"></select>
-        <input type="text" id="mNewFolder" placeholder="New folder…" style="flex:1">
+        <input type="text" id="mNewFolder" placeholder="New folder\u2026" style="flex:1">
       </div>
     </div>
     <div class="field"><label>Tags (comma separated)</label><input type="text" id="mTags" placeholder="e.g. tools, dev, reference"></div>
@@ -163,13 +171,13 @@ select:focus { outline: none; border-color: var(--g4); }
     <div id="importPreviewWrap" style="display:none;flex-direction:column;gap:8px">
       <div class="import-actions">
         <span id="importCount" style="font-weight:500;color:var(--g2)"></span>&nbsp;
-        <a onclick="toggleAll(true)">Select all</a> · <a onclick="toggleAll(false)">Deselect all</a>
+        <a onclick="toggleAll(true)">Select all</a> \u00b7 <a onclick="toggleAll(false)">Deselect all</a>
       </div>
       <div id="importPreview" class="import-preview"></div>
       <div class="field"><label>Put all imports in folder (optional)</label>
         <div style="display:flex;gap:8px">
           <select id="impFolder" style="flex:1"><option value="">No folder</option></select>
-          <input type="text" id="impNewFolder" placeholder="New folder…" style="flex:1">
+          <input type="text" id="impNewFolder" placeholder="New folder\u2026" style="flex:1">
         </div>
       </div>
       <div class="field"><label>Add tags to all imports (optional)</label>
@@ -216,7 +224,7 @@ async function save() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(async () => {
     const status = document.getElementById('saveStatus');
-    status.innerHTML = '<i class="ti ti-loader" style="animation:spin 1s linear infinite"></i> Saving…';
+    status.innerHTML = '<i class="ti ti-loader" style="animation:spin 1s linear infinite"></i> Saving\u2026';
     try {
       await fetch('/api/links', {
         method: 'POST',
@@ -246,6 +254,8 @@ function allTags() { return [...new Set(links.flatMap(l => l.tags))].sort(); }
 
 function render() {
   const q = document.getElementById('search').value.toLowerCase();
+  const clearBtn = document.getElementById('searchClear');
+  if (clearBtn) clearBtn.style.display = q ? '' : 'none';
   const ff = document.getElementById('folderFilter').value;
   const tf = document.getElementById('tagFilter').value;
   const fs = document.getElementById('folderFilter'), ts = document.getElementById('tagFilter');
@@ -259,7 +269,7 @@ function render() {
   });
   const c = document.getElementById('content');
   if (!fil.length) {
-    c.innerHTML = `<div class="empty"><i class="ti ti-bookmarks"></i>${links.length ? 'No results match your filters.' : 'No links yet — click <strong>Add link</strong> or <strong>Import</strong> to get started.'}</div>`;
+    c.innerHTML = `<div class="empty"><i class="ti ti-bookmarks"></i>${links.length ? 'No results match your filters.' : 'No links yet \u2014 click <strong>Add link</strong> or <strong>Import</strong> to get started.'}</div>`;
     return;
   }
   if (ff || q || tf) { c.innerHTML = `<div class="grid">${fil.map(cardHtml).join('')}</div>`; return; }
@@ -437,8 +447,32 @@ function closeSettings() {
 }
 document.addEventListener('click', () => closeSettings());
 
+function clearSearch() {
+  const s = document.getElementById('search');
+  s.value = '';
+  document.getElementById('searchClear').style.display = 'none';
+  render();
+  s.focus();
+}
+
+document.addEventListener('keydown', e => {
+  const s = document.getElementById('search');
+  if ((e.key === '/' || (e.ctrlKey && e.key === 'k')) && !e.target.matches('input,textarea,select')) {
+    e.preventDefault();
+    s.focus();
+    s.select();
+  }
+  if (e.key === 'Escape' && document.activeElement === s) {
+    clearSearch();
+    s.blur();
+  }
+});
+
 function exportLinks() {
-  const rows = links.map(l => ({ url: l.url, title: l.title, folder: l.folder || '' }));
+  const rows = links.map(l => {
+    const folder = l.folder || '';
+    return { url: l.url, title: l.title, folder };
+  });
   const folders = [...new Set(rows.map(r => r.folder))];
   let inner = '';
   folders.forEach(f => {
