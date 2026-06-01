@@ -113,6 +113,16 @@ select:focus { outline: none; border-color: var(--g4); }
 .swatch-dot { width: 36px; height: 36px; border-radius: 50%; }
 .swatch-label { font-size: 12px; color: var(--text1); }
 .theme-swatch.active .swatch-label { color: var(--g2); }
+.drag-handle { width: 26px; height: 26px; border-radius: 8px; border: 0.5px solid var(--g5); background: var(--bg2); color: var(--g3); display: flex; align-items: center; justify-content: center; cursor: grab; font-size: 13px; }
+.drag-handle:hover { background: var(--g5); color: #fff; }
+.drag-handle:active { cursor: grabbing; }
+.folder-drag-handle { display: flex; align-items: center; justify-content: center; width: 18px; cursor: grab; color: var(--text2); font-size: 13px; flex-shrink: 0; }
+.folder-drag-handle:hover { color: var(--g3); }
+.folder-drag-handle:active { cursor: grabbing; }
+.card.dragging { opacity: 0.35; }
+.card.drag-over { border-color: var(--g3) !important; box-shadow: 0 0 0 2px var(--g4-glow), 0 -3px 0 var(--g3) !important; }
+.folder-header.dragging { opacity: 0.5; }
+.folder-header.drag-over { background: rgba(15,110,86,.4) !important; border-color: var(--g3) !important; border-style: dashed !important; }
 </style>
 </head>
 <body>
@@ -213,6 +223,10 @@ let editId = null;
 let parsedBookmarks = [];
 let saveTimer = null;
 let collapsedFolders = new Set(JSON.parse(localStorage.getItem('msp-collapsed') || '[]'));
+let folderOrder = JSON.parse(localStorage.getItem('msp-folder-order') || 'null');
+let dragId = null;
+let dragFolder = null;
+let dragOverEl = null;
 
 async function loadLinks() {
   try {
@@ -258,6 +272,12 @@ function getFavicon(u) { try { return 'https://www.google.com/s2/favicons?domain
 function getDomain(u) { try { return new URL(u).hostname.replace('www.', ''); } catch { return u; } }
 function esc(s) { if (!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function allFolders() { return [...new Set(links.map(l => l.folder).filter(Boolean))].sort(); }
+function getOrderedFolders(names) {
+  if (!folderOrder) return names.slice().sort();
+  const known = new Set(folderOrder);
+  const fresh = names.filter(f => !known.has(f)).sort();
+  return [...folderOrder.filter(f => names.includes(f)), ...fresh];
+}
 function allTags() { return [...new Set(links.flatMap(l => l.tags || []))].sort(); }
 
 function render() {
@@ -285,9 +305,9 @@ function render() {
   fil.forEach(l => { l.folder ? (byF[l.folder] = byF[l.folder] || [], byF[l.folder].push(l)) : noF.push(l); });
   let html = '';
   if (noF.length) html += `<div class="grid">${noF.map(cardHtml).join('')}</div>`;
-  Object.keys(byF).sort().forEach(f => {
+  getOrderedFolders(Object.keys(byF)).forEach(f => {
     const collapsed = collapsedFolders.has(f);
-    html += `<div class="folder-section"><div class="folder-header" onclick="toggleFolder(this.dataset.folder)" data-folder="${esc(f)}"><i class="ti ti-chevron-right folder-chevron${collapsed ? '' : ' open'}"></i><i class="ti ti-folder" style="font-size:16px;color:var(--g4)"></i><span class="folder-name">${esc(f)}</span><span class="count-pill">${byF[f].length}</span></div>${collapsed ? '' : `<div class="grid">${byF[f].map(cardHtml).join('')}</div>`}</div>`;
+    html += `<div class="folder-section"><div class="folder-header" onclick="toggleFolder(this.dataset.folder)" data-folder="${esc(f)}"><div class="folder-drag-handle" draggable="true" title="Drag to reorder folder" onclick="event.stopPropagation()"><i class="ti ti-grip-vertical"></i></div><i class="ti ti-chevron-right folder-chevron${collapsed ? '' : ' open'}"></i><i class="ti ti-folder" style="font-size:16px;color:var(--g4)"></i><span class="folder-name">${esc(f)}</span><span class="count-pill">${byF[f].length}</span></div>${collapsed ? '' : `<div class="grid">${byF[f].map(cardHtml).join('')}</div>`}</div>`;
   });
   c.innerHTML = html;
 }
@@ -295,8 +315,9 @@ function render() {
 function cardHtml(l) {
   const fav = getFavicon(l.url);
   const fi = fav ? `<img src="${fav}" alt="" onerror="this.style.display='none';this.nextSibling.style.display='flex'"><span style="display:none"><i class="ti ti-world"></i></span>` : `<i class="ti ti-world"></i>`;
-  return `<div class="card" onclick="window.open('${esc(l.url)}','_blank')">
+  return `<div class="card" data-id="${esc(l.id)}" onclick="window.open('${esc(l.url)}','_blank')">
     <div class="card-actions">
+      <div class="drag-handle" draggable="true" title="Drag to reorder"><i class="ti ti-grip-vertical"></i></div>
       <button class="icon-btn" title="Edit" onclick="event.stopPropagation();editLink('${l.id}')"><i class="ti ti-edit"></i></button>
       <button class="icon-btn" title="Delete" onclick="event.stopPropagation();deleteLink('${l.id}')"><i class="ti ti-trash"></i></button>
     </div>
@@ -484,6 +505,107 @@ function toggleFolder(name) {
   render();
 }
 
+function setupDragListeners() {
+  const content = document.getElementById('content');
+
+  content.addEventListener('dragstart', e => {
+    const handle = e.target.closest('.drag-handle');
+    const folderHandle = e.target.closest('.folder-drag-handle');
+    if (handle) {
+      const card = handle.closest('.card[data-id]');
+      if (!card) return;
+      dragId = card.dataset.id;
+      dragFolder = null;
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', dragId);
+      e.dataTransfer.setDragImage(card, 20, 20);
+      setTimeout(() => card.classList.add('dragging'), 0);
+    } else if (folderHandle) {
+      const header = folderHandle.closest('.folder-header[data-folder]');
+      if (!header) return;
+      dragFolder = header.dataset.folder;
+      dragId = null;
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', dragFolder);
+      e.dataTransfer.setDragImage(header, 20, 10);
+      setTimeout(() => header.classList.add('dragging'), 0);
+    }
+  });
+
+  content.addEventListener('dragover', e => {
+    if (!dragId && !dragFolder) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    let newTarget = null;
+    if (dragId) {
+      const card = e.target.closest('.card[data-id]');
+      if (card && card.dataset.id !== dragId) newTarget = card;
+      else if (!card) {
+        const header = e.target.closest('.folder-header[data-folder]');
+        if (header) newTarget = header;
+      }
+    } else if (dragFolder) {
+      const header = e.target.closest('.folder-header[data-folder]');
+      if (header && header.dataset.folder !== dragFolder) newTarget = header;
+    }
+    if (newTarget !== dragOverEl) {
+      if (dragOverEl) dragOverEl.classList.remove('drag-over');
+      dragOverEl = newTarget;
+      if (dragOverEl) dragOverEl.classList.add('drag-over');
+    }
+  });
+
+  content.addEventListener('dragleave', e => {
+    if (!content.contains(e.relatedTarget)) {
+      if (dragOverEl) dragOverEl.classList.remove('drag-over');
+      dragOverEl = null;
+    }
+  });
+
+  content.addEventListener('drop', e => {
+    e.preventDefault();
+    if (dragOverEl) dragOverEl.classList.remove('drag-over');
+    document.querySelectorAll('.dragging').forEach(el => el.classList.remove('dragging'));
+    if (dragId) {
+      const card = e.target.closest('.card[data-id]');
+      const header = e.target.closest('.folder-header[data-folder]');
+      if (card && card.dataset.id !== dragId) {
+        const srcIdx = links.findIndex(l => l.id === dragId);
+        const tgtLink = links.find(l => l.id === card.dataset.id);
+        const [moved] = links.splice(srcIdx, 1);
+        moved.folder = tgtLink.folder || '';
+        const newTgt = links.findIndex(l => l.id === card.dataset.id);
+        links.splice(newTgt, 0, moved);
+        save(); render();
+      } else if (header) {
+        const srcIdx = links.findIndex(l => l.id === dragId);
+        if (srcIdx > -1) { links[srcIdx].folder = header.dataset.folder; save(); render(); }
+      }
+    } else if (dragFolder) {
+      const header = e.target.closest('.folder-header[data-folder]');
+      if (header && header.dataset.folder !== dragFolder) {
+        const names = getOrderedFolders(allFolders());
+        const si = names.indexOf(dragFolder), ti = names.indexOf(header.dataset.folder);
+        if (si > -1 && ti > -1) {
+          names.splice(si, 1);
+          names.splice(ti, 0, dragFolder);
+          folderOrder = names;
+          localStorage.setItem('msp-folder-order', JSON.stringify(folderOrder));
+          render();
+        }
+      }
+    }
+    dragId = null; dragFolder = null; dragOverEl = null;
+  });
+
+  content.addEventListener('dragend', () => {
+    dragId = null; dragFolder = null;
+    if (dragOverEl) dragOverEl.classList.remove('drag-over');
+    dragOverEl = null;
+    document.querySelectorAll('.dragging').forEach(el => el.classList.remove('dragging'));
+  });
+}
+
 function exportLinks() {
   const rows = links.map(l => {
     const folder = l.folder || '';
@@ -516,6 +638,7 @@ style.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
 document.head.appendChild(style);
 
 applyTheme(localStorage.getItem('msp-theme') || 'Green');
+setupDragListeners();
 loadLinks();
 </script>
 </body>
