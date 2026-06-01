@@ -65,18 +65,6 @@ ports:
 
 ---
 
-## Unraid Setup
-
-1. Copy the `msp-beacon/` folder to your Unraid server (e.g. `/mnt/user/appdata/msp-beacon/`)
-2. SSH into Unraid and run:
-   ```bash
-   cd /mnt/user/appdata/msp-beacon
-   docker compose up -d
-   ```
-3. Or use the Unraid Docker UI to add a custom container pointing to the built image.
-
----
-
 ## Backing Up Your Links
 
 Just copy `data/links.json` — that's everything.
