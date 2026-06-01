@@ -98,6 +98,13 @@ select:focus { outline: none; border-color: var(--g4); }
 .settings-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 7px; font-size: 14px; color: var(--text0); cursor: pointer; background: none; border: none; font-family: inherit; width: 100%; text-align: left; }
 .settings-item:hover { background: var(--bg3); color: var(--g2); }
 .settings-item i { font-size: 15px; color: var(--g3); }
+.theme-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 4px 0; }
+.theme-swatch { display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; padding: 10px 6px; border-radius: 10px; border: 1.5px solid transparent; transition: border-color .15s, background .15s; }
+.theme-swatch:hover { background: var(--bg3); }
+.theme-swatch.active { border-color: var(--g4); background: var(--bg3); }
+.swatch-dot { width: 36px; height: 36px; border-radius: 50%; }
+.swatch-label { font-size: 12px; color: var(--text1); }
+.theme-swatch.active .swatch-label { color: var(--g2); }
 </style>
 </head>
 <body>
@@ -115,6 +122,7 @@ select:focus { outline: none; border-color: var(--g4); }
     <div class="settings-wrap">
       <button class="btn" id="settingsBtn" onclick="toggleSettings(event)"><i class="ti ti-settings"></i> Settings</button>
       <div class="settings-menu" id="settingsMenu">
+        <button class="settings-item" onclick="closeSettings();openTheme()"><i class="ti ti-palette"></i> Theme</button>
         <button class="settings-item" onclick="closeSettings();openImport()"><i class="ti ti-file-import"></i> Import</button>
         <button class="settings-item" onclick="closeSettings();exportLinks()"><i class="ti ti-file-export"></i> Export</button>
       </div>
@@ -171,6 +179,16 @@ select:focus { outline: none; border-color: var(--g4); }
     <div class="modal-footer">
       <button class="btn" onclick="closeImport()">Cancel</button>
       <button class="btn btn-primary" id="importBtn" style="display:none" onclick="doImport()"><i class="ti ti-file-import"></i> Import selected</button>
+    </div>
+  </div>
+</div>
+
+<div id="themeBg" class="modal-bg" style="display:none" onclick="if(event.target===this)closeTheme()">
+  <div class="modal" role="dialog" aria-modal="true" style="width:min(360px,92vw)">
+    <div class="modal-header"><i class="ti ti-palette"></i><h3>Choose Theme</h3></div>
+    <div class="theme-grid" id="themeGrid"></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeTheme()">Close</button>
     </div>
   </div>
 </div>
@@ -376,6 +394,38 @@ function doImport() {
   showToast(`${added} links imported${skipped ? ', ' + skipped + ' duplicates skipped' : ''}`);
 }
 
+const THEMES = {
+  Green:  { g1:'#E1F5EE', g2:'#9FE1CB', g3:'#5DCAA5', g4:'#1D9E75', g5:'#0F6E56', g6:'#085041' },
+  Blue:   { g1:'#DBEAFE', g2:'#93C5FD', g3:'#60A5FA', g4:'#2563EB', g5:'#1E40AF', g6:'#1E3A8A' },
+  Purple: { g1:'#EDE9FE', g2:'#C4B5FD', g3:'#A78BFA', g4:'#7C3AED', g5:'#6D28D9', g6:'#4C1D95' },
+  Teal:   { g1:'#CCFBF1', g2:'#5EEAD4', g3:'#2DD4BF', g4:'#0D9488', g5:'#0F766E', g6:'#115E59' },
+  Orange: { g1:'#FEF3C7', g2:'#FCD34D', g3:'#F59E0B', g4:'#D97706', g5:'#B45309', g6:'#92400E' },
+  Red:    { g1:'#FEE2E2', g2:'#FCA5A5', g3:'#F87171', g4:'#DC2626', g5:'#B91C1C', g6:'#7F1D1D' },
+};
+
+function applyTheme(name) {
+  const t = THEMES[name] || THEMES.Green;
+  const r = document.documentElement.style;
+  r.setProperty('--g1', t.g1); r.setProperty('--g2', t.g2); r.setProperty('--g3', t.g3);
+  r.setProperty('--g4', t.g4); r.setProperty('--g5', t.g5); r.setProperty('--g6', t.g6);
+  localStorage.setItem('msp-theme', name);
+  document.querySelectorAll('.theme-swatch').forEach(el => {
+    el.classList.toggle('active', el.dataset.theme === name);
+  });
+}
+
+function openTheme() {
+  const saved = localStorage.getItem('msp-theme') || 'Green';
+  const grid = document.getElementById('themeGrid');
+  grid.innerHTML = Object.entries(THEMES).map(([name, t]) => `
+    <div class="theme-swatch${name===saved?' active':''}" data-theme="${name}" onclick="applyTheme('${name}')">
+      <div class="swatch-dot" style="background:linear-gradient(135deg,${t.g3},${t.g5})"></div>
+      <span class="swatch-label">${name}</span>
+    </div>`).join('');
+  document.getElementById('themeBg').style.display = 'flex';
+}
+function closeTheme() { document.getElementById('themeBg').style.display = 'none'; }
+
 function toggleSettings(e) {
   e.stopPropagation();
   document.getElementById('settingsMenu').classList.toggle('open');
@@ -412,6 +462,7 @@ const style = document.createElement('style');
 style.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
 document.head.appendChild(style);
 
+applyTheme(localStorage.getItem('msp-theme') || 'Green');
 loadLinks();
 </script>
 </body>
