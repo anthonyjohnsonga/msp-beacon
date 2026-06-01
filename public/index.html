@@ -63,7 +63,10 @@ select:focus { outline: none; border-color: var(--g4); }
 .empty { text-align: center; padding: 4rem 1rem; color: var(--text2); font-size: 14px; }
 .empty i { font-size: 36px; display: block; margin-bottom: 10px; color: var(--g5); }
 .folder-section { margin-bottom: 1.5rem; }
-.folder-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding: 6px 10px; background: rgba(15,110,86,.15); border-radius: 8px; border: 0.5px solid var(--g5); }
+.folder-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding: 6px 10px; background: rgba(15,110,86,.15); border-radius: 8px; border: 0.5px solid var(--g5); cursor: pointer; user-select: none; }
+.folder-header:hover { background: rgba(15,110,86,.25); }
+.folder-chevron { font-size: 14px; color: var(--text2); transition: transform .2s; flex-shrink: 0; }
+.folder-chevron.open { transform: rotate(90deg); }
 .folder-name { font-size: 13px; font-weight: 500; color: var(--g2); }
 .count-pill { font-size: 11px; padding: 1px 7px; border-radius: 20px; background: var(--g5); color: #fff; }
 .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: flex; align-items: center; justify-content: center; z-index: 100; }
@@ -209,6 +212,7 @@ let links = [];
 let editId = null;
 let parsedBookmarks = [];
 let saveTimer = null;
+let collapsedFolders = new Set(JSON.parse(localStorage.getItem('msp-collapsed') || '[]'));
 
 async function loadLinks() {
   try {
@@ -282,7 +286,8 @@ function render() {
   let html = '';
   if (noF.length) html += `<div class="grid">${noF.map(cardHtml).join('')}</div>`;
   Object.keys(byF).sort().forEach(f => {
-    html += `<div class="folder-section"><div class="folder-header"><i class="ti ti-folder" style="font-size:16px;color:var(--g4)"></i><span class="folder-name">${esc(f)}</span><span class="count-pill">${byF[f].length}</span></div><div class="grid">${byF[f].map(cardHtml).join('')}</div></div>`;
+    const collapsed = collapsedFolders.has(f);
+    html += `<div class="folder-section"><div class="folder-header" onclick="toggleFolder(this.dataset.folder)" data-folder="${esc(f)}"><i class="ti ti-chevron-right folder-chevron${collapsed ? '' : ' open'}"></i><i class="ti ti-folder" style="font-size:16px;color:var(--g4)"></i><span class="folder-name">${esc(f)}</span><span class="count-pill">${byF[f].length}</span></div>${collapsed ? '' : `<div class="grid">${byF[f].map(cardHtml).join('')}</div>`}</div>`;
   });
   c.innerHTML = html;
 }
@@ -471,6 +476,13 @@ document.addEventListener('keydown', e => {
     s.blur();
   }
 });
+
+function toggleFolder(name) {
+  if (collapsedFolders.has(name)) collapsedFolders.delete(name);
+  else collapsedFolders.add(name);
+  localStorage.setItem('msp-collapsed', JSON.stringify([...collapsedFolders]));
+  render();
+}
 
 function exportLinks() {
   const rows = links.map(l => {
