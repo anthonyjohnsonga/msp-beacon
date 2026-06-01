@@ -92,6 +92,12 @@ select:focus { outline: none; border-color: var(--g4); }
 .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: var(--bg1); border: 1px solid var(--g5); color: var(--g2); padding: 10px 16px; border-radius: 8px; font-size: 14px; display: flex; align-items: center; gap: 8px; z-index: 200; opacity: 0; transition: opacity .2s; pointer-events: none; }
 .toast.show { opacity: 1; }
 .saving-indicator { font-size: 12px; color: var(--text2); display: flex; align-items: center; gap: 4px; margin-left: auto; }
+.settings-wrap { position: relative; }
+.settings-menu { position: absolute; top: calc(100% + 6px); right: 0; background: var(--bg1); border: 1px solid var(--g5); border-radius: 10px; min-width: 160px; z-index: 50; box-shadow: 0 8px 24px rgba(0,0,0,.4); padding: 4px; display: none; flex-direction: column; }
+.settings-menu.open { display: flex; }
+.settings-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 7px; font-size: 14px; color: var(--text0); cursor: pointer; background: none; border: none; font-family: inherit; width: 100%; text-align: left; }
+.settings-item:hover { background: var(--bg3); color: var(--g2); }
+.settings-item i { font-size: 15px; color: var(--g3); }
 </style>
 </head>
 <body>
@@ -106,7 +112,13 @@ select:focus { outline: none; border-color: var(--g4); }
     <select id="folderFilter" onchange="render()"><option value="">All folders</option></select>
     <select id="tagFilter" onchange="render()"><option value="">All tags</option></select>
     <button class="btn btn-primary" onclick="openModal()"><i class="ti ti-plus"></i> Add link</button>
-    <button class="btn" onclick="openImport()"><i class="ti ti-file-import"></i> Import</button>
+    <div class="settings-wrap">
+      <button class="btn" id="settingsBtn" onclick="toggleSettings(event)"><i class="ti ti-settings"></i> Settings</button>
+      <div class="settings-menu" id="settingsMenu">
+        <button class="settings-item" onclick="closeSettings();openImport()"><i class="ti ti-file-import"></i> Import</button>
+        <button class="settings-item" onclick="closeSettings();exportLinks()"><i class="ti ti-file-export"></i> Export</button>
+      </div>
+    </div>
   </div>
   <div id="content"></div>
 </div>
@@ -362,6 +374,38 @@ function doImport() {
   });
   save(); closeImport(); render();
   showToast(`${added} links imported${skipped ? ', ' + skipped + ' duplicates skipped' : ''}`);
+}
+
+function toggleSettings(e) {
+  e.stopPropagation();
+  document.getElementById('settingsMenu').classList.toggle('open');
+}
+function closeSettings() {
+  document.getElementById('settingsMenu').classList.remove('open');
+}
+document.addEventListener('click', () => closeSettings());
+
+function exportLinks() {
+  const rows = links.map(l => ({ url: l.url, title: l.title, folder: l.folder || '' }));
+  const folders = [...new Set(rows.map(r => r.folder))];
+  let inner = '';
+  folders.forEach(f => {
+    const items = rows.filter(r => r.folder === f);
+    const itemsHtml = items.map(r => `        <DT><A HREF="${r.url}">${r.title.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</A>`).join('\n');
+    if (f) {
+      inner += `    <DT><H3>${f.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</H3>\n    <DL><p>\n${itemsHtml}\n    </DL><p>\n`;
+    } else {
+      inner += itemsHtml + '\n';
+    }
+  });
+  const html = `<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n${inner}</DL>`;
+  const blob = new Blob([html], { type: 'text/html' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'msp-beacon-bookmarks.html';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showToast('Bookmarks exported');
 }
 
 const style = document.createElement('style');
