@@ -318,6 +318,7 @@ function cardHtml(l) {
   return `<div class="card" data-id="${esc(l.id)}" onclick="window.open('${esc(l.url)}','_blank')">
     <div class="card-actions">
       <div class="drag-handle" draggable="true" title="Drag to reorder"><i class="ti ti-grip-vertical"></i></div>
+      <button class="icon-btn" title="Copy URL" onclick="event.stopPropagation();copyUrl('${esc(l.url)}',this)"><i class="ti ti-copy"></i></button>
       <button class="icon-btn" title="Edit" onclick="event.stopPropagation();editLink('${l.id}')"><i class="ti ti-edit"></i></button>
       <button class="icon-btn" title="Delete" onclick="event.stopPropagation();deleteLink('${l.id}')"><i class="ti ti-trash"></i></button>
     </div>
@@ -369,6 +370,14 @@ function saveLink() {
   const wasEditing = !!editId;
   save(); closeModal(); render();
   showToast(wasEditing ? 'Link updated' : 'Link saved');
+}
+function copyUrl(url, btn) {
+  navigator.clipboard.writeText(url).then(() => {
+    const icon = btn.querySelector('i');
+    icon.className = 'ti ti-check';
+    btn.style.color = 'var(--g3)';
+    setTimeout(() => { icon.className = 'ti ti-copy'; btn.style.color = ''; }, 1500);
+  });
 }
 function editLink(id) { openModal(id); }
 function deleteLink(id) {
