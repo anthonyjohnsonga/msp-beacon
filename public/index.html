@@ -123,6 +123,19 @@ select:focus { outline: none; border-color: var(--g4); }
 .card.drag-over { border-color: var(--g3) !important; box-shadow: 0 0 0 2px var(--g4-glow), 0 -3px 0 var(--g3) !important; }
 .folder-header.dragging { opacity: 0.5; }
 .folder-header.drag-over { background: rgba(15,110,86,.4) !important; border-color: var(--g3) !important; border-style: dashed !important; }
+.card.selected { border-color: var(--g4) !important; background: rgba(29,158,117,.1); }
+.card-check { position: absolute; top: 8px; left: 8px; width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid var(--g4); background: var(--bg2); display: flex; align-items: center; justify-content: center; z-index: 2; flex-shrink: 0; }
+.card-check.checked { background: var(--g4); }
+.card-check i { font-size: 11px; color: #fff; display: none; }
+.card-check.checked i { display: flex; }
+.card.select-mode { cursor: default; }
+.card.select-mode:hover { border-color: var(--g5); box-shadow: none; }
+.card.select-mode.selected:hover { border-color: var(--g4) !important; }
+.bulk-bar { position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%); background: var(--bg1); border: 1px solid var(--g5); border-radius: 12px; padding: 10px 16px; display: flex; align-items: center; gap: 10px; z-index: 150; box-shadow: 0 8px 32px rgba(0,0,0,.5); white-space: nowrap; }
+.bulk-bar.hidden { display: none; }
+.bulk-count { font-size: 14px; font-weight: 500; color: var(--g2); min-width: 72px; }
+.bulk-divider { width: 1px; height: 22px; background: var(--border0); flex-shrink: 0; }
+.btn.active { background: var(--g5); border-color: var(--g4); color: #fff; }
 </style>
 </head>
 <body>
@@ -140,6 +153,7 @@ select:focus { outline: none; border-color: var(--g4); }
     </div>
     <select id="folderFilter" onchange="render()"><option value="">All folders</option></select>
     <select id="tagFilter" onchange="render()"><option value="">All tags</option></select>
+    <button class="btn" id="selectBtn" onclick="toggleSelectMode()"><i class="ti ti-checkbox"></i> Select</button>
     <button class="btn btn-primary" onclick="openModal()"><i class="ti ti-plus"></i> Add link</button>
     <div class="settings-wrap">
       <button class="btn" id="settingsBtn" onclick="toggleSettings(event)"><i class="ti ti-settings"></i> Settings</button>
@@ -217,6 +231,20 @@ select:focus { outline: none; border-color: var(--g4); }
 
 <div class="toast" id="toast"><i class="ti ti-check"></i> <span id="toastMsg"></span></div>
 
+<div class="bulk-bar hidden" id="bulkBar">
+  <span class="bulk-count" id="bulkCount">0 selected</span>
+  <div class="bulk-divider"></div>
+  <a style="font-size:13px;color:var(--g3);cursor:pointer;text-decoration:none" onclick="selectAllVisible()">All</a>
+  <a style="font-size:13px;color:var(--text1);cursor:pointer;text-decoration:none" onclick="clearSelection()">None</a>
+  <div class="bulk-divider"></div>
+  <select id="bulkMoveFolder" onchange="bulkMove(this)" style="height:32px;font-size:13px"><option value="">Move to folder…</option></select>
+  <input type="text" id="bulkTagInput" placeholder="Add tag…" style="height:32px;font-size:13px;width:110px" onkeydown="if(event.key==='Enter')bulkAddTag()">
+  <button class="btn" style="height:32px;font-size:13px;padding:0 10px" onclick="bulkAddTag()"><i class="ti ti-tag"></i> Tag</button>
+  <div class="bulk-divider"></div>
+  <button class="btn" style="height:32px;font-size:13px;padding:0 10px;color:#E24B4A;border-color:#b91c1c" onclick="bulkDelete()"><i class="ti ti-trash"></i> Delete</button>
+  <button class="btn" style="height:32px;font-size:13px;padding:0 10px" onclick="exitSelectMode()" title="Exit select mode"><i class="ti ti-x"></i></button>
+</div>
+
 <script>
 let links = [];
 let editId = null;
@@ -227,6 +255,9 @@ let folderOrder = JSON.parse(localStorage.getItem('msp-folder-order') || 'null')
 let dragId = null;
 let dragFolder = null;
 let dragOverEl = null;
+let selectMode = false;
+let selectedIds = new Set();
+let visibleIds = [];
 
 async function loadLinks() {
   try {
@@ -295,6 +326,7 @@ function render() {
     if (q && !((l.title+l.url+l.desc+(l.folder||'')+(l.tags||[]).join(' ')).toLowerCase().includes(q))) return false;
     return true;
   });
+  visibleIds = fil.map(l => l.id);
   const c = document.getElementById('content');
   if (!fil.length) {
     c.innerHTML = `<div class="empty"><i class="ti ti-bookmarks"></i>${links.length ? 'No results match your filters.' : 'No links yet — click <strong>Add link</strong> or <strong>Import</strong> to get started.'}</div>`;
@@ -315,6 +347,22 @@ function render() {
 function cardHtml(l) {
   const fav = getFavicon(l.url);
   const fi = fav ? `<img src="${fav}" alt="" onerror="this.style.display='none';this.nextSibling.style.display='flex'"><span style="display:none"><i class="ti ti-world"></i></span>` : `<i class="ti ti-world"></i>`;
+  const footer = `<div class="card-footer">
+      ${(l.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('')}
+      ${l.folder ? `<span class="folder-badge"><i class="ti ti-folder" style="font-size:11px"></i> ${esc(l.folder)}</span>` : ''}
+    </div>`;
+  const top = `<div class="card-top"><div class="favicon">${fi}</div>
+      <div style="min-width:0"><div class="card-title">${esc(l.title)}</div><div class="card-url">${esc(getDomain(l.url))}</div></div>
+    </div>`;
+  if (selectMode) {
+    const checked = selectedIds.has(l.id);
+    return `<div class="card select-mode${checked ? ' selected' : ''}" data-id="${esc(l.id)}" onclick="toggleSelect('${esc(l.id)}')">
+      <div class="card-check${checked ? ' checked' : ''}"><i class="ti ti-check"></i></div>
+      ${top}
+      ${l.desc ? `<div class="card-desc">${esc(l.desc)}</div>` : ''}
+      ${footer}
+    </div>`;
+  }
   return `<div class="card" data-id="${esc(l.id)}" onclick="window.open('${esc(l.url)}','_blank')">
     <div class="card-actions">
       <div class="drag-handle" draggable="true" title="Drag to reorder"><i class="ti ti-grip-vertical"></i></div>
@@ -322,14 +370,9 @@ function cardHtml(l) {
       <button class="icon-btn" title="Edit" data-action="edit" data-id="${esc(l.id)}"><i class="ti ti-edit"></i></button>
       <button class="icon-btn" title="Delete" data-action="delete" data-id="${esc(l.id)}"><i class="ti ti-trash"></i></button>
     </div>
-    <div class="card-top"><div class="favicon">${fi}</div>
-      <div style="min-width:0"><div class="card-title">${esc(l.title)}</div><div class="card-url">${esc(getDomain(l.url))}</div></div>
-    </div>
+    ${top}
     ${l.desc ? `<div class="card-desc">${esc(l.desc)}</div>` : ''}
-    <div class="card-footer">
-      ${(l.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('')}
-      ${l.folder ? `<span class="folder-badge"><i class="ti ti-folder" style="font-size:11px"></i> ${esc(l.folder)}</span>` : ''}
-    </div>
+    ${footer}
   </div>`;
 }
 
@@ -659,6 +702,89 @@ function exportLinks() {
 const style = document.createElement('style');
 style.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
 document.head.appendChild(style);
+
+function toggleSelectMode() {
+  selectMode = !selectMode;
+  selectedIds.clear();
+  document.getElementById('selectBtn').classList.toggle('active', selectMode);
+  document.getElementById('bulkBar').classList.toggle('hidden', !selectMode);
+  render();
+  if (selectMode) updateBulkBar();
+}
+
+function exitSelectMode() {
+  selectMode = false;
+  selectedIds.clear();
+  document.getElementById('selectBtn').classList.remove('active');
+  document.getElementById('bulkBar').classList.add('hidden');
+  render();
+}
+
+function toggleSelect(id) {
+  if (selectedIds.has(id)) selectedIds.delete(id);
+  else selectedIds.add(id);
+  const card = document.querySelector(`.card[data-id="${id}"]`);
+  if (card) {
+    const sel = selectedIds.has(id);
+    card.classList.toggle('selected', sel);
+    const chk = card.querySelector('.card-check');
+    if (chk) chk.classList.toggle('checked', sel);
+  }
+  updateBulkBar();
+}
+
+function selectAllVisible() {
+  visibleIds.forEach(id => selectedIds.add(id));
+  render(); updateBulkBar();
+}
+
+function clearSelection() {
+  selectedIds.clear();
+  render(); updateBulkBar();
+}
+
+function updateBulkBar() {
+  const n = selectedIds.size;
+  document.getElementById('bulkCount').textContent = n + ' selected';
+  const mf = document.getElementById('bulkMoveFolder');
+  mf.innerHTML = '<option value="">Move to folder…</option>'
+    + allFolders().map(f => `<option value="${esc(f)}">${esc(f)}</option>`).join('')
+    + '<option value="__none__">— Remove from folder</option>';
+}
+
+function bulkDelete() {
+  if (!selectedIds.size) return;
+  const n = selectedIds.size;
+  if (!confirm(`Delete ${n} link${n > 1 ? 's' : ''}?`)) return;
+  links = links.filter(l => !selectedIds.has(l.id));
+  selectedIds.clear();
+  save(); render(); updateBulkBar();
+  showToast(`${n} link${n > 1 ? 's' : ''} deleted`);
+}
+
+function bulkMove(sel) {
+  if (!sel.value || !selectedIds.size) { sel.value = ''; return; }
+  const n = selectedIds.size;
+  const folder = sel.value === '__none__' ? '' : sel.value;
+  links.forEach(l => { if (selectedIds.has(l.id)) l.folder = folder; });
+  sel.value = '';
+  save(); render(); updateBulkBar();
+  showToast(`${n} link${n > 1 ? 's' : ''} moved`);
+}
+
+function bulkAddTag() {
+  const input = document.getElementById('bulkTagInput');
+  const tag = input.value.trim();
+  if (!tag || !selectedIds.size) return;
+  const n = selectedIds.size;
+  links.forEach(l => {
+    if (selectedIds.has(l.id) && !(l.tags || []).includes(tag))
+      l.tags = [...(l.tags || []), tag];
+  });
+  input.value = '';
+  save(); render(); updateBulkBar();
+  showToast(`Tag "${tag}" added to ${n} link${n > 1 ? 's' : ''}`);
+}
 
 applyTheme(localStorage.getItem('msp-theme') || 'Green');
 setupCardListeners();
