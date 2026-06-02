@@ -1,5 +1,4 @@
 const express = require('express');
-const fs = require('fs');
 const fsp = require('fs').promises;
 const path = require('path');
 const os = require('os');
@@ -53,13 +52,15 @@ app.post('/api/links', (req, res) => {
   const invalid = links.find(l => !isValidLink(l));
   if (invalid) return res.status(400).json({ error: 'Invalid link object in array' });
 
-  writeQueue = writeQueue.then(() => writeLinks(links)).catch(e => {
-    console.error('Write failed:', e);
-  });
+  const writePromise = writeLinks(links);
+  writeQueue = writeQueue.then(() => writePromise).catch(() => {});
 
-  writeQueue.then(() => res.json({ ok: true })).catch(() => {
-    res.status(500).json({ error: 'Failed to save links' });
-  });
+  writePromise
+    .then(() => res.json({ ok: true }))
+    .catch(e => {
+      console.error('Write failed:', e);
+      res.status(500).json({ error: 'Failed to save links' });
+    });
 });
 
 app.listen(PORT, () => {

@@ -318,9 +318,9 @@ function cardHtml(l) {
   return `<div class="card" data-id="${esc(l.id)}" onclick="window.open('${esc(l.url)}','_blank')">
     <div class="card-actions">
       <div class="drag-handle" draggable="true" title="Drag to reorder"><i class="ti ti-grip-vertical"></i></div>
-      <button class="icon-btn" title="Copy URL" onclick="event.stopPropagation();copyUrl('${esc(l.url)}',this)"><i class="ti ti-copy"></i></button>
-      <button class="icon-btn" title="Edit" onclick="event.stopPropagation();editLink('${l.id}')"><i class="ti ti-edit"></i></button>
-      <button class="icon-btn" title="Delete" onclick="event.stopPropagation();deleteLink('${l.id}')"><i class="ti ti-trash"></i></button>
+      <button class="icon-btn" title="Copy URL" data-action="copy" data-id="${esc(l.id)}" data-url="${esc(l.url)}"><i class="ti ti-copy"></i></button>
+      <button class="icon-btn" title="Edit" data-action="edit" data-id="${esc(l.id)}"><i class="ti ti-edit"></i></button>
+      <button class="icon-btn" title="Delete" data-action="delete" data-id="${esc(l.id)}"><i class="ti ti-trash"></i></button>
     </div>
     <div class="card-top"><div class="favicon">${fi}</div>
       <div style="min-width:0"><div class="card-title">${esc(l.title)}</div><div class="card-url">${esc(getDomain(l.url))}</div></div>
@@ -514,6 +514,20 @@ function toggleFolder(name) {
   render();
 }
 
+function setupCardListeners() {
+  const content = document.getElementById('content');
+  content.addEventListener('click', e => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    e.stopPropagation();
+    const action = btn.dataset.action;
+    const id = btn.dataset.id;
+    if (action === 'copy') copyUrl(btn.dataset.url, btn);
+    else if (action === 'edit') editLink(id);
+    else if (action === 'delete') deleteLink(id);
+  });
+}
+
 function setupDragListeners() {
   const content = document.getElementById('content');
 
@@ -647,6 +661,7 @@ style.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
 document.head.appendChild(style);
 
 applyTheme(localStorage.getItem('msp-theme') || 'Green');
+setupCardListeners();
 setupDragListeners();
 loadLinks();
 </script>
