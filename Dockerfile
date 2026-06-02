@@ -12,4 +12,5 @@ VOLUME ["/data"]
 
 EXPOSE 3000
 
+HEALTHCHECK CMD wget -qO- http://localhost:3000/api/links || exit 1
 CMD ["node", "server.js"]

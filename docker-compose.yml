@@ -1,6 +1,6 @@
 services:
   msp-beacon:
-    build: .
+    image: ghcr.io/anthonyjohnsonga/msp-beacon:latest
     container_name: msp-beacon
     ports:
       - "3000:3000"
