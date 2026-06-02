@@ -6,6 +6,26 @@ move between machines, or host on a file share.
 
 ---
 
+## Features
+
+- **Add, edit, delete links** — save any URL with a title, description, folder, and tags
+- **Folders** — group links into collapsible folders; drag to reorder folders
+- **Tags** — tag links for filtering; filter by tag from the toolbar
+- **Search** — real-time search across title, URL, description, folder, and tags (press `/` or `Ctrl+K`)
+- **Folder & tag filters** — filter the view by folder or tag from dropdowns
+- **Drag to reorder** — drag cards within a folder to reorder; drag a card onto a folder header to move it
+- **Copy URL** — one-click copy button on every card
+- **Bulk actions** — checkbox select mode to select multiple cards at once, then delete, move to a folder, or add a tag in one action
+- **Import bookmarks** — drop a browser-exported HTML file to import bookmarks from Chrome, Edge, or Firefox; preview and select which to import
+- **Export bookmarks** — export all links as a browser-compatible HTML bookmark file
+- **Themes** — 6 built-in color themes (Green, Blue, Purple, Teal, Orange, Red)
+- **Auto-save** — changes save automatically with a debounced write queue and atomic file writes
+- **Favicon display** — automatically fetches site favicons for each link
+- **Persistent state** — collapsed folders, folder order, and theme are saved to `localStorage`
+- **Self-hosted & portable** — all data lives in a single `links.json` file; easy to back up or move
+
+---
+
 ## Quick Start
 
 ### Requirements
