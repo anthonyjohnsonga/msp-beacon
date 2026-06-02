@@ -26,44 +26,74 @@ move between machines, or host on a file share.
 
 ---
 
-## Quick Start
+## Getting Started
 
-### Requirements
-- Docker + Docker Compose (Docker Desktop on Windows/Mac, or Docker Engine on Linux/Unraid)
-
-### Run it
+### 1. Create a folder and compose file
 
 ```bash
-# Clone or copy this folder anywhere, then:
+mkdir msp-beacon && cd msp-beacon
+nano docker-compose.yml
+```
+
+Paste this into the file, then save (`Ctrl+X`, `Y`, `Enter`):
+
+```yaml
+services:
+  msp-beacon:
+    image: ghcr.io/anthonyjohnsonga/msp-beacon:latest
+    container_name: msp-beacon
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
+```
+
+### 2. Start the container
+
+```bash
 docker compose up -d
 ```
 
-Open your browser to: **http://localhost:3000**
+Docker will pull the image automatically — no build step needed.
+
+### 3. Open the app
+
+```
+http://localhost:3000
+```
+
+Or from another device on your network:
+
+```
+http://<your-server-ip>:3000
+```
+
+That's it. Your links are saved to `./data/links.json` in the same folder.
 
 ---
 
-## File Structure
+## Updating
 
+```bash
+docker compose pull
+docker compose up -d
 ```
-msp-beacon/
-├── docker-compose.yml   # Start/stop the container
-├── Dockerfile           # Container definition
-├── server.js            # Express API server
-├── package.json
-├── public/
-│   └── index.html       # The app UI
-└── data/
-    └── links.json       # YOUR LINKS — this is the only file that matters
-```
+
+Your `data/links.json` is never touched during updates.
 
 ---
 
-## Moving to a New Machine
+## Changing the Port
 
-1. Copy the entire `msp-beacon/` folder (or just `data/links.json` if you rebuild)
-2. Install Docker on the new machine
-3. Run `docker compose up -d` in the folder
-4. Done — your links are back
+Edit `docker-compose.yml` and change the left side of the port mapping:
+
+```yaml
+ports:
+  - "8080:3000"   # Now accessible on port 8080
+```
+
+Then restart: `docker compose up -d`
 
 ---
 
@@ -77,26 +107,18 @@ http://<your-machine-tailscale-ip>:3000
 
 Find your Tailscale IP in the Tailscale app or by running `tailscale ip` in a terminal.
 
-To use a custom port, edit `docker-compose.yml`:
-```yaml
-ports:
-  - "8080:3000"   # Access on port 8080 instead
-```
-
 ---
 
-## Backing Up Your Links
+## Backing Up
 
 Just copy `data/links.json` — that's everything.
 
 ---
 
-## Updating the App
+## Moving to a New Machine
 
-```bash
-docker compose down
-# Pull the new msp-beacon folder / replace files
-docker compose up -d --build
-```
-
-Your `data/links.json` is untouched since it lives outside the container.
+1. Copy `data/links.json` to the new machine
+2. Create a new folder with the same `docker-compose.yml` above
+3. Put `links.json` in a `data/` subfolder
+4. Run `docker compose up -d`
+5. Done — your links are back
