@@ -1,7 +1,6 @@
 const express = require('express');
 const fsp = require('fs').promises;
 const path = require('path');
-const os = require('os');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -32,7 +31,7 @@ function isValidLink(l) {
 
 async function writeLinks(links) {
   await fsp.mkdir(path.dirname(DATA_FILE), { recursive: true });
-  const tmp = path.join(os.tmpdir(), `links-${Date.now()}.json`);
+  const tmp = path.join(path.dirname(DATA_FILE), `.links-${Date.now()}.json`);
   await fsp.writeFile(tmp, JSON.stringify(links, null, 2), 'utf8');
   await fsp.rename(tmp, DATA_FILE);
 }
