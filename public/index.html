@@ -167,7 +167,7 @@ select:focus { outline: none; border-color: var(--g4); }
   <div class="toolbar">
     <div class="search-wrap">
       <i class="ti ti-search search-icon"></i>
-      <input type="text" id="search" placeholder="Search links… (press /)" oninput="render()">
+      <input type="text" id="search" placeholder="Search links… (press /)" oninput="debouncedRender()">
       <button class="search-clear" id="searchClear" style="display:none" onclick="clearSearch()"><i class="ti ti-x"></i></button>
     </div>
     <select id="folderFilter" onchange="render()"><option value="">All folders</option></select>
@@ -199,7 +199,7 @@ select:focus { outline: none; border-color: var(--g4); }
       </div>
     </div>
     <div class="field"><label>Sub-folder <span style="font-size:10px;color:var(--text2);text-transform:none;letter-spacing:0">(optional)</span></label>
-      <input type="text" id="mSubfolder" placeholder="Sub-folder name…" list="subfolderList" autocomplete="off">
+      <input type="text" id="mSubfolder" placeholder="Sub-folder name…" list="subfolderList" autocomplete="off" onfocus="updateSubfolderDatalist()">
       <datalist id="subfolderList"></datalist>
     </div>
     <div class="field"><label>Tags (comma separated)</label><input type="text" id="mTags" placeholder="e.g. tools, dev, reference"></div>
@@ -286,6 +286,8 @@ let selectMode = false;
 let selectedIds = new Set();
 let visibleIds = [];
 let favoritesCollapsed = JSON.parse(localStorage.getItem('msp-fav-collapsed') || 'false');
+let searchDebounceTimer = null;
+function debouncedRender() { clearTimeout(searchDebounceTimer); searchDebounceTimer = setTimeout(render, 150); }
 
 async function loadLinks() {
   try {
@@ -320,7 +322,7 @@ async function save() {
 }
 
 let toastTimer = null;
-let pendingDelete = null;
+let pendingDelete = null; // { saved: [...links], timer }
 
 function showToast(msg, isError) {
   const t = document.getElementById('toast');
@@ -419,12 +421,14 @@ function renderFolderContents(folderName, folderLinks) {
     bySubfolder[l.subfolder] = bySubfolder[l.subfolder] || [];
     bySubfolder[l.subfolder].push(l);
   });
+
   let html = '';
   if (rootLinks.length) {
     html += `<div class="grid">${rootLinks.map(cardHtml).join('')}</div>`;
   }
+
   Object.keys(bySubfolder).sort().forEach(sf => {
-    const key = folderName + '::' + sf;
+    const key = JSON.stringify([folderName, sf]);
     const sfCollapsed = !!collapsedSubfolders[key];
     const sfLinks = bySubfolder[sf];
     html += `<div class="subfolder-header" onclick="toggleSubfolder('${esc(folderName)}','${esc(sf)}')" data-folder="${esc(folderName)}" data-subfolder="${esc(sf)}">`;
@@ -437,6 +441,7 @@ function renderFolderContents(folderName, folderLinks) {
       html += `<div class="subfolder-grid"><div class="grid">${sfLinks.map(cardHtml).join('')}</div></div>`;
     }
   });
+
   return html;
 }
 
@@ -696,7 +701,7 @@ function toggleFolder(name) {
 }
 
 function toggleSubfolder(folderName, subfolder) {
-  const key = folderName + '::' + subfolder;
+  const key = JSON.stringify([folderName, subfolder]);
   collapsedSubfolders[key] = !collapsedSubfolders[key];
   localStorage.setItem('msp-subfolder-collapsed', JSON.stringify(collapsedSubfolders));
   render();
@@ -986,6 +991,7 @@ function bulkDelete() {
   };
   showUndoToast(`${n} link${n > 1 ? 's' : ''} deleted — Undo?`);
 }
+
 
 function bulkAddTag() {
   const input = document.getElementById('bulkTagInput');

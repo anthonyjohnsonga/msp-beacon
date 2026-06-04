@@ -5,5 +5,8 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./data:/data
+      - msp-beacon-data:/data
     restart: unless-stopped
+
+volumes:
+  msp-beacon-data:
