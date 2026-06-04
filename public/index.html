@@ -136,6 +136,13 @@ select:focus { outline: none; border-color: var(--g4); }
 .bulk-count { font-size: 14px; font-weight: 500; color: var(--g2); min-width: 72px; }
 .bulk-divider { width: 1px; height: 22px; background: var(--border0); flex-shrink: 0; }
 .btn.active { background: var(--g5); border-color: var(--g4); color: #fff; }
+.star-btn { background: none; border: none; padding: 0; cursor: pointer; font-size: 15px; color: var(--text2); display: flex; align-items: center; flex-shrink: 0; transition: color .15s; }
+.star-btn:hover { color: #F5A623; }
+.star-btn.active { color: #F5A623; }
+.favorites-section { margin-bottom: 1.5rem; }
+.favorites-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding: 6px 10px; background: rgba(245,166,35,.08); border-radius: 8px; border: 0.5px solid rgba(245,166,35,.35); cursor: pointer; user-select: none; }
+.favorites-header:hover { background: rgba(245,166,35,.15); }
+.favorites-title { font-size: 13px; font-weight: 500; color: #F5A623; }
 </style>
 </head>
 <body>
@@ -258,6 +265,7 @@ let dragOverEl = null;
 let selectMode = false;
 let selectedIds = new Set();
 let visibleIds = [];
+let favoritesCollapsed = JSON.parse(localStorage.getItem('msp-fav-collapsed') || 'false');
 
 async function loadLinks() {
   try {
@@ -336,6 +344,10 @@ function render() {
   const byF = {}, noF = [];
   fil.forEach(l => { l.folder ? (byF[l.folder] = byF[l.folder] || [], byF[l.folder].push(l)) : noF.push(l); });
   let html = '';
+  const favs = fil.filter(l => l.favorite);
+  if (favs.length) {
+    html += `<div class="favorites-section"><div class="favorites-header" onclick="toggleFavorites()"><i class="ti ti-chevron-right folder-chevron${favoritesCollapsed ? '' : ' open'}"></i><i class="ti ti-star-filled" style="font-size:15px;color:#F5A623"></i><span class="favorites-title">Favorites</span><span class="count-pill" style="background:rgba(245,166,35,.3);color:#F5A623">${favs.length}</span></div>${favoritesCollapsed ? '' : `<div class="grid">${favs.map(cardHtml).join('')}</div>`}</div>`;
+  }
   if (noF.length) html += `<div class="grid">${noF.map(cardHtml).join('')}</div>`;
   getOrderedFolders(Object.keys(byF)).forEach(f => {
     const collapsed = collapsedFolders.has(f);
@@ -347,7 +359,9 @@ function render() {
 function cardHtml(l) {
   const fav = getFavicon(l.url);
   const fi = fav ? `<img src="${fav}" alt="" onerror="this.style.display='none';this.nextSibling.style.display='flex'"><span style="display:none"><i class="ti ti-world"></i></span>` : `<i class="ti ti-world"></i>`;
+  const starBtn = selectMode ? '' : `<button class="star-btn${l.favorite ? ' active' : ''}" data-action="favorite" data-id="${esc(l.id)}" title="${l.favorite ? 'Remove from favorites' : 'Add to favorites'}" onclick="event.stopPropagation()"><i class="ti ti-star${l.favorite ? '-filled' : ''}"></i></button>`;
   const footer = `<div class="card-footer">
+      ${starBtn}
       ${(l.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('')}
       ${l.folder ? `<span class="folder-badge"><i class="ti ti-folder" style="font-size:11px"></i> ${esc(l.folder)}</span>` : ''}
     </div>`;
@@ -568,6 +582,7 @@ function setupCardListeners() {
     if (action === 'copy') copyUrl(btn.dataset.url, btn);
     else if (action === 'edit') editLink(id);
     else if (action === 'delete') deleteLink(id);
+    else if (action === 'favorite') toggleFavorite(id);
   });
 }
 
@@ -702,6 +717,19 @@ function exportLinks() {
 const style = document.createElement('style');
 style.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
 document.head.appendChild(style);
+
+function toggleFavorite(id) {
+  const l = links.find(x => x.id === id);
+  if (!l) return;
+  l.favorite = !l.favorite;
+  save(); render();
+}
+
+function toggleFavorites() {
+  favoritesCollapsed = !favoritesCollapsed;
+  localStorage.setItem('msp-fav-collapsed', JSON.stringify(favoritesCollapsed));
+  render();
+}
 
 function toggleSelectMode() {
   selectMode = !selectMode;
