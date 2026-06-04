@@ -448,7 +448,7 @@ function renderFolderContents(folderName, folderLinks) {
 function cardHtml(l) {
   const fav = getFavicon(l.url);
   const fi = fav ? `<img src="${fav}" alt="" onerror="this.style.display='none';this.nextSibling.style.display='flex'"><span style="display:none"><i class="ti ti-world"></i></span>` : `<i class="ti ti-world"></i>`;
-  const starBtn = selectMode ? '' : `<button class="star-btn${l.favorite ? ' active' : ''}" data-action="favorite" data-id="${esc(l.id)}" title="${l.favorite ? 'Remove from favorites' : 'Add to favorites'}" onclick="event.stopPropagation()"><i class="ti ti-star${l.favorite ? '-filled' : ''}"></i></button>`;
+  const starBtn = selectMode ? '' : `<button class="star-btn${l.favorite ? ' active' : ''}" title="${l.favorite ? 'Remove from favorites' : 'Add to favorites'}" onclick="event.stopPropagation(); toggleFavorite('${esc(l.id)}')" ><i class="ti ti-star${l.favorite ? '-filled' : ''}"></i></button>`;
   const footer = `<div class="card-footer">
       ${starBtn}
       ${(l.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('')}
