@@ -163,6 +163,69 @@ app.get('/api/fetch-title', async (req, res) => {
   } catch { if (!res.headersSent) res.json({ title: '' }); }
 });
 
+app.get('/api/check-links', async (req, res) => {
+  try {
+    const all = await readLinks();
+    let targets = all;
+    if (req.query.ids) {
+      const ids = new Set(req.query.ids.split(',').map(s => s.trim()).filter(Boolean));
+      targets = all.filter(l => ids.has(l.id));
+    }
+
+    async function checkOne(link) {
+      let parsed;
+      try { parsed = new URL(link.url); } catch { return [link.id, 'broken']; }
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return [link.id, 'broken'];
+      const mod = parsed.protocol === 'https:' ? https : http;
+      const options = {
+        hostname: parsed.hostname,
+        port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
+        path: parsed.pathname + parsed.search,
+        method: 'HEAD',
+        timeout: 5000,
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; MSP-Beacon/1.0)' }
+      };
+
+      async function attempt(method) {
+        return new Promise((resolve) => {
+          const opts = { ...options, method };
+          const req = mod.request(opts, (incoming) => {
+            incoming.resume();
+            const sc = incoming.statusCode;
+            if (method === 'HEAD' && sc === 405) {
+              resolve('retry-get');
+            } else if (sc >= 200 && sc < 400) {
+              resolve('ok');
+            } else {
+              resolve('broken');
+            }
+          });
+          req.on('timeout', () => { req.destroy(); resolve('timeout'); });
+          req.on('error', () => resolve('broken'));
+          req.end();
+        });
+      }
+
+      const result = await attempt('HEAD');
+      if (result === 'retry-get') return [link.id, await attempt('GET')];
+      return [link.id, result];
+    }
+
+    const results = {};
+    const CONCURRENCY = 10;
+    for (let i = 0; i < targets.length; i += CONCURRENCY) {
+      const batch = targets.slice(i, i + CONCURRENCY);
+      const batchResults = await Promise.all(batch.map(checkOne));
+      batchResults.forEach(([id, status]) => { results[id] = status; });
+    }
+
+    res.json(results);
+  } catch (e) {
+    console.error('GET /api/check-links error:', e);
+    res.status(500).json({ error: 'Failed to check links' });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`MSP Beacon running on http://0.0.0.0:${PORT}`);
   console.log(`Data file: ${DATA_FILE}`);
