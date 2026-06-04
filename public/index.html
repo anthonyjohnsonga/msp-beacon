@@ -98,7 +98,9 @@ select:focus { outline: none; border-color: var(--g4); }
 .notice { font-size: 12px; color: var(--g2); padding: 8px 12px; background: rgba(15,110,86,.15); border-radius: 8px; display: flex; align-items: center; gap: 8px; border: 0.5px solid var(--g5); }
 .notice i { color: var(--g3); flex-shrink: 0; }
 .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: var(--bg1); border: 1px solid var(--g5); color: var(--g2); padding: 10px 16px; border-radius: 8px; font-size: 14px; display: flex; align-items: center; gap: 8px; z-index: 200; opacity: 0; transition: opacity .2s; pointer-events: none; }
-.toast.show { opacity: 1; }
+.toast.show { opacity: 1; pointer-events: auto; }
+.toast-undo { background: none; border: 1px solid var(--g4); color: var(--g3); border-radius: 6px; padding: 2px 10px; font-size: 13px; cursor: pointer; font-family: inherit; font-weight: 500; }
+.toast-undo:hover { background: var(--g5); color: #fff; }
 .saving-indicator { font-size: 12px; color: var(--text2); display: flex; align-items: center; gap: 4px; margin-left: auto; }
 .settings-wrap { position: relative; }
 .settings-menu { position: absolute; top: calc(100% + 6px); right: 0; background: var(--bg1); border: 1px solid var(--g5); border-radius: 10px; min-width: 160px; z-index: 50; box-shadow: 0 8px 24px rgba(0,0,0,.4); padding: 4px; display: none; flex-direction: column; }
@@ -250,7 +252,7 @@ select:focus { outline: none; border-color: var(--g4); }
   </div>
 </div>
 
-<div class="toast" id="toast"><i class="ti ti-check"></i> <span id="toastMsg"></span></div>
+<div class="toast" id="toast"><i class="ti ti-check" id="toastIcon"></i> <span id="toastMsg"></span><button class="toast-undo" id="toastUndo" style="display:none" onclick="undoDelete()">Undo</button></div>
 
 <div class="bulk-bar hidden" id="bulkBar">
   <span class="bulk-count" id="bulkCount">0 selected</span>
@@ -316,13 +318,40 @@ async function save() {
   }, 400);
 }
 
+let toastTimer = null;
+let pendingDelete = null;
+
 function showToast(msg, isError) {
   const t = document.getElementById('toast');
   document.getElementById('toastMsg').textContent = msg;
+  document.getElementById('toastUndo').style.display = 'none';
+  document.getElementById('toastIcon').className = isError ? 'ti ti-alert-circle' : 'ti ti-check';
   t.style.borderColor = isError ? '#E24B4A' : '';
   t.style.color = isError ? '#E24B4A' : '';
   t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2500);
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function showUndoToast(msg) {
+  const t = document.getElementById('toast');
+  document.getElementById('toastMsg').textContent = msg;
+  document.getElementById('toastUndo').style.display = '';
+  document.getElementById('toastIcon').className = 'ti ti-trash';
+  t.style.borderColor = '';
+  t.style.color = '';
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 5500);
+}
+
+function undoDelete() {
+  if (!pendingDelete) return;
+  clearTimeout(pendingDelete.timer);
+  links = pendingDelete.saved;
+  pendingDelete = null;
+  render();
+  showToast('Restored');
 }
 
 function getFavicon(u) { try { return 'https://www.google.com/s2/favicons?domain=' + new URL(u).hostname + '&sz=64'; } catch { return null; } }
@@ -526,9 +555,15 @@ function copyUrl(url, btn) {
 }
 function editLink(id) { openModal(id); }
 function deleteLink(id) {
-  if (!confirm('Delete this link?')) return;
+  if (pendingDelete) { clearTimeout(pendingDelete.timer); save(); }
+  const saved = links.slice();
   links = links.filter(l => l.id !== id);
-  save(); render(); showToast('Link deleted');
+  render();
+  pendingDelete = {
+    saved,
+    timer: setTimeout(() => { pendingDelete = null; save(); }, 5000)
+  };
+  showUndoToast('Link deleted — Undo?');
 }
 
 function openImport() {
@@ -939,11 +974,16 @@ function confirmBulkMove() {
 function bulkDelete() {
   if (!selectedIds.size) return;
   const n = selectedIds.size;
-  if (!confirm(`Delete ${n} link${n > 1 ? 's' : ''}?`)) return;
+  if (pendingDelete) { clearTimeout(pendingDelete.timer); save(); }
+  const saved = links.slice();
   links = links.filter(l => !selectedIds.has(l.id));
   selectedIds.clear();
-  save(); render(); updateBulkBar();
-  showToast(`${n} link${n > 1 ? 's' : ''} deleted`);
+  render(); updateBulkBar();
+  pendingDelete = {
+    saved,
+    timer: setTimeout(() => { pendingDelete = null; save(); }, 5000)
+  };
+  showUndoToast(`${n} link${n > 1 ? 's' : ''} deleted — Undo?`);
 }
 
 function bulkMove(sel) {
