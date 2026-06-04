@@ -448,7 +448,7 @@ function renderFolderContents(folderName, folderLinks) {
 function cardHtml(l) {
   const fav = getFavicon(l.url);
   const fi = fav ? `<img src="${fav}" alt="" onerror="this.style.display='none';this.nextSibling.style.display='flex'"><span style="display:none"><i class="ti ti-world"></i></span>` : `<i class="ti ti-world"></i>`;
-  const starBtn = selectMode ? '' : `<button class="star-btn${l.favorite ? ' active' : ''}" title="${l.favorite ? 'Remove from favorites' : 'Add to favorites'}" onclick="event.stopPropagation(); toggleFavorite('${esc(l.id)}')" ><i class="ti ti-star${l.favorite ? '-filled' : ''}"></i></button>`;
+  const starBtn = selectMode ? '' : `<button class="star-btn${l.favorite ? ' active' : ''}" data-action="favorite" data-id="${esc(l.id)}" title="${l.favorite ? 'Remove from favorites' : 'Add to favorites'}"><i class="ti ti-star${l.favorite ? '-filled' : ''}"></i></button>`;
   const footer = `<div class="card-footer">
       ${starBtn}
       ${(l.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('')}
@@ -459,14 +459,14 @@ function cardHtml(l) {
     </div>`;
   if (selectMode) {
     const checked = selectedIds.has(l.id);
-    return `<div class="card select-mode${checked ? ' selected' : ''}" data-id="${esc(l.id)}" onclick="toggleSelect('${esc(l.id)}')">
+    return `<div class="card select-mode${checked ? ' selected' : ''}" data-id="${esc(l.id)}">
       <div class="card-check${checked ? ' checked' : ''}"><i class="ti ti-check"></i></div>
       ${top}
       ${l.desc ? `<div class="card-desc">${esc(l.desc)}</div>` : ''}
       ${footer}
     </div>`;
   }
-  return `<div class="card" data-id="${esc(l.id)}" onclick="window.open('${esc(l.url)}','_blank')">
+  return `<div class="card" data-id="${esc(l.id)}" data-url="${esc(l.url)}">
     <div class="card-actions">
       <div class="drag-handle" draggable="true" title="Drag to reorder"><i class="ti ti-grip-vertical"></i></div>
       <button class="icon-btn" title="Copy URL" data-action="copy" data-id="${esc(l.id)}" data-url="${esc(l.url)}"><i class="ti ti-copy"></i></button>
@@ -711,14 +711,19 @@ function setupCardListeners() {
   const content = document.getElementById('content');
   content.addEventListener('click', e => {
     const btn = e.target.closest('[data-action]');
-    if (!btn) return;
-    e.stopPropagation();
-    const action = btn.dataset.action;
-    const id = btn.dataset.id;
-    if (action === 'copy') copyUrl(btn.dataset.url, btn);
-    else if (action === 'edit') editLink(id);
-    else if (action === 'delete') deleteLink(id);
-    else if (action === 'favorite') toggleFavorite(id);
+    if (btn) {
+      const action = btn.dataset.action;
+      const id = btn.dataset.id;
+      if (action === 'copy') copyUrl(btn.dataset.url, btn);
+      else if (action === 'edit') editLink(id);
+      else if (action === 'delete') deleteLink(id);
+      else if (action === 'favorite') toggleFavorite(id);
+      return;
+    }
+    const card = e.target.closest('.card[data-id]');
+    if (!card) return;
+    if (card.classList.contains('select-mode')) toggleSelect(card.dataset.id);
+    else window.open(card.dataset.url, '_blank');
   });
 }
 
