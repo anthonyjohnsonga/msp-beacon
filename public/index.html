@@ -143,6 +143,16 @@ select:focus { outline: none; border-color: var(--g4); }
 .favorites-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding: 6px 10px; background: rgba(245,166,35,.08); border-radius: 8px; border: 0.5px solid rgba(245,166,35,.35); cursor: pointer; user-select: none; }
 .favorites-header:hover { background: rgba(245,166,35,.15); }
 .favorites-title { font-size: 13px; font-weight: 500; color: #F5A623; }
+.subfolder-header { display: flex; align-items: center; gap: 6px; padding: 4px 8px; margin: 8px 0 4px 8px; border-left: 2px solid rgba(100,200,100,.4); cursor: pointer; user-select: none; }
+.subfolder-header:hover { background: rgba(15,110,86,.12); border-radius: 0 6px 6px 0; }
+.subfolder-header.drag-over { background: rgba(15,110,86,.3) !important; border-left-color: var(--g3) !important; border-radius: 0 6px 6px 0; }
+.subfolder-title { font-size: 12px; font-weight: 500; color: var(--text2); }
+.subfolder-grid { padding-left: 12px; }
+.title-wrap { position: relative; display: flex; align-items: center; }
+.title-wrap input[type=text] { width: 100%; }
+.title-spinner { position: absolute; right: 8px; font-size: 14px; color: var(--text2); pointer-events: none; display: none; animation: spin 1s linear infinite; }
+.title-wrap.fetching .title-spinner { display: block; }
+.title-wrap.fetching input[type=text] { opacity: 0.55; }
 </style>
 </head>
 <body>
@@ -177,14 +187,18 @@ select:focus { outline: none; border-color: var(--g4); }
 <div id="modalBg" class="modal-bg" style="display:none" onclick="if(event.target===this)closeModal()">
   <div class="modal" role="dialog" aria-modal="true">
     <div class="modal-header"><i class="ti ti-link"></i><h3 id="modalTitle">Add link</h3></div>
-    <div class="field"><label>URL</label><input type="text" id="mUrl" placeholder="https://…" oninput="autoTitle()"></div>
-    <div class="field"><label>Title</label><input type="text" id="mTitle" placeholder="Site name"></div>
+    <div class="field"><label>URL</label><input type="text" id="mUrl" placeholder="https://…" oninput="autoTitle()" onblur="fetchPageTitle()"></div>
+    <div class="field"><label>Title</label><div class="title-wrap" id="titleWrap"><input type="text" id="mTitle" placeholder="Site name"><i class="ti ti-loader title-spinner" id="titleSpinner"></i></div></div>
     <div class="field"><label>Description</label><textarea id="mDesc" placeholder="What is this?"></textarea></div>
     <div class="field"><label>Folder</label>
       <div style="display:flex;gap:8px">
-        <select id="mFolder" style="flex:1"></select>
-        <input type="text" id="mNewFolder" placeholder="New folder…" style="flex:1">
+        <select id="mFolder" style="flex:1" onchange="updateSubfolderDatalist()"></select>
+        <input type="text" id="mNewFolder" placeholder="New folder…" style="flex:1" oninput="updateSubfolderDatalist()">
       </div>
+    </div>
+    <div class="field"><label>Sub-folder <span style="font-size:10px;color:var(--text2);text-transform:none;letter-spacing:0">(optional)</span></label>
+      <input type="text" id="mSubfolder" placeholder="Sub-folder name…" list="subfolderList" autocomplete="off">
+      <datalist id="subfolderList"></datalist>
     </div>
     <div class="field"><label>Tags (comma separated)</label><input type="text" id="mTags" placeholder="e.g. tools, dev, reference"></div>
     <div class="modal-footer">
@@ -244,7 +258,10 @@ select:focus { outline: none; border-color: var(--g4); }
   <a style="font-size:13px;color:var(--g3);cursor:pointer;text-decoration:none" onclick="selectAllVisible()">All</a>
   <a style="font-size:13px;color:var(--text1);cursor:pointer;text-decoration:none" onclick="clearSelection()">None</a>
   <div class="bulk-divider"></div>
-  <select id="bulkMoveFolder" onchange="bulkMove(this)" style="height:32px;font-size:13px"><option value="">Move to folder…</option></select>
+  <select id="bulkMoveFolder" onchange="onBulkFolderChange(this)" style="height:32px;font-size:13px"><option value="">Move to folder…</option></select>
+  <input type="text" id="bulkMoveSubfolder" placeholder="Sub-folder (optional)…" list="bulkSubfolderList" autocomplete="off" style="height:32px;font-size:13px;width:150px;display:none">
+  <datalist id="bulkSubfolderList"></datalist>
+  <button id="bulkMoveConfirm" class="btn" style="height:32px;font-size:13px;padding:0 10px;display:none" onclick="confirmBulkMove()"><i class="ti ti-arrow-right"></i> Move</button>
   <input type="text" id="bulkTagInput" placeholder="Add tag…" style="height:32px;font-size:13px;width:110px" onkeydown="if(event.key==='Enter')bulkAddTag()">
   <button class="btn" style="height:32px;font-size:13px;padding:0 10px" onclick="bulkAddTag()"><i class="ti ti-tag"></i> Tag</button>
   <div class="bulk-divider"></div>
@@ -258,6 +275,7 @@ let editId = null;
 let parsedBookmarks = [];
 let saveTimer = null;
 let collapsedFolders = new Set(JSON.parse(localStorage.getItem('msp-collapsed') || '[]'));
+let collapsedSubfolders = JSON.parse(localStorage.getItem('msp-subfolder-collapsed') || '{}');
 let folderOrder = JSON.parse(localStorage.getItem('msp-folder-order') || 'null');
 let dragId = null;
 let dragFolder = null;
@@ -319,6 +337,10 @@ function getOrderedFolders(names) {
 }
 function allTags() { return [...new Set(links.flatMap(l => l.tags || []))].sort(); }
 
+function subfoldersByFolder(folderName) {
+  return [...new Set(links.filter(l => l.folder === folderName && l.subfolder).map(l => l.subfolder))].sort();
+}
+
 function render() {
   const q = document.getElementById('search').value.toLowerCase();
   const clearBtn = document.getElementById('searchClear');
@@ -331,7 +353,7 @@ function render() {
   let fil = links.filter(l => {
     if (ff && l.folder !== ff) return false;
     if (tf && !(l.tags || []).some(t => t.toLowerCase() === tf.toLowerCase())) return false;
-    if (q && !((l.title+l.url+l.desc+(l.folder||'')+(l.tags||[]).join(' ')).toLowerCase().includes(q))) return false;
+    if (q && !((l.title+l.url+l.desc+(l.folder||'')+(l.subfolder||'')+(l.tags||[]).join(' ')).toLowerCase().includes(q))) return false;
     return true;
   });
   visibleIds = fil.map(l => l.id);
@@ -351,9 +373,41 @@ function render() {
   if (noF.length) html += `<div class="grid">${noF.map(cardHtml).join('')}</div>`;
   getOrderedFolders(Object.keys(byF)).forEach(f => {
     const collapsed = collapsedFolders.has(f);
-    html += `<div class="folder-section"><div class="folder-header" onclick="toggleFolder(this.dataset.folder)" data-folder="${esc(f)}"><div class="folder-drag-handle" draggable="true" title="Drag to reorder folder" onclick="event.stopPropagation()"><i class="ti ti-grip-vertical"></i></div><i class="ti ti-chevron-right folder-chevron${collapsed ? '' : ' open'}"></i><i class="ti ti-folder" style="font-size:16px;color:var(--g4)"></i><span class="folder-name">${esc(f)}</span><span class="count-pill">${byF[f].length}</span></div>${collapsed ? '' : `<div class="grid">${byF[f].map(cardHtml).join('')}</div>`}</div>`;
+    let folderContent = '';
+    if (!collapsed) {
+      folderContent = renderFolderContents(f, byF[f]);
+    }
+    html += `<div class="folder-section"><div class="folder-header" onclick="toggleFolder(this.dataset.folder)" data-folder="${esc(f)}"><div class="folder-drag-handle" draggable="true" title="Drag to reorder folder" onclick="event.stopPropagation()"><i class="ti ti-grip-vertical"></i></div><i class="ti ti-chevron-right folder-chevron${collapsed ? '' : ' open'}"></i><i class="ti ti-folder" style="font-size:16px;color:var(--g4)"></i><span class="folder-name">${esc(f)}</span><span class="count-pill">${byF[f].length}</span></div>${folderContent}</div>`;
   });
   c.innerHTML = html;
+}
+
+function renderFolderContents(folderName, folderLinks) {
+  const rootLinks = folderLinks.filter(l => !l.subfolder);
+  const bySubfolder = {};
+  folderLinks.filter(l => l.subfolder).forEach(l => {
+    bySubfolder[l.subfolder] = bySubfolder[l.subfolder] || [];
+    bySubfolder[l.subfolder].push(l);
+  });
+  let html = '';
+  if (rootLinks.length) {
+    html += `<div class="grid">${rootLinks.map(cardHtml).join('')}</div>`;
+  }
+  Object.keys(bySubfolder).sort().forEach(sf => {
+    const key = folderName + '::' + sf;
+    const sfCollapsed = !!collapsedSubfolders[key];
+    const sfLinks = bySubfolder[sf];
+    html += `<div class="subfolder-header" onclick="toggleSubfolder('${esc(folderName)}','${esc(sf)}')" data-folder="${esc(folderName)}" data-subfolder="${esc(sf)}">`;
+    html += `<i class="ti ti-chevron-right folder-chevron${sfCollapsed ? '' : ' open'}" style="font-size:12px"></i>`;
+    html += `<i class="ti ti-folder" style="font-size:12px;color:var(--g4);opacity:.7"></i>`;
+    html += `<span class="subfolder-title">${esc(sf)}</span>`;
+    html += `<span class="count-pill" style="font-size:10px;padding:1px 5px;background:rgba(15,110,86,.5)">${sfLinks.length}</span>`;
+    html += `</div>`;
+    if (!sfCollapsed) {
+      html += `<div class="subfolder-grid"><div class="grid">${sfLinks.map(cardHtml).join('')}</div></div>`;
+    }
+  });
+  return html;
 }
 
 function cardHtml(l) {
@@ -363,7 +417,7 @@ function cardHtml(l) {
   const footer = `<div class="card-footer">
       ${starBtn}
       ${(l.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('')}
-      ${l.folder ? `<span class="folder-badge"><i class="ti ti-folder" style="font-size:11px"></i> ${esc(l.folder)}</span>` : ''}
+      ${l.folder ? `<span class="folder-badge"><i class="ti ti-folder" style="font-size:11px"></i> ${esc(l.folder)}${l.subfolder ? ' / ' + esc(l.subfolder) : ''}</span>` : ''}
     </div>`;
   const top = `<div class="card-top"><div class="favicon">${fi}</div>
       <div style="min-width:0"><div class="card-title">${esc(l.title)}</div><div class="card-url">${esc(getDomain(l.url))}</div></div>
@@ -399,8 +453,10 @@ function openModal(id) {
   document.getElementById('mDesc').value = l ? l.desc : '';
   document.getElementById('mTags').value = l ? (l.tags || []).join(', ') : '';
   document.getElementById('mNewFolder').value = '';
+  document.getElementById('mSubfolder').value = l ? (l.subfolder || '') : '';
   const mf = document.getElementById('mFolder');
   mf.innerHTML = '<option value="">No folder</option>' + allFolders().map(f => `<option value="${esc(f)}"${l&&l.folder===f?' selected':''}>${esc(f)}</option>`).join('');
+  updateSubfolderDatalist();
   document.getElementById('modalBg').style.display = 'flex';
   setTimeout(() => document.getElementById('mUrl').focus(), 50);
 }
@@ -408,21 +464,53 @@ function closeModal() { document.getElementById('modalBg').style.display = 'none
 function autoTitle() {
   const u = document.getElementById('mUrl').value.trim();
   const t = document.getElementById('mTitle');
-  if (!t.value && u) { try { t.value = new URL(u).hostname.replace('www.', ''); } catch {} }
+  if (!t.value && u && !/^https?:\/\//i.test(u)) {
+    try { t.value = new URL(u).hostname.replace('www.', ''); } catch {}
+  }
 }
+
+async function fetchPageTitle() {
+  if (editId) return;
+  const u = document.getElementById('mUrl').value.trim();
+  const t = document.getElementById('mTitle');
+  if (!u || !/^https?:\/\//i.test(u)) return;
+  if (t.value) return;
+  const wrap = document.getElementById('titleWrap');
+  wrap.classList.add('fetching');
+  try {
+    const res = await fetch('/api/fetch-title?url=' + encodeURIComponent(u));
+    const data = await res.json();
+    if (!t.value) {
+      t.value = data.title || new URL(u).hostname.replace('www.', '');
+    }
+  } catch {
+    if (!t.value) { try { t.value = new URL(u).hostname.replace('www.', ''); } catch {} }
+  }
+  wrap.classList.remove('fetching');
+}
+
+function updateSubfolderDatalist() {
+  const nf = document.getElementById('mNewFolder').value.trim();
+  const selectedFolder = nf || document.getElementById('mFolder').value || '';
+  const subs = selectedFolder ? subfoldersByFolder(selectedFolder) : [];
+  const dl = document.getElementById('subfolderList');
+  dl.innerHTML = subs.map(s => `<option value="${esc(s)}">`).join('');
+}
+
 function saveLink() {
   const url = document.getElementById('mUrl').value.trim();
   const title = document.getElementById('mTitle').value.trim();
   if (!url || !title) { alert('URL and title are required.'); return; }
   const nf = document.getElementById('mNewFolder').value.trim();
   const folder = nf || document.getElementById('mFolder').value || '';
+  const subfolder = document.getElementById('mSubfolder').value.trim() || null;
   const tags = document.getElementById('mTags').value.split(',').map(t => t.trim()).filter(Boolean);
   const desc = document.getElementById('mDesc').value.trim();
   if (editId) {
     const i = links.findIndex(l => l.id === editId);
-    if (i > -1) links[i] = { ...links[i], url, title, desc, folder, tags };
+    if (i > -1) links[i] = { ...links[i], url, title, desc, folder, subfolder, tags };
   } else {
-    links.unshift({ id: Date.now().toString(36) + Math.random().toString(36).slice(2), url, title, desc, folder, tags });
+    links.unshift({ id: Date.now().toString(36) + Math.random().toString(36).slice(2), url, title, desc, folder, subfolder, tags });
   }
   const wasEditing = !!editId;
   save(); closeModal(); render();
@@ -571,6 +659,13 @@ function toggleFolder(name) {
   render();
 }
 
+function toggleSubfolder(folderName, subfolder) {
+  const key = folderName + '::' + subfolder;
+  collapsedSubfolders[key] = !collapsedSubfolders[key];
+  localStorage.setItem('msp-subfolder-collapsed', JSON.stringify(collapsedSubfolders));
+  render();
+}
+
 function setupCardListeners() {
   const content = document.getElementById('content');
   content.addEventListener('click', e => {
@@ -620,10 +715,16 @@ function setupDragListeners() {
     let newTarget = null;
     if (dragId) {
       const card = e.target.closest('.card[data-id]');
-      if (card && card.dataset.id !== dragId) newTarget = card;
-      else if (!card) {
-        const header = e.target.closest('.folder-header[data-folder]');
-        if (header) newTarget = header;
+      if (card && card.dataset.id !== dragId) {
+        newTarget = card;
+      } else if (!card) {
+        const sfHeader = e.target.closest('.subfolder-header[data-subfolder]');
+        if (sfHeader) {
+          newTarget = sfHeader;
+        } else {
+          const header = e.target.closest('.folder-header[data-folder]');
+          if (header) newTarget = header;
+        }
       }
     } else if (dragFolder) {
       const header = e.target.closest('.folder-header[data-folder]');
@@ -649,18 +750,31 @@ function setupDragListeners() {
     document.querySelectorAll('.dragging').forEach(el => el.classList.remove('dragging'));
     if (dragId) {
       const card = e.target.closest('.card[data-id]');
-      const header = e.target.closest('.folder-header[data-folder]');
+      const sfHeader = e.target.closest('.subfolder-header[data-subfolder]');
+      const header = !sfHeader ? e.target.closest('.folder-header[data-folder]') : null;
       if (card && card.dataset.id !== dragId) {
         const srcIdx = links.findIndex(l => l.id === dragId);
         const tgtLink = links.find(l => l.id === card.dataset.id);
         const [moved] = links.splice(srcIdx, 1);
         moved.folder = tgtLink.folder || '';
+        moved.subfolder = tgtLink.subfolder || null;
         const newTgt = links.findIndex(l => l.id === card.dataset.id);
         links.splice(newTgt, 0, moved);
         save(); render();
+      } else if (sfHeader) {
+        const srcIdx = links.findIndex(l => l.id === dragId);
+        if (srcIdx > -1) {
+          links[srcIdx].folder = sfHeader.dataset.folder;
+          links[srcIdx].subfolder = sfHeader.dataset.subfolder;
+          save(); render();
+        }
       } else if (header) {
         const srcIdx = links.findIndex(l => l.id === dragId);
-        if (srcIdx > -1) { links[srcIdx].folder = header.dataset.folder; save(); render(); }
+        if (srcIdx > -1) {
+          links[srcIdx].folder = header.dataset.folder;
+          links[srcIdx].subfolder = null;
+          save(); render();
+        }
       }
     } else if (dragFolder) {
       const header = e.target.closest('.folder-header[data-folder]');
@@ -778,6 +892,48 @@ function updateBulkBar() {
   mf.innerHTML = '<option value="">Move to folder…</option>'
     + allFolders().map(f => `<option value="${esc(f)}">${esc(f)}</option>`).join('')
     + '<option value="__none__">— Remove from folder</option>';
+  document.getElementById('bulkMoveSubfolder').style.display = 'none';
+  document.getElementById('bulkMoveConfirm').style.display = 'none';
+  document.getElementById('bulkMoveSubfolder').value = '';
+}
+
+function onBulkFolderChange(sel) {
+  if (!sel.value || sel.value === '__none__') {
+    if (sel.value === '__none__' && selectedIds.size) {
+      const n = selectedIds.size;
+      links.forEach(l => { if (selectedIds.has(l.id)) { l.folder = ''; l.subfolder = null; } });
+      sel.value = '';
+      document.getElementById('bulkMoveSubfolder').style.display = 'none';
+      document.getElementById('bulkMoveConfirm').style.display = 'none';
+      save(); render(); updateBulkBar();
+      showToast(`${n} link${n > 1 ? 's' : ''} moved`);
+    } else {
+      document.getElementById('bulkMoveSubfolder').style.display = 'none';
+      document.getElementById('bulkMoveConfirm').style.display = 'none';
+    }
+    return;
+  }
+  const folder = sel.value;
+  const subs = subfoldersByFolder(folder);
+  const dl = document.getElementById('bulkSubfolderList');
+  dl.innerHTML = subs.map(s => `<option value="${esc(s)}">`).join('');
+  document.getElementById('bulkMoveSubfolder').style.display = '';
+  document.getElementById('bulkMoveSubfolder').value = '';
+  document.getElementById('bulkMoveConfirm').style.display = 'flex';
+}
+
+function confirmBulkMove() {
+  const sel = document.getElementById('bulkMoveFolder');
+  if (!sel.value || !selectedIds.size) { sel.value = ''; return; }
+  const n = selectedIds.size;
+  const folder = sel.value;
+  const subfolder = document.getElementById('bulkMoveSubfolder').value.trim() || null;
+  links.forEach(l => { if (selectedIds.has(l.id)) { l.folder = folder; l.subfolder = subfolder; } });
+  sel.value = '';
+  document.getElementById('bulkMoveSubfolder').style.display = 'none';
+  document.getElementById('bulkMoveConfirm').style.display = 'none';
+  save(); render(); updateBulkBar();
+  showToast(`${n} link${n > 1 ? 's' : ''} moved`);
 }
 
 function bulkDelete() {
