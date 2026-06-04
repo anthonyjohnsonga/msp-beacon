@@ -174,6 +174,13 @@ select:focus { outline: none; border-color: var(--g4); }
     </div>
     <select id="folderFilter" onchange="render()"><option value="">All folders</option></select>
     <select id="tagFilter" onchange="render()"><option value="">All tags</option></select>
+    <select id="sortSelect" onchange="onSortChange()">
+      <option value="manual">Manual order</option>
+      <option value="az">A → Z</option>
+      <option value="za">Z → A</option>
+      <option value="newest">Newest first</option>
+      <option value="oldest">Oldest first</option>
+    </select>
     <button class="btn" id="checkLinksBtn" onclick="checkLinks()"><i class="ti ti-wifi"></i> Check links</button>
     <button class="btn" id="selectBtn" onclick="toggleSelectMode()"><i class="ti ti-checkbox"></i> Select</button>
     <button class="btn btn-primary" onclick="openModal()"><i class="ti ti-plus"></i> Add link</button>
@@ -292,6 +299,21 @@ let visibleIds = [];
 let favoritesCollapsed = JSON.parse(localStorage.getItem('msp-fav-collapsed') || 'false');
 let searchDebounceTimer = null;
 function debouncedRender() { clearTimeout(searchDebounceTimer); searchDebounceTimer = setTimeout(render, 150); }
+let currentSort = localStorage.getItem('msp-sort') || 'manual';
+function onSortChange() {
+  currentSort = document.getElementById('sortSelect').value;
+  localStorage.setItem('msp-sort', currentSort);
+  render();
+}
+function sortLinks(arr) {
+  if (currentSort === 'manual') return arr;
+  const copy = arr.slice();
+  if (currentSort === 'az') copy.sort((a, b) => (a.title || '').toLowerCase().localeCompare((b.title || '').toLowerCase()));
+  else if (currentSort === 'za') copy.sort((a, b) => (b.title || '').toLowerCase().localeCompare((a.title || '').toLowerCase()));
+  else if (currentSort === 'newest') copy.sort((a, b) => parseInt(b.id, 36) - parseInt(a.id, 36));
+  else if (currentSort === 'oldest') copy.sort((a, b) => parseInt(a.id, 36) - parseInt(b.id, 36));
+  return copy;
+}
 
 async function loadLinks() {
   try {
@@ -386,12 +408,15 @@ function render() {
   const fs = document.getElementById('folderFilter'), ts = document.getElementById('tagFilter');
   fs.innerHTML = '<option value="">All folders</option>' + allFolders().map(f => `<option value="${esc(f)}"${f===ff?' selected':''}>${esc(f)}</option>`).join('');
   ts.innerHTML = '<option value="">All tags</option>' + allTags().map(t => `<option value="${esc(t)}"${t===tf?' selected':''}>${esc(t)}</option>`).join('');
+  const sortEl = document.getElementById('sortSelect');
+  if (sortEl) sortEl.value = currentSort;
   let fil = links.filter(l => {
     if (ff && l.folder !== ff) return false;
     if (tf && !(l.tags || []).some(t => t.toLowerCase() === tf.toLowerCase())) return false;
     if (q && !((l.title+l.url+l.desc+(l.folder||'')+(l.subfolder||'')+(l.tags||[]).join(' ')).toLowerCase().includes(q))) return false;
     return true;
   });
+  fil = sortLinks(fil);
   visibleIds = fil.map(l => l.id);
   const c = document.getElementById('content');
   if (!fil.length) {
@@ -538,7 +563,7 @@ function updateSubfolderDatalist() {
   const selectedFolder = nf || document.getElementById('mFolder').value || '';
   const subs = selectedFolder ? subfoldersByFolder(selectedFolder) : [];
   const dl = document.getElementById('subfolderList');
-  dl.innerHTML = subs.map(s => `<option value="${esc(s)}">`).join('');
+  dl.innerHTML = subs.map(s => `<option value="${esc(s)}">` ).join('');
 }
 
 function saveLink() {
