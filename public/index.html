@@ -305,11 +305,12 @@ async function save() {
     const status = document.getElementById('saveStatus');
     status.innerHTML = '<i class="ti ti-loader" style="animation:spin 1s linear infinite"></i> Saving…';
     try {
-      await fetch('/api/links', {
+      const res = await fetch('/api/links', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(links)
       });
+      if (!res.ok) throw new Error('Server error ' + res.status);
       status.innerHTML = '<i class="ti ti-circle-check" style="color:var(--g3)"></i> Saved';
       setTimeout(() => status.innerHTML = '', 2000);
     } catch(e) {
@@ -984,16 +985,6 @@ function bulkDelete() {
     timer: setTimeout(() => { pendingDelete = null; save(); }, 5000)
   };
   showUndoToast(`${n} link${n > 1 ? 's' : ''} deleted — Undo?`);
-}
-
-function bulkMove(sel) {
-  if (!sel.value || !selectedIds.size) { sel.value = ''; return; }
-  const n = selectedIds.size;
-  const folder = sel.value === '__none__' ? '' : sel.value;
-  links.forEach(l => { if (selectedIds.has(l.id)) l.folder = folder; });
-  sel.value = '';
-  save(); render(); updateBulkBar();
-  showToast(`${n} link${n > 1 ? 's' : ''} moved`);
 }
 
 function bulkAddTag() {

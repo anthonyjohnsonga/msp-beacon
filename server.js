@@ -3,6 +3,25 @@ const fsp = require('fs').promises;
 const path = require('path');
 const http = require('http');
 const https = require('https');
+const dns = require('dns').promises;
+const net = require('net');
+
+function isPrivateIP(ip) {
+  if (net.isIPv4(ip)) {
+    const p = ip.split('.').map(Number);
+    return p[0] === 127 ||
+      p[0] === 10 ||
+      (p[0] === 172 && p[1] >= 16 && p[1] <= 31) ||
+      (p[0] === 192 && p[1] === 168) ||
+      (p[0] === 169 && p[1] === 254) ||
+      p[0] === 0;
+  }
+  if (net.isIPv6(ip)) {
+    const l = ip.toLowerCase();
+    return l === '::1' || l.startsWith('fc') || l.startsWith('fd') || l.startsWith('fe80');
+  }
+  return true;
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -64,14 +83,20 @@ app.post('/api/links', (req, res) => {
     });
 });
 
-app.get('/api/fetch-title', (req, res) => {
+app.get('/api/fetch-title', async (req, res) => {
   const rawUrl = req.query.url;
   if (!rawUrl) return res.json({ title: '' });
 
-  function fetchTitle(urlStr, hopsLeft) {
+  async function fetchTitle(urlStr, hopsLeft) {
     let parsed;
     try { parsed = new URL(urlStr); } catch { return res.json({ title: '' }); }
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return res.json({ title: '' });
+
+    // SSRF protection: resolve hostname and block private/internal IPs
+    try {
+      const { address } = await dns.lookup(parsed.hostname);
+      if (isPrivateIP(address)) return res.json({ title: '' });
+    } catch { return res.json({ title: '' }); }
 
     const mod = parsed.protocol === 'https:' ? https : http;
     const options = {
@@ -110,13 +135,8 @@ app.get('/api/fetch-title', (req, res) => {
         }
       });
 
-      incoming.on('end', () => {
-        if (!done) sendTitle();
-      });
-
-      incoming.on('error', () => {
-        if (!res.headersSent) sendTitle();
-      });
+      incoming.on('end', () => { if (!done) sendTitle(); });
+      incoming.on('error', () => { if (!res.headersSent) sendTitle(); });
 
       function sendTitle() {
         if (res.headersSent) return;
@@ -135,11 +155,12 @@ app.get('/api/fetch-title', (req, res) => {
 
     request.on('timeout', () => { request.destroy(); });
     request.on('error', () => { if (!res.headersSent) res.json({ title: '' }); });
-    request.on('close', () => {});
     request.end();
   }
 
-  fetchTitle(rawUrl, 3);
+  try {
+    await fetchTitle(rawUrl, 3);
+  } catch { if (!res.headersSent) res.json({ title: '' }); }
 });
 
 app.listen(PORT, () => {
