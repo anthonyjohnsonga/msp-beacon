@@ -181,12 +181,12 @@ select:focus { outline: none; border-color: var(--g4); }
       <option value="newest">Newest first</option>
       <option value="oldest">Oldest first</option>
     </select>
-    <button class="btn" id="checkLinksBtn" onclick="checkLinks()"><i class="ti ti-wifi"></i> Check links</button>
     <button class="btn" id="selectBtn" onclick="toggleSelectMode()"><i class="ti ti-checkbox"></i> Select</button>
     <button class="btn btn-primary" onclick="openModal()"><i class="ti ti-plus"></i> Add link</button>
     <div class="settings-wrap">
       <button class="btn" id="settingsBtn" onclick="toggleSettings(event)"><i class="ti ti-settings"></i> Settings</button>
       <div class="settings-menu" id="settingsMenu">
+        <button class="settings-item" id="checkLinksBtn" onclick="checkLinks()"><i class="ti ti-wifi"></i> Check links</button>
         <button class="settings-item" onclick="closeSettings();openTheme()"><i class="ti ti-palette"></i> Theme</button>
         <button class="settings-item" onclick="closeSettings();openImport()"><i class="ti ti-file-import"></i> Import</button>
         <button class="settings-item" onclick="closeSettings();exportLinks()"><i class="ti ti-file-export"></i> Export</button>
@@ -1049,6 +1049,7 @@ function bulkAddTag() {
 async function checkLinks() {
   const btn = document.getElementById('checkLinksBtn');
   if (!btn || btn.disabled) return;
+  closeSettings();
   const ids = visibleIds.length ? visibleIds : links.map(l => l.id);
   if (!ids.length) { showToast('No links to check'); return; }
   btn.disabled = true;
