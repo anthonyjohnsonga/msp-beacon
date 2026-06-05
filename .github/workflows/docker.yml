@@ -10,8 +10,16 @@ jobs:
     permissions:
       contents: write
       packages: write
+      security-events: write
 
     steps:
+      - name: Verify tag pushed by repo owner
+        run: |
+          if [ "${{ github.actor }}" != "${{ github.repository_owner }}" ]; then
+            echo "Error: tags must be pushed by the repo owner (${{ github.repository_owner }}), got ${{ github.actor }}"
+            exit 1
+          fi
+
       - uses: actions/checkout@v4
 
       - name: Log in to GHCR
@@ -42,6 +50,16 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Scan image for vulnerabilities
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ghcr.io/${{ github.repository_owner }}/msp-beacon:latest
+          format: table
+          exit-code: '0'
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
