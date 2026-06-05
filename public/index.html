@@ -348,7 +348,7 @@ async function save() {
 }
 
 let toastTimer = null;
-let pendingDelete = null; // { saved: [...links], timer }
+let pendingDelete = null;
 
 function showToast(msg, isError) {
   const t = document.getElementById('toast');
@@ -460,7 +460,7 @@ function renderFolderContents(folderName, folderLinks) {
     const key = JSON.stringify([folderName, sf]);
     const sfCollapsed = !!collapsedSubfolders[key];
     const sfLinks = bySubfolder[sf];
-    html += `<div class="subfolder-header" onclick="toggleSubfolder('${esc(folderName)}','${esc(sf)}')" data-folder="${esc(folderName)}" data-subfolder="${esc(sf)}">`;
+    html += `<div class="subfolder-header" onclick="toggleSubfolder(this.dataset.folder,this.dataset.subfolder)" data-folder="${esc(folderName)}" data-subfolder="${esc(sf)}">`;
     html += `<i class="ti ti-chevron-right folder-chevron${sfCollapsed ? '' : ' open'}" style="font-size:12px"></i>`;
     html += `<i class="ti ti-folder" style="font-size:12px;color:var(--g4);opacity:.7"></i>`;
     html += `<span class="subfolder-title">${esc(sf)}</span>`;
@@ -563,7 +563,7 @@ function updateSubfolderDatalist() {
   const selectedFolder = nf || document.getElementById('mFolder').value || '';
   const subs = selectedFolder ? subfoldersByFolder(selectedFolder) : [];
   const dl = document.getElementById('subfolderList');
-  dl.innerHTML = subs.map(s => `<option value="${esc(s)}">` ).join('');
+  dl.innerHTML = subs.map(s => `<option value="${esc(s)}">`).join('');
 }
 
 function saveLink() {
