@@ -170,6 +170,23 @@ select:focus { outline: none; border-color: var(--g4); }
 .title-wrap.fetching input[type=text] { opacity: 0.55; }
 .status-badge { position: absolute; top: 7px; left: 7px; width: 20px; height: 20px; border-radius: 5px; background: rgba(226,75,74,.15); border: 0.5px solid #E24B4A; display: flex; align-items: center; justify-content: center; z-index: 2; pointer-events: none; }
 .status-badge i { font-size: 11px; color: #E24B4A; }
+.stat-section { display: flex; flex-direction: column; gap: 4px; padding: 4px 0; }
+.stat-section + .stat-section { border-top: 0.5px solid var(--bg3); padding-top: 10px; margin-top: 4px; }
+.stat-section-title { font-size: 11px; color: var(--g3); font-weight: 500; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 4px; }
+.stat-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.stat-summary-card { background: var(--bg2); border-radius: 8px; padding: 10px 14px; display: flex; flex-direction: column; gap: 2px; }
+.stat-summary-value { font-size: 22px; font-weight: 600; color: var(--g2); }
+.stat-summary-label { font-size: 11px; color: var(--text2); }
+.stat-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 13px; min-width: 0; }
+.stat-row-label { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text0); }
+.stat-row-sub { font-size: 11px; color: var(--text2); flex-shrink: 0; }
+.stat-bar-track { flex: 1 1 60px; height: 5px; background: var(--bg3); border-radius: 3px; flex-shrink: 0; min-width: 40px; }
+.stat-bar-fill { height: 5px; background: var(--g4); border-radius: 3px; }
+.stat-toggle { background: none; border: none; color: var(--g3); font-size: 12px; cursor: pointer; font-family: inherit; padding: 0; text-align: left; }
+.stat-toggle:hover { color: var(--g2); }
+.stat-never-list { display: flex; flex-direction: column; gap: 2px; max-height: 160px; overflow-y: auto; margin-top: 4px; }
+.stat-never-item { font-size: 12px; color: var(--text1); padding: 3px 6px; border-radius: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat-never-item:hover { background: var(--bg3); color: var(--text0); }
 </style>
 </head>
 <body>
@@ -193,6 +210,7 @@ select:focus { outline: none; border-color: var(--g4); }
       <option value="za">Z → A</option>
       <option value="newest">Newest first</option>
       <option value="oldest">Oldest first</option>
+      <option value="most-visited">Most visited</option>
     </select>
     <button class="btn" id="viewToggleBtn" onclick="toggleView()" title="Toggle view"><i class="ti ti-layout-list" id="viewToggleIcon"></i></button>
     <button class="btn" id="selectBtn" onclick="toggleSelectMode()"><i class="ti ti-checkbox"></i> Select</button>
@@ -201,6 +219,7 @@ select:focus { outline: none; border-color: var(--g4); }
       <button class="btn" id="settingsBtn" onclick="toggleSettings(event)"><i class="ti ti-settings"></i> Settings</button>
       <div class="settings-menu" id="settingsMenu">
         <button class="settings-item" id="checkLinksBtn" onclick="checkLinks()"><i class="ti ti-wifi"></i> Check links</button>
+        <button class="settings-item" onclick="closeSettings();openStats()"><i class="ti ti-chart-bar"></i> Stats</button>
         <button class="settings-item" onclick="closeSettings();openTheme()"><i class="ti ti-palette"></i> Theme</button>
         <button class="settings-item" onclick="closeSettings();openImport()"><i class="ti ti-file-import"></i> Import</button>
         <button class="settings-item" onclick="closeSettings();exportLinks()"><i class="ti ti-file-export"></i> Export</button>
@@ -276,6 +295,17 @@ select:focus { outline: none; border-color: var(--g4); }
   </div>
 </div>
 
+<div id="statsBg" class="modal-bg" style="display:none" onclick="if(event.target===this)closeStats()">
+  <div class="modal" role="dialog" aria-modal="true" style="width:min(500px,92vw)">
+    <div class="modal-header"><i class="ti ti-chart-bar"></i><h3>Link Stats</h3></div>
+    <div id="statsContent" style="display:flex;flex-direction:column;gap:10px"></div>
+    <div class="modal-footer">
+      <button class="btn" style="color:#E24B4A;border-color:#b91c1c" onclick="resetStats()"><i class="ti ti-refresh"></i> Reset stats</button>
+      <button class="btn btn-primary" onclick="closeStats()">Close</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"><i class="ti ti-check" id="toastIcon"></i> <span id="toastMsg"></span><button class="toast-undo" id="toastUndo" style="display:none" onclick="undoDelete()">Undo</button></div>
 
 <div class="bulk-bar hidden" id="bulkBar">
@@ -333,6 +363,7 @@ function sortLinks(arr) {
   else if (currentSort === 'za') copy.sort((a, b) => (b.title || '').toLowerCase().localeCompare((a.title || '').toLowerCase()));
   else if (currentSort === 'newest') copy.sort((a, b) => parseInt(b.id, 36) - parseInt(a.id, 36));
   else if (currentSort === 'oldest') copy.sort((a, b) => parseInt(a.id, 36) - parseInt(b.id, 36));
+  else if (currentSort === 'most-visited') copy.sort((a, b) => (b.visits || 0) - (a.visits || 0));
   return copy;
 }
 
@@ -817,7 +848,7 @@ function setupCardListeners() {
     const card = e.target.closest('.card[data-id], .card-row[data-id]');
     if (!card) return;
     if (card.classList.contains('select-mode')) toggleSelect(card.dataset.id);
-    else window.open(card.dataset.url, '_blank');
+    else openLink(card.dataset.id, card.dataset.url);
   });
 }
 
@@ -1129,6 +1160,85 @@ async function checkLinks() {
   }
   btn.disabled = false;
   btn.innerHTML = '<i class="ti ti-wifi"></i> Check links';
+}
+
+function openLink(id, url) {
+  const l = links.find(x => x.id === id);
+  if (l) { l.visits = (l.visits || 0) + 1; save(); }
+  window.open(url, '_blank');
+}
+
+let statsNeverExpanded = false;
+function openStats() {
+  statsNeverExpanded = false;
+  renderStats();
+  document.getElementById('statsBg').style.display = 'flex';
+}
+function closeStats() { document.getElementById('statsBg').style.display = 'none'; }
+function resetStats() {
+  if (!confirm('Reset all visit counts to zero?')) return;
+  links.forEach(l => { l.visits = 0; });
+  save();
+  renderStats();
+  showToast('Stats reset');
+}
+function renderStats() {
+  const totalLinks = links.length;
+  const totalVisits = links.reduce((s, l) => s + (l.visits || 0), 0);
+  const sorted = links.slice().sort((a, b) => (b.visits || 0) - (a.visits || 0));
+  const topMax = sorted[0] ? (sorted[0].visits || 0) : 1;
+  const top10 = sorted.filter(l => (l.visits || 0) > 0).slice(0, 10);
+  const never = links.filter(l => !(l.visits || 0));
+
+  const folders = allFolders();
+  const noFolderCount = links.filter(l => !l.folder).length;
+  const folderRows = folders.map(f => {
+    const count = links.filter(l => l.folder === f).length;
+    return `<div class="stat-row">
+      <i class="ti ti-folder" style="font-size:13px;color:var(--g4);flex-shrink:0"></i>
+      <span class="stat-row-label">${esc(f)}</span>
+      <span class="stat-row-sub">${count} link${count !== 1 ? 's' : ''}</span>
+    </div>`;
+  }).join('');
+  const noFolderRow = noFolderCount > 0 ? `<div class="stat-row">
+    <i class="ti ti-minus" style="font-size:13px;color:var(--text2);flex-shrink:0"></i>
+    <span class="stat-row-label" style="color:var(--text2)">No folder</span>
+    <span class="stat-row-sub">${noFolderCount} link${noFolderCount !== 1 ? 's' : ''}</span>
+  </div>` : '';
+
+  const topRows = top10.length ? top10.map(l => `
+    <div class="stat-row">
+      <span class="stat-row-label">${esc(l.title)}</span>
+      <div class="stat-bar-track"><div class="stat-bar-fill" style="width:${Math.round(((l.visits||0)/topMax)*100)}%"></div></div>
+      <span class="stat-row-sub" style="min-width:44px;text-align:right">${l.visits} visit${l.visits !== 1 ? 's' : ''}</span>
+    </div>`).join('') : `<div style="font-size:13px;color:var(--text2)">No links visited yet.</div>`;
+
+  const neverList = statsNeverExpanded ? `<div class="stat-never-list">${never.map(l => `<div class="stat-never-item">${esc(l.title)}</div>`).join('')}</div>` : '';
+
+  document.getElementById('statsContent').innerHTML = `
+    <div class="stat-section">
+      <div class="stat-section-title">Summary</div>
+      <div class="stat-summary">
+        <div class="stat-summary-card"><div class="stat-summary-value">${totalLinks}</div><div class="stat-summary-label">Total links</div></div>
+        <div class="stat-summary-card"><div class="stat-summary-value">${totalVisits}</div><div class="stat-summary-label">Total visits</div></div>
+      </div>
+    </div>
+    <div class="stat-section">
+      <div class="stat-section-title">By Folder</div>
+      ${folderRows}${noFolderRow}
+    </div>
+    <div class="stat-section">
+      <div class="stat-section-title">Top 10 Most Visited</div>
+      ${topRows}
+    </div>
+    <div class="stat-section">
+      <div class="stat-section-title" style="display:flex;align-items:center;justify-content:space-between">
+        <span>Never Visited</span>
+        ${never.length ? `<button class="stat-toggle" onclick="statsNeverExpanded=!statsNeverExpanded;renderStats()">${statsNeverExpanded ? 'Hide' : `Show ${never.length}`}</button>` : ''}
+      </div>
+      ${never.length === 0 ? `<div style="font-size:13px;color:var(--text2)">All links have been visited!</div>` : `<div style="font-size:13px;color:var(--text2)">${never.length} link${never.length !== 1 ? 's' : ''} never opened</div>`}
+      ${neverList}
+    </div>`;
 }
 
 applyTheme(localStorage.getItem('msp-theme') || 'Green');
