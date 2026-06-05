@@ -44,19 +44,6 @@ select:focus { outline: none; border-color: var(--g4); }
 .btn-primary { background: var(--g5); color: #fff; border-color: var(--g6); }
 .btn-primary:hover { background: var(--g6); }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; padding-bottom: 1.5rem; }
-.link-list { display: flex; flex-direction: column; gap: 2px; padding-bottom: 1.5rem; }
-.card-row { background: var(--bg1); border: 0.5px solid var(--border0); border-radius: 8px; padding: 8px 12px; cursor: pointer; transition: border-color .15s; display: flex; align-items: center; gap: 10px; position: relative; min-width: 0; }
-.card-row:hover { border-color: var(--g4); box-shadow: 0 0 0 2px var(--g4-glow); }
-.card-row .favicon { width: 22px; height: 22px; border-radius: 4px; flex-shrink: 0; }
-.card-row-title { font-size: 14px; font-weight: 500; color: var(--text0); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1 1 180px; }
-.card-row-domain { font-size: 12px; color: var(--text2); white-space: nowrap; flex-shrink: 0; }
-.card-row-tags { display: flex; gap: 4px; flex-shrink: 0; }
-.card-row-actions { display: none; gap: 4px; flex-shrink: 0; margin-left: auto; }
-.card-row:hover .card-row-actions { display: flex; }
-.card-row.selected { border-color: var(--g4) !important; background: rgba(29,158,117,.1); }
-.card-row.select-mode { cursor: default; }
-.card-row.select-mode:hover { border-color: var(--g5); box-shadow: none; }
-.card-row.select-mode.selected:hover { border-color: var(--g4) !important; }
 .card { background: var(--bg1); border: 0.5px solid var(--border0); border-radius: 12px; padding: 14px; cursor: pointer; transition: border-color .15s; display: flex; flex-direction: column; gap: 8px; position: relative; text-decoration: none; }
 .card:hover { border-color: var(--g4); box-shadow: 0 0 0 2px var(--g4-glow); }
 .card-top { display: flex; align-items: flex-start; gap: 10px; }
@@ -170,23 +157,15 @@ select:focus { outline: none; border-color: var(--g4); }
 .title-wrap.fetching input[type=text] { opacity: 0.55; }
 .status-badge { position: absolute; top: 7px; left: 7px; width: 20px; height: 20px; border-radius: 5px; background: rgba(226,75,74,.15); border: 0.5px solid #E24B4A; display: flex; align-items: center; justify-content: center; z-index: 2; pointer-events: none; }
 .status-badge i { font-size: 11px; color: #E24B4A; }
-.stat-section { display: flex; flex-direction: column; gap: 4px; padding: 4px 0; }
-.stat-section + .stat-section { border-top: 0.5px solid var(--bg3); padding-top: 10px; margin-top: 4px; }
-.stat-section-title { font-size: 11px; color: var(--g3); font-weight: 500; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 4px; }
-.stat-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.stat-summary-card { background: var(--bg2); border-radius: 8px; padding: 10px 14px; display: flex; flex-direction: column; gap: 2px; }
-.stat-summary-value { font-size: 22px; font-weight: 600; color: var(--g2); }
-.stat-summary-label { font-size: 11px; color: var(--text2); }
-.stat-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 13px; min-width: 0; }
-.stat-row-label { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text0); }
-.stat-row-sub { font-size: 11px; color: var(--text2); flex-shrink: 0; }
-.stat-bar-track { flex: 1 1 60px; height: 5px; background: var(--bg3); border-radius: 3px; flex-shrink: 0; min-width: 40px; }
-.stat-bar-fill { height: 5px; background: var(--g4); border-radius: 3px; }
-.stat-toggle { background: none; border: none; color: var(--g3); font-size: 12px; cursor: pointer; font-family: inherit; padding: 0; text-align: left; }
-.stat-toggle:hover { color: var(--g2); }
-.stat-never-list { display: flex; flex-direction: column; gap: 2px; max-height: 160px; overflow-y: auto; margin-top: 4px; }
-.stat-never-item { font-size: 12px; color: var(--text1); padding: 3px 6px; border-radius: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.stat-never-item:hover { background: var(--bg3); color: var(--text0); }
+.dup-warning { background: rgba(245,166,35,.08); border: 0.5px solid rgba(245,166,35,.35); border-radius: 8px; padding: 10px 12px; font-size: 13px; display: flex; align-items: center; gap: 8px; color: #F5A623; }
+.dup-warning i { flex-shrink: 0; }
+.dup-warning-text { flex: 1; color: var(--text0); }
+.dup-warning-text strong { color: #F5A623; }
+.dup-warning-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.dup-warning-btn { background: rgba(245,166,35,.15); border: 0.5px solid rgba(245,166,35,.5); color: #F5A623; border-radius: 6px; padding: 3px 10px; font-size: 12px; cursor: pointer; font-family: inherit; font-weight: 500; white-space: nowrap; }
+.dup-warning-btn:hover { background: rgba(245,166,35,.3); }
+.dup-warning-dismiss { background: none; border: none; color: var(--text2); cursor: pointer; font-size: 14px; display: flex; align-items: center; padding: 2px; border-radius: 4px; }
+.dup-warning-dismiss:hover { color: var(--text0); background: var(--bg3); }
 </style>
 </head>
 <body>
@@ -210,16 +189,13 @@ select:focus { outline: none; border-color: var(--g4); }
       <option value="za">Z → A</option>
       <option value="newest">Newest first</option>
       <option value="oldest">Oldest first</option>
-      <option value="most-visited">Most visited</option>
     </select>
-    <button class="btn" id="viewToggleBtn" onclick="toggleView()" title="Toggle view"><i class="ti ti-layout-list" id="viewToggleIcon"></i></button>
+    <button class="btn" id="checkLinksBtn" onclick="checkLinks()"><i class="ti ti-wifi"></i> Check links</button>
     <button class="btn" id="selectBtn" onclick="toggleSelectMode()"><i class="ti ti-checkbox"></i> Select</button>
     <button class="btn btn-primary" onclick="openModal()"><i class="ti ti-plus"></i> Add link</button>
     <div class="settings-wrap">
       <button class="btn" id="settingsBtn" onclick="toggleSettings(event)"><i class="ti ti-settings"></i> Settings</button>
       <div class="settings-menu" id="settingsMenu">
-        <button class="settings-item" id="checkLinksBtn" onclick="checkLinks()"><i class="ti ti-wifi"></i> Check links</button>
-        <button class="settings-item" onclick="closeSettings();openStats()"><i class="ti ti-chart-bar"></i> Stats</button>
         <button class="settings-item" onclick="closeSettings();openTheme()"><i class="ti ti-palette"></i> Theme</button>
         <button class="settings-item" onclick="closeSettings();openImport()"><i class="ti ti-file-import"></i> Import</button>
         <button class="settings-item" onclick="closeSettings();exportLinks()"><i class="ti ti-file-export"></i> Export</button>
@@ -246,6 +222,14 @@ select:focus { outline: none; border-color: var(--g4); }
       <datalist id="subfolderList"></datalist>
     </div>
     <div class="field"><label>Tags (comma separated)</label><input type="text" id="mTags" placeholder="e.g. tools, dev, reference"></div>
+    <div id="dupWarning" class="dup-warning" style="display:none">
+      <i class="ti ti-alert-triangle"></i>
+      <span class="dup-warning-text" id="dupWarningText">A link with this URL already exists.</span>
+      <div class="dup-warning-actions">
+        <button class="dup-warning-btn" onclick="addLinkAnyway()">Add anyway</button>
+        <button class="dup-warning-dismiss" title="Dismiss" onclick="document.getElementById('dupWarning').style.display='none'"><i class="ti ti-x"></i></button>
+      </div>
+    </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeModal()">Cancel</button>
       <button class="btn btn-primary" onclick="saveLink()"><i class="ti ti-check"></i> Save</button>
@@ -295,17 +279,6 @@ select:focus { outline: none; border-color: var(--g4); }
   </div>
 </div>
 
-<div id="statsBg" class="modal-bg" style="display:none" onclick="if(event.target===this)closeStats()">
-  <div class="modal" role="dialog" aria-modal="true" style="width:min(500px,92vw)">
-    <div class="modal-header"><i class="ti ti-chart-bar"></i><h3>Link Stats</h3></div>
-    <div id="statsContent" style="display:flex;flex-direction:column;gap:10px"></div>
-    <div class="modal-footer">
-      <button class="btn" style="color:#E24B4A;border-color:#b91c1c" onclick="resetStats()"><i class="ti ti-refresh"></i> Reset stats</button>
-      <button class="btn btn-primary" onclick="closeStats()">Close</button>
-    </div>
-  </div>
-</div>
-
 <div class="toast" id="toast"><i class="ti ti-check" id="toastIcon"></i> <span id="toastMsg"></span><button class="toast-undo" id="toastUndo" style="display:none" onclick="undoDelete()">Undo</button></div>
 
 <div class="bulk-bar hidden" id="bulkBar">
@@ -344,13 +317,6 @@ let favoritesCollapsed = JSON.parse(localStorage.getItem('msp-fav-collapsed') ||
 let searchDebounceTimer = null;
 function debouncedRender() { clearTimeout(searchDebounceTimer); searchDebounceTimer = setTimeout(render, 150); }
 let currentSort = localStorage.getItem('msp-sort') || 'manual';
-let currentView = localStorage.getItem('msp-view') || 'grid';
-function toggleView() {
-  currentView = currentView === 'grid' ? 'list' : 'grid';
-  localStorage.setItem('msp-view', currentView);
-  document.getElementById('viewToggleIcon').className = currentView === 'grid' ? 'ti ti-layout-list' : 'ti ti-layout-grid';
-  render();
-}
 function onSortChange() {
   currentSort = document.getElementById('sortSelect').value;
   localStorage.setItem('msp-sort', currentSort);
@@ -363,7 +329,6 @@ function sortLinks(arr) {
   else if (currentSort === 'za') copy.sort((a, b) => (b.title || '').toLowerCase().localeCompare((a.title || '').toLowerCase()));
   else if (currentSort === 'newest') copy.sort((a, b) => parseInt(b.id, 36) - parseInt(a.id, 36));
   else if (currentSort === 'oldest') copy.sort((a, b) => parseInt(a.id, 36) - parseInt(b.id, 36));
-  else if (currentSort === 'most-visited') copy.sort((a, b) => (b.visits || 0) - (a.visits || 0));
   return copy;
 }
 
@@ -475,17 +440,15 @@ function render() {
     c.innerHTML = `<div class="empty"><i class="ti ti-bookmarks"></i>${links.length ? 'No results match your filters.' : 'No links yet — click <strong>Add link</strong> or <strong>Import</strong> to get started.'}</div>`;
     return;
   }
-  const cardFn = currentView === 'list' ? cardListHtml : cardHtml;
-  const wrap = items => currentView === 'list' ? `<div class="link-list">${items.map(cardFn).join('')}</div>` : `<div class="grid">${items.map(cardFn).join('')}</div>`;
-  if (ff || q || tf) { c.innerHTML = wrap(fil); return; }
+  if (ff || q || tf) { c.innerHTML = `<div class="grid">${fil.map(cardHtml).join('')}</div>`; return; }
   const byF = {}, noF = [];
   fil.forEach(l => { l.folder ? (byF[l.folder] = byF[l.folder] || [], byF[l.folder].push(l)) : noF.push(l); });
   let html = '';
   const favs = fil.filter(l => l.favorite);
   if (favs.length) {
-    html += `<div class="favorites-section"><div class="favorites-header" onclick="toggleFavorites()"><i class="ti ti-chevron-right folder-chevron${favoritesCollapsed ? '' : ' open'}"></i><i class="ti ti-star-filled" style="font-size:15px;color:#F5A623"></i><span class="favorites-title">Favorites</span><span class="count-pill" style="background:rgba(245,166,35,.3);color:#F5A623">${favs.length}</span></div>${favoritesCollapsed ? '' : wrap(favs)}</div>`;
+    html += `<div class="favorites-section"><div class="favorites-header" onclick="toggleFavorites()"><i class="ti ti-chevron-right folder-chevron${favoritesCollapsed ? '' : ' open'}"></i><i class="ti ti-star-filled" style="font-size:15px;color:#F5A623"></i><span class="favorites-title">Favorites</span><span class="count-pill" style="background:rgba(245,166,35,.3);color:#F5A623">${favs.length}</span></div>${favoritesCollapsed ? '' : `<div class="grid">${favs.map(cardHtml).join('')}</div>`}</div>`;
   }
-  if (noF.length) html += wrap(noF);
+  if (noF.length) html += `<div class="grid">${noF.map(cardHtml).join('')}</div>`;
   getOrderedFolders(Object.keys(byF)).forEach(f => {
     const collapsed = collapsedFolders.has(f);
     let folderContent = '';
@@ -505,12 +468,9 @@ function renderFolderContents(folderName, folderLinks) {
     bySubfolder[l.subfolder].push(l);
   });
 
-  const cardFn = currentView === 'list' ? cardListHtml : cardHtml;
-  const wrap = items => currentView === 'list' ? `<div class="link-list">${items.map(cardFn).join('')}</div>` : `<div class="grid">${items.map(cardFn).join('')}</div>`;
-
   let html = '';
   if (rootLinks.length) {
-    html += wrap(rootLinks);
+    html += `<div class="grid">${rootLinks.map(cardHtml).join('')}</div>`;
   }
 
   Object.keys(bySubfolder).sort().forEach(sf => {
@@ -524,7 +484,7 @@ function renderFolderContents(folderName, folderLinks) {
     html += `<span class="count-pill" style="font-size:10px;padding:1px 5px;background:rgba(15,110,86,.5)">${sfLinks.length}</span>`;
     html += `</div>`;
     if (!sfCollapsed) {
-      html += `<div class="subfolder-grid">${wrap(sfLinks)}</div>`;
+      html += `<div class="subfolder-grid"><div class="grid">${sfLinks.map(cardHtml).join('')}</div></div>`;
     }
   });
 
@@ -570,40 +530,6 @@ function cardHtml(l) {
   </div>`;
 }
 
-function cardListHtml(l) {
-  const fav = getFavicon(l.url);
-  const fi = fav ? `<img src="${fav}" alt="" onerror="this.style.display='none';this.nextSibling.style.display='flex'"><span style="display:none"><i class="ti ti-world"></i></span>` : `<i class="ti ti-world"></i>`;
-  const statusBadge = (linkStatus[l.id] === 'broken' || linkStatus[l.id] === 'timeout')
-    ? `<i class="ti ti-alert-triangle" style="font-size:13px;color:#E24B4A;flex-shrink:0" title="${linkStatus[l.id] === 'timeout' ? 'Link timed out' : 'Link appears broken'}"></i>`
-    : '';
-  if (selectMode) {
-    const checked = selectedIds.has(l.id);
-    return `<div class="card-row select-mode${checked ? ' selected' : ''}" data-id="${esc(l.id)}">
-      <div class="card-check${checked ? ' checked' : ''}" style="position:static;flex-shrink:0"><i class="ti ti-check"></i></div>
-      <div class="favicon">${fi}</div>
-      ${statusBadge}
-      <span class="card-row-title">${esc(l.title)}</span>
-      <span class="card-row-domain">${esc(getDomain(l.url))}</span>
-      <div class="card-row-tags">${(l.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('')}</div>
-      ${l.folder ? `<span class="folder-badge" style="margin-left:0"><i class="ti ti-folder" style="font-size:11px"></i> ${esc(l.folder)}${l.subfolder ? ' / ' + esc(l.subfolder) : ''}</span>` : ''}
-    </div>`;
-  }
-  return `<div class="card-row" data-id="${esc(l.id)}" data-url="${esc(l.url)}">
-    <div class="favicon">${fi}</div>
-    ${statusBadge}
-    <span class="card-row-title">${esc(l.title)}</span>
-    <span class="card-row-domain">${esc(getDomain(l.url))}</span>
-    <div class="card-row-tags">${(l.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('')}</div>
-    ${l.folder ? `<span class="folder-badge" style="margin-left:0"><i class="ti ti-folder" style="font-size:11px"></i> ${esc(l.folder)}${l.subfolder ? ' / ' + esc(l.subfolder) : ''}</span>` : ''}
-    <button class="star-btn${l.favorite ? ' active' : ''}" data-action="favorite" data-id="${esc(l.id)}" title="${l.favorite ? 'Remove from favorites' : 'Add to favorites'}" style="flex-shrink:0"><i class="ti ti-star${l.favorite ? '-filled' : ''}"></i></button>
-    <div class="card-row-actions">
-      <button class="icon-btn" title="Copy URL" data-action="copy" data-id="${esc(l.id)}" data-url="${esc(l.url)}"><i class="ti ti-copy"></i></button>
-      <button class="icon-btn" title="Edit" data-action="edit" data-id="${esc(l.id)}"><i class="ti ti-edit"></i></button>
-      <button class="icon-btn" title="Delete" data-action="delete" data-id="${esc(l.id)}"><i class="ti ti-trash"></i></button>
-    </div>
-  </div>`;
-}
-
 function openModal(id) {
   editId = id || null;
   const l = id ? links.find(x => x.id === id) : null;
@@ -617,10 +543,11 @@ function openModal(id) {
   const mf = document.getElementById('mFolder');
   mf.innerHTML = '<option value="">No folder</option>' + allFolders().map(f => `<option value="${esc(f)}"${l&&l.folder===f?' selected':''}>${esc(f)}</option>`).join('');
   updateSubfolderDatalist();
+  document.getElementById('dupWarning').style.display = 'none';
   document.getElementById('modalBg').style.display = 'flex';
   setTimeout(() => document.getElementById('mUrl').focus(), 50);
 }
-function closeModal() { document.getElementById('modalBg').style.display = 'none'; editId = null; }
+function closeModal() { document.getElementById('modalBg').style.display = 'none'; document.getElementById('dupWarning').style.display = 'none'; editId = null; }
 function autoTitle() {
   const u = document.getElementById('mUrl').value.trim();
   const t = document.getElementById('mTitle');
@@ -661,6 +588,16 @@ function saveLink() {
   const url = document.getElementById('mUrl').value.trim();
   const title = document.getElementById('mTitle').value.trim();
   if (!url || !title) { alert('URL and title are required.'); return; }
+  if (!editId) {
+    const normUrl = url.toLowerCase();
+    const dup = links.find(l => l.url.trim().toLowerCase() === normUrl);
+    if (dup) {
+      const warn = document.getElementById('dupWarning');
+      document.getElementById('dupWarningText').innerHTML = `A link with this URL already exists \u2014 <strong>${esc(dup.title)}</strong>`;
+      warn.style.display = 'flex';
+      return;
+    }
+  }
   const nf = document.getElementById('mNewFolder').value.trim();
   const folder = nf || document.getElementById('mFolder').value || '';
   const subfolder = document.getElementById('mSubfolder').value.trim() || null;
@@ -675,6 +612,18 @@ function saveLink() {
   const wasEditing = !!editId;
   save(); closeModal(); render();
   showToast(wasEditing ? 'Link updated' : 'Link saved');
+}
+function addLinkAnyway() {
+  const url = document.getElementById('mUrl').value.trim();
+  const title = document.getElementById('mTitle').value.trim();
+  const nf = document.getElementById('mNewFolder').value.trim();
+  const folder = nf || document.getElementById('mFolder').value || '';
+  const subfolder = document.getElementById('mSubfolder').value.trim() || null;
+  const tags = document.getElementById('mTags').value.split(',').map(t => t.trim()).filter(Boolean);
+  const desc = document.getElementById('mDesc').value.trim();
+  links.unshift({ id: Date.now().toString(36) + Math.random().toString(36).slice(2), url, title, desc, folder, subfolder, tags });
+  save(); closeModal(); render();
+  showToast('Link saved');
 }
 function copyUrl(url, btn) {
   navigator.clipboard.writeText(url).then(() => {
@@ -845,10 +794,10 @@ function setupCardListeners() {
       else if (action === 'favorite') toggleFavorite(id);
       return;
     }
-    const card = e.target.closest('.card[data-id], .card-row[data-id]');
+    const card = e.target.closest('.card[data-id]');
     if (!card) return;
     if (card.classList.contains('select-mode')) toggleSelect(card.dataset.id);
-    else openLink(card.dataset.id, card.dataset.url);
+    else window.open(card.dataset.url, '_blank');
   });
 }
 
@@ -885,7 +834,7 @@ function setupDragListeners() {
     e.dataTransfer.dropEffect = 'move';
     let newTarget = null;
     if (dragId) {
-      const card = e.target.closest('.card[data-id], .card-row[data-id]');
+      const card = e.target.closest('.card[data-id]');
       if (card && card.dataset.id !== dragId) {
         newTarget = card;
       } else if (!card) {
@@ -920,7 +869,7 @@ function setupDragListeners() {
     if (dragOverEl) dragOverEl.classList.remove('drag-over');
     document.querySelectorAll('.dragging').forEach(el => el.classList.remove('dragging'));
     if (dragId) {
-      const card = e.target.closest('.card[data-id], .card-row[data-id]');
+      const card = e.target.closest('.card[data-id]');
       const sfHeader = e.target.closest('.subfolder-header[data-subfolder]');
       const header = !sfHeader ? e.target.closest('.folder-header[data-folder]') : null;
       if (card && card.dataset.id !== dragId) {
@@ -1036,7 +985,7 @@ function exitSelectMode() {
 function toggleSelect(id) {
   if (selectedIds.has(id)) selectedIds.delete(id);
   else selectedIds.add(id);
-  const card = document.querySelector(`.card[data-id="${id}"], .card-row[data-id="${id}"]`);
+  const card = document.querySelector(`.card[data-id="${id}"]`);
   if (card) {
     const sel = selectedIds.has(id);
     card.classList.toggle('selected', sel);
@@ -1140,7 +1089,6 @@ function bulkAddTag() {
 async function checkLinks() {
   const btn = document.getElementById('checkLinksBtn');
   if (!btn || btn.disabled) return;
-  closeSettings();
   const ids = visibleIds.length ? visibleIds : links.map(l => l.id);
   if (!ids.length) { showToast('No links to check'); return; }
   btn.disabled = true;
@@ -1162,87 +1110,7 @@ async function checkLinks() {
   btn.innerHTML = '<i class="ti ti-wifi"></i> Check links';
 }
 
-function openLink(id, url) {
-  const l = links.find(x => x.id === id);
-  if (l) { l.visits = (l.visits || 0) + 1; save(); }
-  window.open(url, '_blank');
-}
-
-let statsNeverExpanded = false;
-function openStats() {
-  statsNeverExpanded = false;
-  renderStats();
-  document.getElementById('statsBg').style.display = 'flex';
-}
-function closeStats() { document.getElementById('statsBg').style.display = 'none'; }
-function resetStats() {
-  if (!confirm('Reset all visit counts to zero?')) return;
-  links.forEach(l => { l.visits = 0; });
-  save();
-  renderStats();
-  showToast('Stats reset');
-}
-function renderStats() {
-  const totalLinks = links.length;
-  const totalVisits = links.reduce((s, l) => s + (l.visits || 0), 0);
-  const sorted = links.slice().sort((a, b) => (b.visits || 0) - (a.visits || 0));
-  const topMax = sorted[0] ? (sorted[0].visits || 0) : 1;
-  const top10 = sorted.filter(l => (l.visits || 0) > 0).slice(0, 10);
-  const never = links.filter(l => !(l.visits || 0));
-
-  const folders = allFolders();
-  const noFolderCount = links.filter(l => !l.folder).length;
-  const folderRows = folders.map(f => {
-    const count = links.filter(l => l.folder === f).length;
-    return `<div class="stat-row">
-      <i class="ti ti-folder" style="font-size:13px;color:var(--g4);flex-shrink:0"></i>
-      <span class="stat-row-label">${esc(f)}</span>
-      <span class="stat-row-sub">${count} link${count !== 1 ? 's' : ''}</span>
-    </div>`;
-  }).join('');
-  const noFolderRow = noFolderCount > 0 ? `<div class="stat-row">
-    <i class="ti ti-minus" style="font-size:13px;color:var(--text2);flex-shrink:0"></i>
-    <span class="stat-row-label" style="color:var(--text2)">No folder</span>
-    <span class="stat-row-sub">${noFolderCount} link${noFolderCount !== 1 ? 's' : ''}</span>
-  </div>` : '';
-
-  const topRows = top10.length ? top10.map(l => `
-    <div class="stat-row">
-      <span class="stat-row-label">${esc(l.title)}</span>
-      <div class="stat-bar-track"><div class="stat-bar-fill" style="width:${Math.round(((l.visits||0)/topMax)*100)}%"></div></div>
-      <span class="stat-row-sub" style="min-width:44px;text-align:right">${l.visits} visit${l.visits !== 1 ? 's' : ''}</span>
-    </div>`).join('') : `<div style="font-size:13px;color:var(--text2)">No links visited yet.</div>`;
-
-  const neverList = statsNeverExpanded ? `<div class="stat-never-list">${never.map(l => `<div class="stat-never-item">${esc(l.title)}</div>`).join('')}</div>` : '';
-
-  document.getElementById('statsContent').innerHTML = `
-    <div class="stat-section">
-      <div class="stat-section-title">Summary</div>
-      <div class="stat-summary">
-        <div class="stat-summary-card"><div class="stat-summary-value">${totalLinks}</div><div class="stat-summary-label">Total links</div></div>
-        <div class="stat-summary-card"><div class="stat-summary-value">${totalVisits}</div><div class="stat-summary-label">Total visits</div></div>
-      </div>
-    </div>
-    <div class="stat-section">
-      <div class="stat-section-title">By Folder</div>
-      ${folderRows}${noFolderRow}
-    </div>
-    <div class="stat-section">
-      <div class="stat-section-title">Top 10 Most Visited</div>
-      ${topRows}
-    </div>
-    <div class="stat-section">
-      <div class="stat-section-title" style="display:flex;align-items:center;justify-content:space-between">
-        <span>Never Visited</span>
-        ${never.length ? `<button class="stat-toggle" onclick="statsNeverExpanded=!statsNeverExpanded;renderStats()">${statsNeverExpanded ? 'Hide' : `Show ${never.length}`}</button>` : ''}
-      </div>
-      ${never.length === 0 ? `<div style="font-size:13px;color:var(--text2)">All links have been visited!</div>` : `<div style="font-size:13px;color:var(--text2)">${never.length} link${never.length !== 1 ? 's' : ''} never opened</div>`}
-      ${neverList}
-    </div>`;
-}
-
 applyTheme(localStorage.getItem('msp-theme') || 'Green');
-document.getElementById('viewToggleIcon').className = currentView === 'grid' ? 'ti ti-layout-list' : 'ti ti-layout-grid';
 setupCardListeners();
 setupDragListeners();
 loadLinks();
