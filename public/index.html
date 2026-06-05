@@ -44,6 +44,19 @@ select:focus { outline: none; border-color: var(--g4); }
 .btn-primary { background: var(--g5); color: #fff; border-color: var(--g6); }
 .btn-primary:hover { background: var(--g6); }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; padding-bottom: 1.5rem; }
+.link-list { display: flex; flex-direction: column; gap: 2px; padding-bottom: 1.5rem; }
+.card-row { background: var(--bg1); border: 0.5px solid var(--border0); border-radius: 8px; padding: 8px 12px; cursor: pointer; transition: border-color .15s; display: flex; align-items: center; gap: 10px; position: relative; min-width: 0; }
+.card-row:hover { border-color: var(--g4); box-shadow: 0 0 0 2px var(--g4-glow); }
+.card-row .favicon { width: 22px; height: 22px; border-radius: 4px; flex-shrink: 0; }
+.card-row-title { font-size: 14px; font-weight: 500; color: var(--text0); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1 1 180px; }
+.card-row-domain { font-size: 12px; color: var(--text2); white-space: nowrap; flex-shrink: 0; }
+.card-row-tags { display: flex; gap: 4px; flex-shrink: 0; }
+.card-row-actions { display: none; gap: 4px; flex-shrink: 0; margin-left: auto; }
+.card-row:hover .card-row-actions { display: flex; }
+.card-row.selected { border-color: var(--g4) !important; background: rgba(29,158,117,.1); }
+.card-row.select-mode { cursor: default; }
+.card-row.select-mode:hover { border-color: var(--g5); box-shadow: none; }
+.card-row.select-mode.selected:hover { border-color: var(--g4) !important; }
 .card { background: var(--bg1); border: 0.5px solid var(--border0); border-radius: 12px; padding: 14px; cursor: pointer; transition: border-color .15s; display: flex; flex-direction: column; gap: 8px; position: relative; text-decoration: none; }
 .card:hover { border-color: var(--g4); box-shadow: 0 0 0 2px var(--g4-glow); }
 .card-top { display: flex; align-items: flex-start; gap: 10px; }
@@ -181,6 +194,7 @@ select:focus { outline: none; border-color: var(--g4); }
       <option value="newest">Newest first</option>
       <option value="oldest">Oldest first</option>
     </select>
+    <button class="btn" id="viewToggleBtn" onclick="toggleView()" title="Toggle view"><i class="ti ti-layout-list" id="viewToggleIcon"></i></button>
     <button class="btn" id="selectBtn" onclick="toggleSelectMode()"><i class="ti ti-checkbox"></i> Select</button>
     <button class="btn btn-primary" onclick="openModal()"><i class="ti ti-plus"></i> Add link</button>
     <div class="settings-wrap">
@@ -300,6 +314,13 @@ let favoritesCollapsed = JSON.parse(localStorage.getItem('msp-fav-collapsed') ||
 let searchDebounceTimer = null;
 function debouncedRender() { clearTimeout(searchDebounceTimer); searchDebounceTimer = setTimeout(render, 150); }
 let currentSort = localStorage.getItem('msp-sort') || 'manual';
+let currentView = localStorage.getItem('msp-view') || 'grid';
+function toggleView() {
+  currentView = currentView === 'grid' ? 'list' : 'grid';
+  localStorage.setItem('msp-view', currentView);
+  document.getElementById('viewToggleIcon').className = currentView === 'grid' ? 'ti ti-layout-list' : 'ti ti-layout-grid';
+  render();
+}
 function onSortChange() {
   currentSort = document.getElementById('sortSelect').value;
   localStorage.setItem('msp-sort', currentSort);
@@ -423,15 +444,17 @@ function render() {
     c.innerHTML = `<div class="empty"><i class="ti ti-bookmarks"></i>${links.length ? 'No results match your filters.' : 'No links yet — click <strong>Add link</strong> or <strong>Import</strong> to get started.'}</div>`;
     return;
   }
-  if (ff || q || tf) { c.innerHTML = `<div class="grid">${fil.map(cardHtml).join('')}</div>`; return; }
+  const cardFn = currentView === 'list' ? cardListHtml : cardHtml;
+  const wrap = items => currentView === 'list' ? `<div class="link-list">${items.map(cardFn).join('')}</div>` : `<div class="grid">${items.map(cardFn).join('')}</div>`;
+  if (ff || q || tf) { c.innerHTML = wrap(fil); return; }
   const byF = {}, noF = [];
   fil.forEach(l => { l.folder ? (byF[l.folder] = byF[l.folder] || [], byF[l.folder].push(l)) : noF.push(l); });
   let html = '';
   const favs = fil.filter(l => l.favorite);
   if (favs.length) {
-    html += `<div class="favorites-section"><div class="favorites-header" onclick="toggleFavorites()"><i class="ti ti-chevron-right folder-chevron${favoritesCollapsed ? '' : ' open'}"></i><i class="ti ti-star-filled" style="font-size:15px;color:#F5A623"></i><span class="favorites-title">Favorites</span><span class="count-pill" style="background:rgba(245,166,35,.3);color:#F5A623">${favs.length}</span></div>${favoritesCollapsed ? '' : `<div class="grid">${favs.map(cardHtml).join('')}</div>`}</div>`;
+    html += `<div class="favorites-section"><div class="favorites-header" onclick="toggleFavorites()"><i class="ti ti-chevron-right folder-chevron${favoritesCollapsed ? '' : ' open'}"></i><i class="ti ti-star-filled" style="font-size:15px;color:#F5A623"></i><span class="favorites-title">Favorites</span><span class="count-pill" style="background:rgba(245,166,35,.3);color:#F5A623">${favs.length}</span></div>${favoritesCollapsed ? '' : wrap(favs)}</div>`;
   }
-  if (noF.length) html += `<div class="grid">${noF.map(cardHtml).join('')}</div>`;
+  if (noF.length) html += wrap(noF);
   getOrderedFolders(Object.keys(byF)).forEach(f => {
     const collapsed = collapsedFolders.has(f);
     let folderContent = '';
@@ -451,9 +474,12 @@ function renderFolderContents(folderName, folderLinks) {
     bySubfolder[l.subfolder].push(l);
   });
 
+  const cardFn = currentView === 'list' ? cardListHtml : cardHtml;
+  const wrap = items => currentView === 'list' ? `<div class="link-list">${items.map(cardFn).join('')}</div>` : `<div class="grid">${items.map(cardFn).join('')}</div>`;
+
   let html = '';
   if (rootLinks.length) {
-    html += `<div class="grid">${rootLinks.map(cardHtml).join('')}</div>`;
+    html += wrap(rootLinks);
   }
 
   Object.keys(bySubfolder).sort().forEach(sf => {
@@ -467,7 +493,7 @@ function renderFolderContents(folderName, folderLinks) {
     html += `<span class="count-pill" style="font-size:10px;padding:1px 5px;background:rgba(15,110,86,.5)">${sfLinks.length}</span>`;
     html += `</div>`;
     if (!sfCollapsed) {
-      html += `<div class="subfolder-grid"><div class="grid">${sfLinks.map(cardHtml).join('')}</div></div>`;
+      html += `<div class="subfolder-grid">${wrap(sfLinks)}</div>`;
     }
   });
 
@@ -510,6 +536,40 @@ function cardHtml(l) {
     ${top}
     ${l.desc ? `<div class="card-desc">${esc(l.desc)}</div>` : ''}
     ${footer}
+  </div>`;
+}
+
+function cardListHtml(l) {
+  const fav = getFavicon(l.url);
+  const fi = fav ? `<img src="${fav}" alt="" onerror="this.style.display='none';this.nextSibling.style.display='flex'"><span style="display:none"><i class="ti ti-world"></i></span>` : `<i class="ti ti-world"></i>`;
+  const statusBadge = (linkStatus[l.id] === 'broken' || linkStatus[l.id] === 'timeout')
+    ? `<i class="ti ti-alert-triangle" style="font-size:13px;color:#E24B4A;flex-shrink:0" title="${linkStatus[l.id] === 'timeout' ? 'Link timed out' : 'Link appears broken'}"></i>`
+    : '';
+  if (selectMode) {
+    const checked = selectedIds.has(l.id);
+    return `<div class="card-row select-mode${checked ? ' selected' : ''}" data-id="${esc(l.id)}">
+      <div class="card-check${checked ? ' checked' : ''}" style="position:static;flex-shrink:0"><i class="ti ti-check"></i></div>
+      <div class="favicon">${fi}</div>
+      ${statusBadge}
+      <span class="card-row-title">${esc(l.title)}</span>
+      <span class="card-row-domain">${esc(getDomain(l.url))}</span>
+      <div class="card-row-tags">${(l.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('')}</div>
+      ${l.folder ? `<span class="folder-badge" style="margin-left:0"><i class="ti ti-folder" style="font-size:11px"></i> ${esc(l.folder)}${l.subfolder ? ' / ' + esc(l.subfolder) : ''}</span>` : ''}
+    </div>`;
+  }
+  return `<div class="card-row" data-id="${esc(l.id)}" data-url="${esc(l.url)}">
+    <div class="favicon">${fi}</div>
+    ${statusBadge}
+    <span class="card-row-title">${esc(l.title)}</span>
+    <span class="card-row-domain">${esc(getDomain(l.url))}</span>
+    <div class="card-row-tags">${(l.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('')}</div>
+    ${l.folder ? `<span class="folder-badge" style="margin-left:0"><i class="ti ti-folder" style="font-size:11px"></i> ${esc(l.folder)}${l.subfolder ? ' / ' + esc(l.subfolder) : ''}</span>` : ''}
+    <button class="star-btn${l.favorite ? ' active' : ''}" data-action="favorite" data-id="${esc(l.id)}" title="${l.favorite ? 'Remove from favorites' : 'Add to favorites'}" style="flex-shrink:0"><i class="ti ti-star${l.favorite ? '-filled' : ''}"></i></button>
+    <div class="card-row-actions">
+      <button class="icon-btn" title="Copy URL" data-action="copy" data-id="${esc(l.id)}" data-url="${esc(l.url)}"><i class="ti ti-copy"></i></button>
+      <button class="icon-btn" title="Edit" data-action="edit" data-id="${esc(l.id)}"><i class="ti ti-edit"></i></button>
+      <button class="icon-btn" title="Delete" data-action="delete" data-id="${esc(l.id)}"><i class="ti ti-trash"></i></button>
+    </div>
   </div>`;
 }
 
@@ -754,7 +814,7 @@ function setupCardListeners() {
       else if (action === 'favorite') toggleFavorite(id);
       return;
     }
-    const card = e.target.closest('.card[data-id]');
+    const card = e.target.closest('.card[data-id], .card-row[data-id]');
     if (!card) return;
     if (card.classList.contains('select-mode')) toggleSelect(card.dataset.id);
     else window.open(card.dataset.url, '_blank');
@@ -794,7 +854,7 @@ function setupDragListeners() {
     e.dataTransfer.dropEffect = 'move';
     let newTarget = null;
     if (dragId) {
-      const card = e.target.closest('.card[data-id]');
+      const card = e.target.closest('.card[data-id], .card-row[data-id]');
       if (card && card.dataset.id !== dragId) {
         newTarget = card;
       } else if (!card) {
@@ -829,7 +889,7 @@ function setupDragListeners() {
     if (dragOverEl) dragOverEl.classList.remove('drag-over');
     document.querySelectorAll('.dragging').forEach(el => el.classList.remove('dragging'));
     if (dragId) {
-      const card = e.target.closest('.card[data-id]');
+      const card = e.target.closest('.card[data-id], .card-row[data-id]');
       const sfHeader = e.target.closest('.subfolder-header[data-subfolder]');
       const header = !sfHeader ? e.target.closest('.folder-header[data-folder]') : null;
       if (card && card.dataset.id !== dragId) {
@@ -945,7 +1005,7 @@ function exitSelectMode() {
 function toggleSelect(id) {
   if (selectedIds.has(id)) selectedIds.delete(id);
   else selectedIds.add(id);
-  const card = document.querySelector(`.card[data-id="${id}"]`);
+  const card = document.querySelector(`.card[data-id="${id}"], .card-row[data-id="${id}"]`);
   if (card) {
     const sel = selectedIds.has(id);
     card.classList.toggle('selected', sel);
@@ -1072,6 +1132,7 @@ async function checkLinks() {
 }
 
 applyTheme(localStorage.getItem('msp-theme') || 'Green');
+document.getElementById('viewToggleIcon').className = currentView === 'grid' ? 'ti ti-layout-list' : 'ti ti-layout-grid';
 setupCardListeners();
 setupDragListeners();
 loadLinks();
