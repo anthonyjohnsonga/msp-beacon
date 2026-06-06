@@ -43,7 +43,7 @@ select:focus { outline: none; border-color: var(--g4); }
 .btn:hover { background: var(--bg3); border-color: var(--g5); }
 .btn-primary { background: var(--g5); color: #fff; border-color: var(--g6); }
 .btn-primary:hover { background: var(--g6); }
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; padding-bottom: 1.5rem; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--card-min-width, 220px), 1fr)); gap: var(--card-gap, 12px); padding-bottom: 1.5rem; }
 .link-list { display: flex; flex-direction: column; gap: 2px; padding-bottom: 1.5rem; }
 .card-row { background: var(--bg1); border: 0.5px solid var(--border0); border-radius: 8px; padding: 8px 12px; cursor: pointer; transition: border-color .15s; display: flex; align-items: center; gap: 10px; position: relative; min-width: 0; }
 .card-row:hover { border-color: var(--g4); box-shadow: 0 0 0 2px var(--g4-glow); }
@@ -57,7 +57,7 @@ select:focus { outline: none; border-color: var(--g4); }
 .card-row.select-mode { cursor: default; }
 .card-row.select-mode:hover { border-color: var(--g5); box-shadow: none; }
 .card-row.select-mode.selected:hover { border-color: var(--g4) !important; }
-.card { background: var(--bg1); border: 0.5px solid var(--border0); border-radius: 12px; padding: 14px; cursor: pointer; transition: border-color .15s; display: flex; flex-direction: column; gap: 8px; position: relative; text-decoration: none; }
+.card { background: var(--bg1); border: 0.5px solid var(--border0); border-radius: 12px; padding: var(--card-padding, 14px); cursor: pointer; transition: border-color .15s; display: flex; flex-direction: column; gap: 8px; position: relative; text-decoration: none; }
 .card:hover { border-color: var(--g4); box-shadow: 0 0 0 2px var(--g4-glow); }
 .card-top { display: flex; align-items: flex-start; gap: 10px; }
 .favicon { width: 28px; height: 28px; border-radius: 6px; background: var(--bg3); display: flex; align-items: center; justify-content: center; flex-shrink: 0; overflow: hidden; }
@@ -215,6 +215,7 @@ select:focus { outline: none; border-color: var(--g4); }
       <option value="most-visited">Most visited</option>
     </select>
     <button class="btn" id="viewToggleBtn" onclick="toggleView()" title="Toggle view"><i class="ti ti-layout-list" id="viewToggleIcon"></i></button>
+    <button class="btn" id="densityBtn" onclick="cycleDensity()" title="Card density"></button>
     <button class="btn" id="selectBtn" onclick="toggleSelectMode()"><i class="ti ti-checkbox"></i> Select</button>
     <button class="btn btn-primary" onclick="openModal()"><i class="ti ti-plus"></i> Add link</button>
     <div class="settings-wrap">
@@ -356,6 +357,28 @@ let searchDebounceTimer = null;
 function debouncedRender() { clearTimeout(searchDebounceTimer); searchDebounceTimer = setTimeout(render, 150); }
 let currentSort = localStorage.getItem('msp-sort') || 'manual';
 let currentView = localStorage.getItem('msp-view') || 'grid';
+let currentDensity = localStorage.getItem('msp-density') || 'comfortable';
+const DENSITY_CYCLE = ['compact', 'comfortable', 'spacious'];
+const DENSITY_SETTINGS = {
+  compact:     { minWidth: '160px', padding: '8px',  gap: '8px',  icon: 'ti ti-layout-grid',        label: 'Compact'     },
+  comfortable: { minWidth: '220px', padding: '14px', gap: '12px', icon: 'ti ti-layout-grid-2',       label: 'Comfortable' },
+  spacious:    { minWidth: '300px', padding: '20px', gap: '16px', icon: 'ti ti-layout-grid-3',       label: 'Spacious'    },
+};
+function applyDensity(d) {
+  const s = DENSITY_SETTINGS[d] || DENSITY_SETTINGS.comfortable;
+  const r = document.documentElement.style;
+  r.setProperty('--card-min-width', s.minWidth);
+  r.setProperty('--card-padding', s.padding);
+  r.setProperty('--card-gap', s.gap);
+  currentDensity = d;
+  localStorage.setItem('msp-density', d);
+  const btn = document.getElementById('densityBtn');
+  if (btn) btn.innerHTML = `<i class="${s.icon}"></i>`;
+}
+function cycleDensity() {
+  const next = DENSITY_CYCLE[(DENSITY_CYCLE.indexOf(currentDensity) + 1) % DENSITY_CYCLE.length];
+  applyDensity(next);
+}
 function toggleView() {
   currentView = currentView === 'grid' ? 'list' : 'grid';
   localStorage.setItem('msp-view', currentView);
@@ -1389,6 +1412,7 @@ function closeFolderColorPicker() {
 }
 
 applyTheme(localStorage.getItem('msp-theme') || 'Green');
+applyDensity(currentDensity);
 document.getElementById('viewToggleIcon').className = currentView === 'grid' ? 'ti ti-layout-list' : 'ti ti-layout-grid';
 setupCardListeners();
 setupDragListeners();
