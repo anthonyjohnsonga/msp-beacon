@@ -82,6 +82,8 @@ select:focus { outline: none; border-color: var(--g4); }
 .folder-chevron.open { transform: rotate(90deg); }
 .folder-name { font-size: 13px; font-weight: 500; color: var(--g2); }
 .count-pill { font-size: 11px; padding: 1px 7px; border-radius: 20px; background: var(--g5); color: #fff; }
+.folder-rename-btn { background: none; border: none; color: var(--text2); font-size: 12px; cursor: pointer; padding: 2px 4px; border-radius: 4px; display: flex; align-items: center; line-height: 1; }
+.folder-rename-btn:hover { color: var(--g2); background: rgba(255,255,255,.07); }
 .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: flex; align-items: center; justify-content: center; z-index: 100; }
 .modal { background: var(--bg1); border-radius: 12px; border: 1px solid var(--g5); padding: 1.25rem; width: min(460px, 92vw); display: flex; flex-direction: column; gap: 12px; max-height: 90vh; overflow-y: auto; }
 .modal-header { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--g6); padding-bottom: 10px; }
@@ -508,7 +510,7 @@ function render() {
     }
     const fc = getFolderColor(f);
     const fcRgb = hexToRgb(fc);
-    html += `<div class="folder-section"><div class="folder-header" onclick="toggleFolder(this.dataset.folder)" data-folder="${esc(f)}" style="background:rgba(${fcRgb},.15);border-color:${fc}"><div class="folder-drag-handle" draggable="true" title="Drag to reorder folder" onclick="event.stopPropagation()"><i class="ti ti-grip-vertical"></i></div><i class="ti ti-chevron-right folder-chevron${collapsed ? '' : ' open'}" style="color:${fc}"></i><i class="ti ti-folder" style="font-size:16px;color:${fc}"></i><span class="folder-name">${esc(f)}</span><span class="count-pill" style="background:${fc}">${byF[f].length}</span><div class="folder-color-swatch" onclick="event.stopPropagation();openFolderColorPicker('${esc(f)}',this)" style="width:16px;height:16px;border-radius:50%;background:${fc};cursor:pointer;margin-left:auto;flex-shrink:0;border:1.5px solid rgba(255,255,255,.2)"></div></div>${folderContent}</div>`;
+    html += `<div class="folder-section"><div class="folder-header" onclick="toggleFolder(this.dataset.folder)" data-folder="${esc(f)}" style="background:rgba(${fcRgb},.15);border-color:${fc}"><div class="folder-drag-handle" draggable="true" title="Drag to reorder folder" onclick="event.stopPropagation()"><i class="ti ti-grip-vertical"></i></div><i class="ti ti-chevron-right folder-chevron${collapsed ? '' : ' open'}" style="color:${fc}"></i><i class="ti ti-folder" style="font-size:16px;color:${fc}"></i><span class="folder-name">${esc(f)}</span><button class="folder-rename-btn" onclick="event.stopPropagation();startFolderRename(this)" title="Rename folder"><i class="ti ti-pencil"></i></button><span class="count-pill" style="background:${fc}">${byF[f].length}</span><div class="folder-color-swatch" onclick="event.stopPropagation();openFolderColorPicker('${esc(f)}',this)" style="width:16px;height:16px;border-radius:50%;background:${fc};cursor:pointer;margin-left:auto;flex-shrink:0;border:1.5px solid rgba(255,255,255,.2)"></div></div>${folderContent}</div>`;
   });
   c.innerHTML = html;
 }
@@ -868,6 +870,65 @@ function toggleFolder(name) {
   else collapsedFolders.add(name);
   localStorage.setItem('msp-collapsed', JSON.stringify([...collapsedFolders]));
   render();
+}
+
+function renameFolder(oldName, newName) {
+  newName = newName.trim();
+  if (!newName || newName === oldName) return;
+  // Update all links
+  links.forEach(l => { if (l.folder === oldName) l.folder = newName; });
+  // Update folderColors
+  if (folderColors[oldName]) {
+    folderColors[newName] = folderColors[oldName];
+    delete folderColors[oldName];
+    localStorage.setItem('msp-folder-colors', JSON.stringify(folderColors));
+  }
+  // Update folderOrder
+  if (folderOrder) {
+    const idx = folderOrder.indexOf(oldName);
+    if (idx > -1) folderOrder[idx] = newName;
+    localStorage.setItem('msp-folder-order', JSON.stringify(folderOrder));
+  }
+  // Update collapsedFolders
+  if (collapsedFolders.has(oldName)) {
+    collapsedFolders.delete(oldName);
+    collapsedFolders.add(newName);
+    localStorage.setItem('msp-collapsed', JSON.stringify([...collapsedFolders]));
+  }
+  save();
+}
+
+function startFolderRename(btn) {
+  const header = btn.closest('.folder-header[data-folder]');
+  if (!header) return;
+  const oldName = header.dataset.folder;
+  const nameSpan = header.querySelector('.folder-name');
+  if (!nameSpan || header.querySelector('.folder-rename-input')) return;
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = oldName;
+  input.className = 'folder-rename-input';
+  input.style.cssText = 'height:22px;padding:0 6px;border-radius:5px;border:1px solid var(--g4);background:var(--bg2);color:var(--text0);font-size:13px;font-weight:500;font-family:inherit;width:140px';
+  nameSpan.replaceWith(input);
+  input.focus();
+  input.select();
+  let committed = false;
+  function commit() {
+    if (committed) return;
+    committed = true;
+    const newName = input.value.trim();
+    if (newName && newName !== oldName) {
+      renameFolder(oldName, newName);
+      render();
+    } else {
+      input.replaceWith(nameSpan);
+    }
+  }
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); commit(); }
+    if (e.key === 'Escape') { committed = true; input.replaceWith(nameSpan); }
+  });
+  input.addEventListener('blur', commit);
 }
 
 function toggleSubfolder(folderName, subfolder) {
@@ -1323,4 +1384,3 @@ setupDragListeners();
 loadLinks();
 </script>
 </body>
-</html>
