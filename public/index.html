@@ -561,7 +561,7 @@ function cardHtml(l) {
       ${l.folder ? `<span class="folder-badge"><i class="ti ti-folder" style="font-size:11px"></i> ${esc(l.folder)}${l.subfolder ? ' / ' + esc(l.subfolder) : ''}</span>` : ''}
     </div>`;
   const top = `<div class="card-top"><div class="favicon">${fi}</div>
-      <div style="min-width:0"><div class="card-title">${esc(l.title)}</div><div class="card-url">${esc(getDomain(l.url))}</div></div>
+      <div style="min-width:0"><div class="card-title">${esc(l.title)}</div><div class="card-url">${esc(getDomain(l.url))}</div>${l.lastVisited ? `<div style="font-size:11px;color:var(--text2);margin-top:1px">${timeAgo(l.lastVisited)}</div>` : ''}</div>
     </div>`;
   const statusBadge = (linkStatus[l.id] === 'broken' || linkStatus[l.id] === 'timeout')
     ? `<div class="status-badge" title="${linkStatus[l.id] === 'timeout' ? 'Link timed out' : 'Link appears broken'}"><i class="ti ti-alert-triangle"></i></div>`
@@ -613,6 +613,7 @@ function cardListHtml(l) {
     ${statusBadge}
     <span class="card-row-title">${esc(l.title)}</span>
     <span class="card-row-domain">${esc(getDomain(l.url))}</span>
+    ${l.lastVisited ? `<span style="font-size:11px;color:var(--text2);flex-shrink:0">${timeAgo(l.lastVisited)}</span>` : ''}
     <div class="card-row-tags">${(l.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('')}</div>
     ${l.folder ? `<span class="folder-badge" style="margin-left:0"><i class="ti ti-folder" style="font-size:11px"></i> ${esc(l.folder)}${l.subfolder ? ' / ' + esc(l.subfolder) : ''}</span>` : ''}
     <button class="star-btn${l.favorite ? ' active' : ''}" data-action="favorite" data-id="${esc(l.id)}" title="${l.favorite ? 'Remove from favorites' : 'Add to favorites'}" style="flex-shrink:0"><i class="ti ti-star${l.favorite ? '-filled' : ''}"></i></button>
@@ -997,6 +998,7 @@ function setupDragListeners() {
       } else if (!card) {
         const sfHeader = e.target.closest('.subfolder-header[data-subfolder]');
         if (sfHeader) {
+        if (sfHeader) {
           newTarget = sfHeader;
         } else {
           const header = e.target.closest('.folder-header[data-folder]');
@@ -1270,8 +1272,17 @@ async function checkLinks() {
 
 function openLink(id, url) {
   const l = links.find(x => x.id === id);
-  if (l) { l.visits = (l.visits || 0) + 1; save(); }
+  if (l) { l.visits = (l.visits || 0) + 1; l.lastVisited = Date.now(); save(); }
   window.open(url, '_blank');
+}
+function timeAgo(ts) {
+  if (!ts) return '';
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return Math.floor(s / 60) + 'm ago';
+  if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+  if (s < 2592000) return Math.floor(s / 86400) + 'd ago';
+  return Math.floor(s / 2592000) + 'mo ago';
 }
 
 let statsNeverExpanded = false;
@@ -1384,3 +1395,4 @@ setupDragListeners();
 loadLinks();
 </script>
 </body>
+</html>
