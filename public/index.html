@@ -511,7 +511,7 @@ function render() {
     }
     const fc = getFolderColor(f);
     const fcRgb = hexToRgb(fc);
-    html += `<div class="folder-section"><div class="folder-header" onclick="toggleFolder(this.dataset.folder)" data-folder="${esc(f)}" style="background:rgba(${fcRgb},.15);border-color:${fc}"><div class="folder-drag-handle" draggable="true" title="Drag to reorder folder" onclick="event.stopPropagation()"><i class="ti ti-grip-vertical"></i></div><i class="ti ti-chevron-right folder-chevron${collapsed ? '' : ' open'}" style="color:${fc}"></i><i class="ti ti-folder" style="font-size:16px;color:${fc}"></i><span class="folder-name">${esc(f)}</span><button class="folder-rename-btn" onclick="event.stopPropagation();startFolderRename(this)" title="Rename folder"><i class="ti ti-pencil"></i></button><span class="count-pill" style="background:${fc}">${byF[f].length}</span><div class="folder-color-swatch" data-folder="${esc(f)}" onclick="event.stopPropagation();openFolderColorPicker(this.dataset.folder,this)" style="width:16px;height:16px;border-radius:50%;background:${fc};cursor:pointer;margin-left:auto;flex-shrink:0;border:1.5px solid rgba(255,255,255,.2)"></div></div>${folderContent}</div>`;
+    html += `<div class="folder-section"><div class="folder-header" onclick="toggleFolder(this.dataset.folder)" data-folder="${esc(f)}" style="background:rgba(${fcRgb},.15);border-color:${fc}"><div class="folder-drag-handle" draggable="true" title="Drag to reorder folder" onclick="event.stopPropagation()"><i class="ti ti-grip-vertical"></i></div><i class="ti ti-chevron-right folder-chevron${collapsed ? '' : ' open'}" style="color:${fc}"></i><i class="ti ti-folder" style="font-size:16px;color:${fc}"></i><span class="folder-name">${esc(f)}</span><button class="folder-rename-btn" onclick="event.stopPropagation();startFolderRename(this)" title="Rename folder"><i class="ti ti-pencil"></i></button><span class="count-pill" style="background:${fc}">${byF[f].length}</span><div class="folder-color-swatch" onclick="event.stopPropagation();openFolderColorPicker(${JSON.stringify(f)},this)" style="width:16px;height:16px;border-radius:50%;background:${fc};cursor:pointer;margin-left:auto;flex-shrink:0;border:1.5px solid rgba(255,255,255,.2)"></div></div>${folderContent}</div>`;
   });
   c.innerHTML = html;
 }
@@ -577,7 +577,7 @@ function cardHtml(l) {
       ${footer}
     </div>`;
   }
-  return `<div class="card" data-id="${esc(l.id)}" data-url="${esc(l.url)}">
+  return `<div class="card" data-id="${esc(l.id)}" data-url="${esc(l.url)}"${l.folder ? ` style="border-left:3px solid ${getFolderColor(l.folder)}"` : ''}>
     <div class="card-actions">
       <div class="drag-handle" draggable="true" title="Drag to reorder"><i class="ti ti-grip-vertical"></i></div>
       <button class="icon-btn" title="Copy URL" data-action="copy" data-id="${esc(l.id)}" data-url="${esc(l.url)}"><i class="ti ti-copy"></i></button>
@@ -609,7 +609,7 @@ function cardListHtml(l) {
       ${l.folder ? `<span class="folder-badge" style="margin-left:0"><i class="ti ti-folder" style="font-size:11px"></i> ${esc(l.folder)}${l.subfolder ? ' / ' + esc(l.subfolder) : ''}</span>` : ''}
     </div>`;
   }
-  return `<div class="card-row" data-id="${esc(l.id)}" data-url="${esc(l.url)}">
+  return `<div class="card-row" data-id="${esc(l.id)}" data-url="${esc(l.url)}"${l.folder ? ` style="border-left:3px solid ${getFolderColor(l.folder)}"` : ''}>
     <div class="favicon">${fi}</div>
     ${statusBadge}
     <span class="card-row-title">${esc(l.title)}</span>
