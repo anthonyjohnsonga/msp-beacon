@@ -566,6 +566,7 @@ function renderFolderContents(folderName, folderLinks) {
     html += `<i class="ti ti-folder" style="font-size:12px;color:${fc};opacity:.7"></i>`;
     html += `<span class="subfolder-title">${esc(sf)}</span>`;
     html += `<span class="count-pill" style="font-size:10px;padding:1px 5px;background:rgba(${fcRgb},.5)">${sfLinks.length}</span>`;
+    html += `<button class="folder-rename-btn" onclick="event.stopPropagation();startSubfolderRename(this)" title="Rename sub-folder" style="font-size:11px"><i class="ti ti-pencil"></i></button>`;
     html += `</div>`;
     if (!sfCollapsed) {
       html += `<div class="subfolder-grid">${wrap(sfLinks)}</div>`;
@@ -1008,6 +1009,48 @@ function startFolderRename(btn) {
     } else {
       input.replaceWith(nameSpan);
     }
+  }
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); commit(); }
+    if (e.key === 'Escape') { committed = true; input.replaceWith(nameSpan); }
+  });
+  input.addEventListener('blur', commit);
+}
+function renameSubfolder(folderName, oldName, newName) {
+  newName = newName.trim();
+  if (!newName || newName === oldName) return;
+  links.forEach(l => { if (l.folder === folderName && l.subfolder === oldName) l.subfolder = newName; });
+  const oldKey = JSON.stringify([folderName, oldName]);
+  const newKey = JSON.stringify([folderName, newName]);
+  if (collapsedSubfolders[oldKey] !== undefined) {
+    collapsedSubfolders[newKey] = collapsedSubfolders[oldKey];
+    delete collapsedSubfolders[oldKey];
+    localStorage.setItem('msp-subfolder-collapsed', JSON.stringify(collapsedSubfolders));
+  }
+  save();
+}
+function startSubfolderRename(btn) {
+  const header = btn.closest('.subfolder-header');
+  if (!header) return;
+  const folderName = header.dataset.folder;
+  const oldName = header.dataset.subfolder;
+  const nameSpan = header.querySelector('.subfolder-title');
+  if (!nameSpan || header.querySelector('.folder-rename-input')) return;
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = oldName;
+  input.className = 'folder-rename-input';
+  input.style.cssText = 'height:20px;padding:0 6px;border-radius:5px;border:1px solid var(--g4);background:var(--bg2);color:var(--text0);font-size:12px;font-weight:500;font-family:inherit;width:120px';
+  nameSpan.replaceWith(input);
+  input.focus();
+  input.select();
+  let committed = false;
+  function commit() {
+    if (committed) return;
+    committed = true;
+    const newName = input.value.trim();
+    if (newName && newName !== oldName) { renameSubfolder(folderName, oldName, newName); render(); }
+    else input.replaceWith(nameSpan);
   }
   input.addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); commit(); }
