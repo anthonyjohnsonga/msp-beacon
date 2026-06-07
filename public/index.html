@@ -534,7 +534,7 @@ function render() {
     }
     const fc = getFolderColor(f);
     const fcRgb = hexToRgb(fc);
-    html += `<div class="folder-section"><div class="folder-header" onclick="toggleFolder(this.dataset.folder)" data-folder="${esc(f)}" style="background:rgba(${fcRgb},.15);border-color:${fc}"><div class="folder-drag-handle" draggable="true" title="Drag to reorder folder" onclick="event.stopPropagation()"><i class="ti ti-grip-vertical"></i></div><i class="ti ti-chevron-right folder-chevron${collapsed ? '' : ' open'}" style="color:${fc}"></i><i class="ti ti-folder" style="font-size:16px;color:${fc}"></i><span class="folder-name">${esc(f)}</span><button class="folder-rename-btn" onclick="event.stopPropagation();startFolderRename(this)" title="Rename folder"><i class="ti ti-pencil"></i></button><button class="folder-rename-btn" onclick="event.stopPropagation();deleteFolder(${JSON.stringify(f)})" title="Delete folder" style="color:#E24B4A"><i class="ti ti-trash"></i></button><span class="count-pill" style="background:${fc}">${byF[f].length}</span><div class="folder-color-swatch" onclick="event.stopPropagation();openFolderColorPicker(${JSON.stringify(f)},this)" style="width:16px;height:16px;border-radius:50%;background:${fc};cursor:pointer;margin-left:auto;flex-shrink:0;border:1.5px solid rgba(255,255,255,.2)"></div></div>${folderContent}</div>`;
+    html += `<div class="folder-section"><div class="folder-header" onclick="toggleFolder(this.dataset.folder)" data-folder="${esc(f)}" style="background:rgba(${fcRgb},.15);border-color:${fc}"><div class="folder-drag-handle" draggable="true" title="Drag to reorder folder" onclick="event.stopPropagation()"><i class="ti ti-grip-vertical"></i></div><i class="ti ti-chevron-right folder-chevron${collapsed ? '' : ' open'}" style="color:${fc}"></i><i class="ti ti-folder" style="font-size:16px;color:${fc}"></i><span class="folder-name">${esc(f)}</span><button class="folder-rename-btn" onclick="event.stopPropagation();startFolderRename(this)" title="Rename folder"><i class="ti ti-pencil"></i></button><button class="folder-rename-btn" onclick="event.stopPropagation();deleteFolder(${JSON.stringify(f)})" title="Delete folder" style="color:#E24B4A"><i class="ti ti-trash"></i></button><span class="count-pill" style="background:${fc}">${byF[f].length}</span><div class="folder-color-swatch" onclick="event.stopPropagation();openFolderColorPicker(${JSON.stringify(f)},this)" style="width:16px;height:16px;border-radius:50%;background:${fc};cursor:pointer;margin-left:auto;flex-shrink:0;border:1.5px solid rgba(255,255,255,.2)"></div></div><div class="folder-content" data-folder="${esc(f)}">${folderContent}</div></div>`;
   });
   c.innerHTML = html;
 }
@@ -891,10 +891,55 @@ document.addEventListener('keydown', e => {
 });
 
 function toggleFolder(name) {
-  if (collapsedFolders.has(name)) collapsedFolders.delete(name);
+  const contentEl = Array.from(document.querySelectorAll('.folder-content')).find(el => el.dataset.folder === name);
+  const isCollapsed = collapsedFolders.has(name);
+
+  if (!isCollapsed && contentEl) {
+    if (contentEl.dataset.animating) return;
+    contentEl.dataset.animating = '1';
+    const chevron = Array.from(document.querySelectorAll('.folder-header')).find(el => el.dataset.folder === name)?.querySelector('.folder-chevron');
+    if (chevron) chevron.classList.remove('open');
+    contentEl.style.overflow = 'hidden';
+    contentEl.style.maxHeight = contentEl.scrollHeight + 'px';
+    contentEl.style.opacity = '1';
+    requestAnimationFrame(() => {
+      contentEl.style.transition = 'max-height 0.25s ease, opacity 0.2s ease';
+      contentEl.style.maxHeight = '0';
+      contentEl.style.opacity = '0';
+    });
+    setTimeout(() => {
+      collapsedFolders.add(name);
+      localStorage.setItem('msp-collapsed', JSON.stringify([...collapsedFolders]));
+      render();
+    }, 260);
+    return;
+  }
+
+  if (isCollapsed) collapsedFolders.delete(name);
   else collapsedFolders.add(name);
   localStorage.setItem('msp-collapsed', JSON.stringify([...collapsedFolders]));
   render();
+
+  if (isCollapsed) {
+    const newEl = Array.from(document.querySelectorAll('.folder-content')).find(el => el.dataset.folder === name);
+    if (newEl) {
+      const height = newEl.scrollHeight;
+      newEl.style.overflow = 'hidden';
+      newEl.style.maxHeight = '0';
+      newEl.style.opacity = '0';
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        newEl.style.transition = 'max-height 0.25s ease, opacity 0.2s ease';
+        newEl.style.maxHeight = height + 'px';
+        newEl.style.opacity = '1';
+        setTimeout(() => {
+          newEl.style.maxHeight = '';
+          newEl.style.overflow = '';
+          newEl.style.transition = '';
+          newEl.style.opacity = '';
+        }, 260);
+      }));
+    }
+  }
 }
 
 function renameFolder(oldName, newName) {
