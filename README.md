@@ -8,20 +8,48 @@ move between machines, or host on a file share.
 
 ## Features
 
-- **Add, edit, delete links** — save any URL with a title, description, folder, and tags
-- **Folders** — group links into collapsible folders; drag to reorder folders
-- **Tags** — tag links for filtering; filter by tag from the toolbar
-- **Search** — real-time search across title, URL, description, folder, and tags (press `/` or `Ctrl+K`)
-- **Folder & tag filters** — filter the view by folder or tag from dropdowns
-- **Drag to reorder** — drag cards within a folder to reorder; drag a card onto a folder header to move it
+### Links
+- **Add, edit, delete links** — save any URL with a title, description, folder, sub-folder, and tags
+- **Auto-fetch page title** — blurring the URL field fetches the page title automatically
 - **Copy URL** — one-click copy button on every card
-- **Bulk actions** — checkbox select mode to select multiple cards at once, then delete, move to a folder, or add a tag in one action
-- **Import bookmarks** — drop a browser-exported HTML file to import bookmarks from Chrome, Edge, or Firefox; preview and select which to import
-- **Export bookmarks** — export all links as a browser-compatible HTML bookmark file
+- **Duplicate URL warning** — inline warning when adding a URL that already exists, with an "Add anyway" option
+- **Undo delete** — single and bulk deletes can be undone within 5 seconds via a toast notification
+- **Favorites** — star any link to pin it to a collapsible Favorites section at the top
+
+### Organization
+- **Folders & sub-folders** — group links into collapsible folders with one level of sub-folder nesting
+- **Folder color coding** — assign a custom color to each folder; color cascades to sub-folders and card accents
+- **Folder rename** — inline rename via pencil icon; updates all links, colors, and order atomically
+- **Delete folder** — trash icon removes the folder and moves its links to no folder
+- **Tags** — tag links for filtering; filter by tag from the toolbar
+- **Drag to reorder** — drag cards to reorder within folders; drag folders to reorder sections; drop a card onto a folder or sub-folder header to move it
+- **Bulk actions** — checkbox select mode to delete, move, or tag multiple links at once
+
+### Search & Filter
+- **Search** — real-time search across title, URL, description, folder, and tags (press `/` or `Ctrl+K`)
+- **Folder & tag filters** — filter the view by folder or tag from toolbar dropdowns
+- **Sort options** — sort by manual order, A→Z, Z→A, newest, oldest, or most visited
+
+### Views & Appearance
+- **List view toggle** — switch between card grid and compact row layout; preference saved
+- **Card density toggle** — cycle through compact, comfortable, and spacious grid layouts
+- **Folder color accent on cards** — cards show a colored left border matching their folder
 - **Themes** — 6 built-in color themes (Green, Blue, Purple, Teal, Orange, Red)
+
+### Stats & Health
+- **Visit counter** — tracks how many times each link has been opened
+- **Last visited timestamp** — shows "2h ago", "3d ago" etc. on each card
+- **Stats report** — Settings → Stats shows total links, total visits, links per folder, top 10 most visited, and never-visited links
+- **Link health check** — Settings → Check links runs HEAD requests against all visible links and badges broken ones
+
+### Import & Export
+- **Import bookmarks** — drop a browser-exported HTML file to import from Chrome, Edge, or Firefox; preview and select before importing
+- **Export bookmarks** — export all links as a browser-compatible HTML bookmark file
+
+### General
 - **Auto-save** — changes save automatically with a debounced write queue and atomic file writes
 - **Favicon display** — automatically fetches site favicons for each link
-- **Persistent state** — collapsed folders, folder order, and theme are saved to `localStorage`
+- **Persistent state** — collapsed folders, folder order, theme, view, density, and sort are saved to `localStorage`
 - **Self-hosted & portable** — all data lives in a single `links.json` file; easy to back up or move
 
 ---
@@ -47,6 +75,11 @@ services:
     volumes:
       - ./data:/data
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.50'
 ```
 
 ### 2. Start the container
