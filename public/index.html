@@ -909,6 +909,7 @@ function toggleFolder(name) {
       contentEl.style.opacity = '0';
     });
     setTimeout(() => {
+      delete contentEl.dataset.animating;
       collapsedFolders.add(name);
       localStorage.setItem('msp-collapsed', JSON.stringify([...collapsedFolders]));
       render();
@@ -923,7 +924,8 @@ function toggleFolder(name) {
 
   if (isCollapsed) {
     const newEl = Array.from(document.querySelectorAll('.folder-content')).find(el => el.dataset.folder === name);
-    if (newEl) {
+    if (newEl && !newEl.dataset.animating) {
+      newEl.dataset.animating = '1';
       const height = newEl.scrollHeight;
       newEl.style.overflow = 'hidden';
       newEl.style.maxHeight = '0';
@@ -933,6 +935,7 @@ function toggleFolder(name) {
         newEl.style.maxHeight = height + 'px';
         newEl.style.opacity = '1';
         setTimeout(() => {
+          delete newEl.dataset.animating;
           newEl.style.maxHeight = '';
           newEl.style.overflow = '';
           newEl.style.transition = '';
@@ -980,6 +983,10 @@ function deleteFolder(name) {
   }
   collapsedFolders.delete(name);
   localStorage.setItem('msp-collapsed', JSON.stringify([...collapsedFolders]));
+  Object.keys(collapsedSubfolders).forEach(key => {
+    try { if (JSON.parse(key)[0] === name) delete collapsedSubfolders[key]; } catch {}
+  });
+  localStorage.setItem('msp-subfolder-collapsed', JSON.stringify(collapsedSubfolders));
   save(); render();
   showToast(`Folder "${name}" deleted`);
 }
