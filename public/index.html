@@ -205,6 +205,8 @@ select:focus { outline: none; border-color: var(--g4); }
       <button class="search-clear" id="searchClear" style="display:none" onclick="clearSearch()"><i class="ti ti-x"></i></button>
     </div>
     <select id="folderFilter" onchange="render()"><option value="">All folders</option></select>
+    <button class="btn" onclick="collapseAll()" title="Collapse all folders"><i class="ti ti-chevrons-up"></i></button>
+    <button class="btn" onclick="expandAll()" title="Expand all folders"><i class="ti ti-chevrons-down"></i></button>
     <select id="tagFilter" onchange="render()"><option value="">All tags</option></select>
     <select id="sortSelect" onchange="onSortChange()">
       <option value="manual">Manual order</option>
@@ -946,6 +948,16 @@ function toggleFolder(name) {
   }
 }
 
+function collapseAll() {
+  allFolders().forEach(f => collapsedFolders.add(f));
+  localStorage.setItem('msp-collapsed', JSON.stringify([...collapsedFolders]));
+  render();
+}
+function expandAll() {
+  collapsedFolders.clear();
+  localStorage.setItem('msp-collapsed', JSON.stringify([]));
+  render();
+}
 function renameFolder(oldName, newName) {
   newName = newName.trim();
   if (!newName || newName === oldName) return;
