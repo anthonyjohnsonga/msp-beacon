@@ -138,18 +138,33 @@ app.get('/api/fetch-title', async (req, res) => {
       incoming.on('end', () => { if (!done) sendTitle(); });
       incoming.on('error', () => { if (!res.headersSent) sendTitle(); });
 
-      function sendTitle() {
-        if (res.headersSent) return;
-        const m = buf.match(/<title[^>]*>([^<]+)<\/title>/i);
-        if (!m) return res.json({ title: '' });
-        let title = m[1]
+      function decodeEntities(str) {
+        return str
           .replace(/&amp;/g, '&')
           .replace(/&lt;/g, '<')
           .replace(/&gt;/g, '>')
           .replace(/&quot;/g, '"')
+          .replace(/&apos;/g, "'")
           .replace(/&#39;/g, "'")
+          .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+          .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCharCode(parseInt(h, 16)))
           .trim();
-        res.json({ title });
+      }
+      function sendTitle() {
+        if (res.headersSent) return;
+        // Try <title> first
+        const titleMatch = buf.match(/<title[^>]*>([^<]*)<\/title>/i);
+        const titleText = titleMatch ? decodeEntities(titleMatch[1]) : '';
+        if (titleText) return res.json({ title: titleText });
+        // Fall back to og:title
+        const ogMatch = buf.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)
+          || buf.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i);
+        if (ogMatch) return res.json({ title: decodeEntities(ogMatch[1]) });
+        // Fall back to meta name="title"
+        const metaMatch = buf.match(/<meta[^>]+name=["']title["'][^>]+content=["']([^"']+)["']/i)
+          || buf.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']title["']/i);
+        if (metaMatch) return res.json({ title: decodeEntities(metaMatch[1]) });
+        res.json({ title: '' });
       }
     });
 

@@ -692,12 +692,8 @@ async function fetchPageTitle() {
   try {
     const res = await fetch('/api/fetch-title?url=' + encodeURIComponent(u));
     const data = await res.json();
-    if (!t.value) {
-      t.value = data.title || new URL(u).hostname.replace('www.', '');
-    }
-  } catch {
-    if (!t.value) { try { t.value = new URL(u).hostname.replace('www.', ''); } catch {} }
-  }
+    if (!t.value && data.title) t.value = data.title;
+  } catch {}
   wrap.classList.remove('fetching');
 }
 
