@@ -17,13 +17,16 @@ move between machines, or host on a file share.
 - **Favorites** — star any link to pin it to a collapsible Favorites section at the top
 
 ### Organization
-- **Folders & sub-folders** — group links into collapsible folders with one level of sub-folder nesting
+- **Folders & sub-folders** — group links into collapsible folders with one level of sub-folder nesting; smooth slide/fade animation on expand/collapse
 - **Folder color coding** — assign a custom color to each folder; color cascades to sub-folders and card accents
-- **Folder rename** — inline rename via pencil icon; updates all links, colors, and order atomically
+- **Folder icons** — click the folder icon to pick from 24 presets; persists across rename
+- **Folder rename** — inline rename via pencil icon; updates all links, colors, order, and icon atomically
+- **Subfolder rename** — pencil icon on subfolder headers enables inline rename; updates all links and collapsed state
 - **Delete folder** — trash icon removes the folder and moves its links to no folder
 - **Tags** — tag links for filtering; filter by tag from the toolbar
 - **Drag to reorder** — drag cards to reorder within folders; drag folders to reorder sections; drop a card onto a folder or sub-folder header to move it
 - **Bulk actions** — checkbox select mode to delete, move, or tag multiple links at once
+- **Collapse all / Expand all** — Settings menu buttons to collapse or expand every folder at once
 
 ### Search & Filter
 - **Search** — real-time search across title, URL, description, folder, and tags (press `/` or `Ctrl+K`)
