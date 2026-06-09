@@ -244,6 +244,7 @@ select:focus { outline: none; border-color: var(--g4); }
         <button class="settings-item" onclick="closeSettings();collapseAll()"><i class="ti ti-chevrons-up"></i> Collapse all</button>
         <button class="settings-item" onclick="closeSettings();expandAll()"><i class="ti ti-chevrons-down"></i> Expand all</button>
         <button class="settings-item" id="checkLinksBtn" onclick="checkLinks()"><i class="ti ti-wifi"></i> Check links</button>
+        <button class="settings-item" onclick="closeSettings();openShortcuts()"><i class="ti ti-keyboard"></i> Keyboard shortcuts</button>
         <button class="settings-item" onclick="closeSettings();openFolderManager()"><i class="ti ti-folders"></i> Manage folders</button>
         <button class="settings-item" onclick="closeSettings();openTagManager()"><i class="ti ti-tags"></i> Manage tags</button>
         <button class="settings-item" onclick="closeSettings();openStats()"><i class="ti ti-chart-bar"></i> Stats</button>
@@ -350,6 +351,27 @@ select:focus { outline: none; border-color: var(--g4); }
   </div>
 </div>
 
+<div id="shortcutsBg" class="modal-bg" style="display:none" onclick="if(event.target===this)closeShortcuts()">
+  <div class="modal" role="dialog" aria-modal="true" style="width:min(400px,92vw)">
+    <div class="modal-header"><i class="ti ti-keyboard"></i><h3>Keyboard Shortcuts</h3></div>
+    <div style="display:flex;flex-direction:column;gap:4px;padding:4px 0">
+      <div style="display:grid;grid-template-columns:80px 1fr;gap:6px 12px;font-size:13px;align-items:center">
+        <kbd style="font-family:inherit;background:var(--bg3);border:1px solid var(--g5);border-radius:5px;padding:2px 8px;text-align:center;color:var(--text0)">/</kbd><span style="color:var(--text1)">Focus search</span>
+        <kbd style="font-family:inherit;background:var(--bg3);border:1px solid var(--g5);border-radius:5px;padding:2px 8px;text-align:center;color:var(--text0)">Ctrl K</kbd><span style="color:var(--text1)">Focus search</span>
+        <kbd style="font-family:inherit;background:var(--bg3);border:1px solid var(--g5);border-radius:5px;padding:2px 8px;text-align:center;color:var(--text0)">n</kbd><span style="color:var(--text1)">New link</span>
+        <kbd style="font-family:inherit;background:var(--bg3);border:1px solid var(--g5);border-radius:5px;padding:2px 8px;text-align:center;color:var(--text0)">e</kbd><span style="color:var(--text1)">Edit hovered link</span>
+        <kbd style="font-family:inherit;background:var(--bg3);border:1px solid var(--g5);border-radius:5px;padding:2px 8px;text-align:center;color:var(--text0)">f</kbd><span style="color:var(--text1)">Favorite hovered link</span>
+        <kbd style="font-family:inherit;background:var(--bg3);border:1px solid var(--g5);border-radius:5px;padding:2px 8px;text-align:center;color:var(--text0)">Del</kbd><span style="color:var(--text1)">Delete hovered link</span>
+        <kbd style="font-family:inherit;background:var(--bg3);border:1px solid var(--g5);border-radius:5px;padding:2px 8px;text-align:center;color:var(--text0)">Esc</kbd><span style="color:var(--text1)">Close modal / clear search</span>
+        <kbd style="font-family:inherit;background:var(--bg3);border:1px solid var(--g5);border-radius:5px;padding:2px 8px;text-align:center;color:var(--text0)">?</kbd><span style="color:var(--text1)">Show this help</span>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="closeShortcuts()">Close</button>
+    </div>
+  </div>
+</div>
+
 <div id="statsBg" class="modal-bg" style="display:none" onclick="if(event.target===this)closeStats()">
   <div class="modal" role="dialog" aria-modal="true" style="width:min(500px,92vw)">
     <div class="modal-header"><i class="ti ti-chart-bar"></i><h3>Link Stats</h3></div>
@@ -400,6 +422,7 @@ let dragId = null;
 let dragFolder = null;
 let dragOverEl = null;
 let selectMode = false;
+let activeCardId = null;
 let selectedIds = new Set();
 let visibleIds = [];
 let favoritesCollapsed = JSON.parse(localStorage.getItem('msp-fav-collapsed') || 'false');
@@ -1004,16 +1027,43 @@ function clearSearch() {
   s.focus();
 }
 
+function anyModalOpen() {
+  return !!document.querySelector('.modal-bg[style*="flex"]');
+}
+function openShortcuts() { document.getElementById('shortcutsBg').style.display = 'flex'; }
+function closeShortcuts() { document.getElementById('shortcutsBg').style.display = 'none'; }
+
 document.addEventListener('keydown', e => {
   const s = document.getElementById('search');
-  if ((e.key === '/' || (e.ctrlKey && e.key === 'k')) && !e.target.matches('input,textarea,select')) {
+  const inInput = e.target.matches('input,textarea,select,[contenteditable]');
+
+  if ((e.key === '/' || (e.ctrlKey && e.key === 'k')) && !inInput) {
     e.preventDefault();
     s.focus();
     s.select();
   }
-  if (e.key === 'Escape' && document.activeElement === s) {
-    clearSearch();
-    s.blur();
+
+  if (e.key === 'Escape') {
+    if (document.activeElement === s) { clearSearch(); s.blur(); return; }
+    closeFolderColorPicker();
+    closeFolderIconPicker();
+    closeFilter();
+    closeSettings();
+    ['modalBg','importBg','statsBg','folderMgrBg','tagMgrBg','shortcutsBg','themeBg'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el && el.style.display === 'flex') el.style.display = 'none';
+    });
+  }
+
+  if (inInput || anyModalOpen()) return;
+
+  if (e.key === 'n') { e.preventDefault(); openModal(null); }
+  if (e.key === '?') { e.preventDefault(); openShortcuts(); }
+
+  if (activeCardId) {
+    if (e.key === 'e') { e.preventDefault(); editLink(activeCardId); }
+    if (e.key === 'f') { e.preventDefault(); toggleFavorite(activeCardId); }
+    if (e.key === 'Delete') { e.preventDefault(); deleteLink(activeCardId); }
   }
 });
 
@@ -1231,6 +1281,11 @@ function toggleSubfolder(folderName, subfolder) {
 
 function setupCardListeners() {
   const content = document.getElementById('content');
+  content.addEventListener('mouseover', e => {
+    const card = e.target.closest('.card[data-id], .card-row[data-id]');
+    activeCardId = card ? card.dataset.id : null;
+  });
+  content.addEventListener('mouseleave', () => { activeCardId = null; });
   content.addEventListener('click', e => {
     const btn = e.target.closest('[data-action]');
     if (btn) {
