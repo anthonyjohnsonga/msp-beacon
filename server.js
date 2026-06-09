@@ -26,6 +26,7 @@ function isPrivateIP(ip) {
 const app = express();
 const PORT = process.env.PORT || 3000;
 const DATA_FILE = path.join('/data', 'links.json');
+const CONFIG_FILE = path.join('/data/config', 'config.json');
 
 app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
@@ -57,6 +58,24 @@ async function writeLinks(links) {
   await fsp.rename(tmp, DATA_FILE);
 }
 
+async function readConfig() {
+  try {
+    const raw = await fsp.readFile(CONFIG_FILE, 'utf8');
+    const data = JSON.parse(raw);
+    return data && typeof data === 'object' ? data : {};
+  } catch (e) {
+    if (e.code !== 'ENOENT') console.error('Failed to read config file:', e);
+    return {};
+  }
+}
+
+async function writeConfig(cfg) {
+  await fsp.mkdir(path.dirname(CONFIG_FILE), { recursive: true });
+  const tmp = path.join(path.dirname(CONFIG_FILE), `.config-${Date.now()}.json`);
+  await fsp.writeFile(tmp, JSON.stringify(cfg, null, 2), 'utf8');
+  await fsp.rename(tmp, CONFIG_FILE);
+}
+
 app.get('/api/links', async (req, res) => {
   try {
     res.json(await readLinks());
@@ -81,6 +100,29 @@ app.post('/api/links', (req, res) => {
       console.error('Write failed:', e);
       res.status(500).json({ error: 'Failed to save links' });
     });
+});
+
+app.get('/api/config', async (req, res) => {
+  try {
+    res.json(await readConfig());
+  } catch (e) {
+    console.error('GET /api/config error:', e);
+    res.status(500).json({ error: 'Failed to read config' });
+  }
+});
+
+app.post('/api/config', async (req, res) => {
+  const cfg = req.body;
+  if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) {
+    return res.status(400).json({ error: 'Expected an object' });
+  }
+  try {
+    await writeConfig(cfg);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('POST /api/config error:', e);
+    res.status(500).json({ error: 'Failed to save config' });
+  }
 });
 
 app.get('/api/fetch-title', async (req, res) => {
@@ -244,4 +286,5 @@ app.get('/api/check-links', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`MSP Beacon running on http://0.0.0.0:${PORT}`);
   console.log(`Data file: ${DATA_FILE}`);
+  console.log(`Config file: ${CONFIG_FILE}`);
 });

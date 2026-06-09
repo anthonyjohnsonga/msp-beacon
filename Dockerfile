@@ -8,9 +8,9 @@ RUN npm install --omit=dev
 COPY server.js ./
 COPY public/ ./public/
 
-RUN mkdir -p /data && chown node:node /data
+RUN mkdir -p /data /data/config && chown -R node:node /data
 
-VOLUME ["/data"]
+VOLUME ["/data", "/data/config"]
 
 EXPOSE 3000
 

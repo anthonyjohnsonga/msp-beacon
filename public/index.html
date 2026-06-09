@@ -381,6 +381,7 @@ let collapsedSubfolders = JSON.parse(localStorage.getItem('msp-subfolder-collaps
 let folderOrder = JSON.parse(localStorage.getItem('msp-folder-order') || 'null');
 let folderColors = JSON.parse(localStorage.getItem('msp-folder-colors') || '{}');
 let folderIcons = JSON.parse(localStorage.getItem('msp-folder-icons') || '{}');
+let currentTheme = localStorage.getItem('msp-theme') || 'Green';
 let dragId = null;
 let dragFolder = null;
 let dragOverEl = null;
@@ -437,11 +438,43 @@ function sortLinks(arr) {
   return copy;
 }
 
+function saveConfig() {
+  const cfg = { folderColors, folderIcons, folderOrder, theme: currentTheme };
+  fetch('/api/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(cfg)
+  }).catch(e => console.error('Config save failed:', e));
+}
+
+function applyServerConfig(cfg) {
+  if (!cfg || typeof cfg !== 'object') return;
+  if (cfg.folderColors && typeof cfg.folderColors === 'object') {
+    folderColors = cfg.folderColors;
+    localStorage.setItem('msp-folder-colors', JSON.stringify(folderColors));
+  }
+  if (cfg.folderIcons && typeof cfg.folderIcons === 'object') {
+    folderIcons = cfg.folderIcons;
+    localStorage.setItem('msp-folder-icons', JSON.stringify(folderIcons));
+  }
+  if (Array.isArray(cfg.folderOrder)) {
+    folderOrder = cfg.folderOrder;
+    localStorage.setItem('msp-folder-order', JSON.stringify(folderOrder));
+  }
+  if (cfg.theme && THEMES[cfg.theme]) {
+    applyTheme(cfg.theme, false);
+  }
+}
+
 async function loadLinks() {
   try {
-    const res = await fetch('/api/links');
-    const data = await res.json();
+    const [linksRes, cfgRes] = await Promise.all([
+      fetch('/api/links'),
+      fetch('/api/config').catch(() => null)
+    ]);
+    const data = await linksRes.json();
     links = Array.isArray(data) ? data : [];
+    if (cfgRes && cfgRes.ok) applyServerConfig(await cfgRes.json());
     render();
   } catch(e) {
     console.error('Failed to load links', e);
@@ -866,16 +899,18 @@ const THEMES = {
   Red:    { g1:'#FEE2E2', g2:'#FCA5A5', g3:'#F87171', g4:'#DC2626', g5:'#B91C1C', g6:'#7F1D1D', glow:'rgba(220,38,38,.15)' },
 };
 
-function applyTheme(name) {
+function applyTheme(name, save = true) {
   const t = THEMES[name] || THEMES.Green;
   const r = document.documentElement.style;
   r.setProperty('--g1', t.g1); r.setProperty('--g2', t.g2); r.setProperty('--g3', t.g3);
   r.setProperty('--g4', t.g4); r.setProperty('--g5', t.g5); r.setProperty('--g6', t.g6);
   r.setProperty('--g4-glow', t.glow);
+  currentTheme = name;
   localStorage.setItem('msp-theme', name);
   document.querySelectorAll('.theme-swatch').forEach(el => {
     el.classList.toggle('active', el.dataset.theme === name);
   });
+  if (save) saveConfig();
 }
 
 function openTheme() {
@@ -1040,6 +1075,7 @@ function renameFolder(oldName, newName) {
     localStorage.setItem('msp-folder-icons', JSON.stringify(folderIcons));
   }
   save();
+  saveConfig();
 }
 function deleteFolder(name) {
   const count = links.filter(l => l.folder === name).length;
@@ -1059,7 +1095,7 @@ function deleteFolder(name) {
     try { if (JSON.parse(key)[0] === name) delete collapsedSubfolders[key]; } catch {}
   });
   localStorage.setItem('msp-subfolder-collapsed', JSON.stringify(collapsedSubfolders));
-  save(); render();
+  save(); render(); saveConfig();
   showToast(`Folder "${name}" deleted`);
 }
 function deleteSubfolder(folderName, subName) {
@@ -1281,6 +1317,7 @@ function setupDragListeners() {
           folderOrder = names;
           localStorage.setItem('msp-folder-order', JSON.stringify(folderOrder));
           render();
+          saveConfig();
         }
       }
     }
@@ -1676,6 +1713,7 @@ function selectFolderColor(color) {
   localStorage.setItem('msp-folder-colors', JSON.stringify(folderColors));
   closeFolderColorPicker();
   render();
+  saveConfig();
 }
 
 function closeFolderColorPicker() {
@@ -1711,6 +1749,7 @@ function selectFolderIcon(icon) {
   localStorage.setItem('msp-folder-icons', JSON.stringify(folderIcons));
   closeFolderIconPicker();
   render();
+  saveConfig();
 }
 function closeFolderIconPicker() {
   const picker = document.getElementById('folderIconPicker');
@@ -1718,7 +1757,7 @@ function closeFolderIconPicker() {
   iconPickerFolder = null;
 }
 
-applyTheme(localStorage.getItem('msp-theme') || 'Green');
+applyTheme(localStorage.getItem('msp-theme') || 'Green', false);
 applyDensity(currentDensity);
 document.getElementById('viewToggleIcon').className = currentView === 'grid' ? 'ti ti-layout-list' : 'ti ti-layout-grid';
 setupCardListeners();
