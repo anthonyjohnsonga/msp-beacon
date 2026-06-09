@@ -362,7 +362,7 @@ select:focus { outline: none; border-color: var(--g4); }
 </div>
 
 <input type="file" id="restoreInput" accept=".json" style="display:none" onchange="handleRestoreFile(this)">
-<div class="toast" id="toast"><i class="ti ti-check" id="toastIcon"></i> <span id="toastMsg"></span><button class="toast-undo" id="toastUndo" style="display:none" onclick="undoDelete()">Undo</button></div>
+<div class="toast" id="toast"><i class="ti ti-check" id="toastIcon"></i> <span id="toastMsg"></span><button class="toast-undo" id="toastUndo" style="display:none" onclick="undoAction()">Undo</button></div>
 
 <div id="folderColorPicker" style="display:none;position:fixed;z-index:300;background:var(--bg1);border:1px solid var(--g5);border-radius:10px;padding:8px;gap:6px;flex-wrap:wrap;width:168px;box-shadow:0 8px 24px rgba(0,0,0,.4)"></div>
 <div id="folderIconPicker" style="display:none;position:fixed;z-index:300;background:var(--bg1);border:1px solid var(--g5);border-radius:10px;padding:8px;flex-wrap:wrap;width:224px;gap:4px;box-shadow:0 8px 24px rgba(0,0,0,.4)"></div>
@@ -518,6 +518,7 @@ async function save() {
 
 let toastTimer = null;
 let pendingDelete = null;
+let pendingMove = null;
 
 function showToast(msg, isError) {
   const t = document.getElementById('toast');
@@ -531,16 +532,21 @@ function showToast(msg, isError) {
   toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
 }
 
-function showUndoToast(msg) {
+function showUndoToast(msg, icon = 'ti-trash') {
   const t = document.getElementById('toast');
   document.getElementById('toastMsg').textContent = msg;
   document.getElementById('toastUndo').style.display = '';
-  document.getElementById('toastIcon').className = 'ti ti-trash';
+  document.getElementById('toastIcon').className = `ti ${icon}`;
   t.style.borderColor = '';
   t.style.color = '';
   t.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.remove('show'), 5500);
+}
+
+function undoAction() {
+  if (pendingDelete) undoDelete();
+  else if (pendingMove) undoMove();
 }
 
 function undoDelete() {
@@ -550,6 +556,22 @@ function undoDelete() {
   pendingDelete = null;
   render();
   showToast('Restored');
+}
+
+function undoMove() {
+  if (!pendingMove) return;
+  clearTimeout(pendingMove.timer);
+  links = pendingMove.saved;
+  pendingMove = null;
+  save(); render();
+  showToast('Move undone');
+}
+
+function commitPendingMove() {
+  if (!pendingMove) return;
+  clearTimeout(pendingMove.timer);
+  pendingMove = null;
+  save();
 }
 
 function getFavicon(u) { try { return 'https://www.google.com/s2/favicons?domain=' + new URL(u).hostname + '&sz=64'; } catch { return null; } }
@@ -835,6 +857,7 @@ function copyUrl(url, btn) {
 }
 function editLink(id) { openModal(id); }
 function deleteLink(id) {
+  commitPendingMove();
   if (pendingDelete) { clearTimeout(pendingDelete.timer); save(); }
   const saved = links.slice();
   links = links.filter(l => l.id !== id);
@@ -1298,27 +1321,43 @@ function setupDragListeners() {
       const sfHeader = e.target.closest('.subfolder-header[data-subfolder]');
       const header = !sfHeader ? e.target.closest('.folder-header[data-folder]') : null;
       if (card && card.dataset.id !== dragId) {
+        if (pendingDelete) { clearTimeout(pendingDelete.timer); save(); pendingDelete = null; }
+        commitPendingMove();
+        const saved = links.slice();
         const srcIdx = links.findIndex(l => l.id === dragId);
         const tgtLink = links.find(l => l.id === card.dataset.id);
         const [moved] = links.splice(srcIdx, 1);
-        moved.folder = tgtLink.folder || '';
+        const destFolder = tgtLink.folder || '';
+        moved.folder = destFolder;
         moved.subfolder = tgtLink.subfolder || null;
         const newTgt = links.findIndex(l => l.id === card.dataset.id);
         links.splice(newTgt, 0, moved);
-        save(); render();
+        render();
+        pendingMove = { saved, timer: setTimeout(() => { pendingMove = null; save(); }, 5000) };
+        showUndoToast(`Moved to "${destFolder || 'no folder'}" — Undo?`, 'ti-arrows-move');
       } else if (sfHeader) {
         const srcIdx = links.findIndex(l => l.id === dragId);
         if (srcIdx > -1) {
+          if (pendingDelete) { clearTimeout(pendingDelete.timer); save(); pendingDelete = null; }
+          commitPendingMove();
+          const saved = links.slice();
           links[srcIdx].folder = sfHeader.dataset.folder;
           links[srcIdx].subfolder = sfHeader.dataset.subfolder;
-          save(); render();
+          render();
+          pendingMove = { saved, timer: setTimeout(() => { pendingMove = null; save(); }, 5000) };
+          showUndoToast(`Moved to ${sfHeader.dataset.folder} / ${sfHeader.dataset.subfolder} — Undo?`, 'ti-arrows-move');
         }
       } else if (header) {
         const srcIdx = links.findIndex(l => l.id === dragId);
         if (srcIdx > -1) {
+          if (pendingDelete) { clearTimeout(pendingDelete.timer); save(); pendingDelete = null; }
+          commitPendingMove();
+          const saved = links.slice();
           links[srcIdx].folder = header.dataset.folder;
           links[srcIdx].subfolder = null;
-          save(); render();
+          render();
+          pendingMove = { saved, timer: setTimeout(() => { pendingMove = null; save(); }, 5000) };
+          showUndoToast(`Moved to "${header.dataset.folder}" — Undo?`, 'ti-arrows-move');
         }
       }
     } else if (dragFolder) {
@@ -1471,6 +1510,9 @@ function onBulkFolderChange(sel) {
 function confirmBulkMove() {
   const sel = document.getElementById('bulkMoveFolder');
   if (!sel.value || !selectedIds.size) { sel.value = ''; return; }
+  if (pendingDelete) { clearTimeout(pendingDelete.timer); save(); pendingDelete = null; }
+  commitPendingMove();
+  const saved = links.slice();
   const n = selectedIds.size;
   const folder = sel.value;
   const subfolder = document.getElementById('bulkMoveSubfolder').value.trim() || null;
@@ -1478,12 +1520,15 @@ function confirmBulkMove() {
   sel.value = '';
   document.getElementById('bulkMoveSubfolder').style.display = 'none';
   document.getElementById('bulkMoveConfirm').style.display = 'none';
-  save(); render(); updateBulkBar();
-  showToast(`${n} link${n > 1 ? 's' : ''} moved`);
+  render(); updateBulkBar();
+  const label = subfolder ? `${folder} / ${subfolder}` : folder;
+  pendingMove = { saved, timer: setTimeout(() => { pendingMove = null; save(); }, 5000) };
+  showUndoToast(`${n} link${n > 1 ? 's' : ''} moved to "${label}" — Undo?`, 'ti-arrows-move');
 }
 
 function bulkDelete() {
   if (!selectedIds.size) return;
+  commitPendingMove();
   const n = selectedIds.size;
   if (pendingDelete) { clearTimeout(pendingDelete.timer); save(); }
   const saved = links.slice();
