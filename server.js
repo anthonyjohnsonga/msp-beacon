@@ -129,6 +129,45 @@ app.post('/api/config', (req, res) => {
     });
 });
 
+app.get('/api/backup', async (req, res) => {
+  try {
+    const [links, config] = await Promise.all([readLinks(), readConfig()]);
+    const backup = {
+      version: '1.0',
+      exportedAt: new Date().toISOString(),
+      links,
+      config
+    };
+    const date = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Disposition', `attachment; filename="msp-beacon-backup-${date}.json"`);
+    res.setHeader('Content-Type', 'application/json');
+    res.send(JSON.stringify(backup, null, 2));
+  } catch (e) {
+    console.error('GET /api/backup error:', e);
+    res.status(500).json({ error: 'Failed to create backup' });
+  }
+});
+
+app.post('/api/restore', express.json({ limit: '10mb' }), async (req, res) => {
+  const backup = req.body;
+  if (!backup || typeof backup !== 'object' || !Array.isArray(backup.links)) {
+    return res.status(400).json({ error: 'Invalid backup file' });
+  }
+  const invalid = backup.links.find(l => !isValidLink(l));
+  if (invalid) return res.status(400).json({ error: 'Invalid link object in backup' });
+
+  try {
+    await Promise.all([
+      writeLinks(backup.links),
+      backup.config && typeof backup.config === 'object' ? writeConfig(backup.config) : Promise.resolve()
+    ]);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('POST /api/restore error:', e);
+    res.status(500).json({ error: 'Failed to restore backup' });
+  }
+});
+
 app.get('/api/fetch-title', async (req, res) => {
   const rawUrl = req.query.url;
   if (!rawUrl) return res.json({ title: '' });
