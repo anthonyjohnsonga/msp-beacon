@@ -245,6 +245,7 @@ select:focus { outline: none; border-color: var(--g4); }
         <button class="settings-item" onclick="closeSettings();expandAll()"><i class="ti ti-chevrons-down"></i> Expand all</button>
         <button class="settings-item" id="checkLinksBtn" onclick="checkLinks()"><i class="ti ti-wifi"></i> Check links</button>
         <button class="settings-item" onclick="closeSettings();openFolderManager()"><i class="ti ti-folders"></i> Manage folders</button>
+        <button class="settings-item" onclick="closeSettings();openTagManager()"><i class="ti ti-tags"></i> Manage tags</button>
         <button class="settings-item" onclick="closeSettings();openStats()"><i class="ti ti-chart-bar"></i> Stats</button>
         <button class="settings-item" onclick="closeSettings();openTheme()"><i class="ti ti-palette"></i> Theme</button>
         <button class="settings-item" onclick="closeSettings();openImport()"><i class="ti ti-file-import"></i> Import</button>
@@ -335,6 +336,16 @@ select:focus { outline: none; border-color: var(--g4); }
     <div id="folderMgrContent" style="overflow-y:auto;flex:1;padding:8px 0"></div>
     <div class="modal-footer">
       <button class="btn btn-primary" onclick="closeFolderManager()">Done</button>
+    </div>
+  </div>
+</div>
+
+<div id="tagMgrBg" class="modal-bg" style="display:none" onclick="if(event.target===this)closeTagManager()">
+  <div class="modal" role="dialog" aria-modal="true" style="width:min(480px,92vw);max-height:80vh;overflow:hidden;display:flex;flex-direction:column">
+    <div class="modal-header"><i class="ti ti-tags"></i><h3>Manage Tags</h3></div>
+    <div id="tagMgrContent" style="overflow-y:auto;flex:1;padding:8px 0"></div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="closeTagManager()">Done</button>
     </div>
   </div>
 </div>
@@ -1659,6 +1670,75 @@ function fmgrDeleteRow(btn) {
   if (type === 'folder') deleteFolder(folder);
   else deleteSubfolder(folder, subfolder);
   renderFolderManager();
+}
+function renameTag(oldName, newName) {
+  newName = newName.trim();
+  if (!newName || newName === oldName) return;
+  links.forEach(l => {
+    if ((l.tags || []).includes(oldName)) {
+      l.tags = l.tags.map(t => t === oldName ? newName : t);
+    }
+  });
+  save(); render();
+}
+function deleteTag(name) {
+  const count = links.filter(l => (l.tags || []).includes(name)).length;
+  if (!confirm(`Delete tag "${name}"? It will be removed from ${count} link${count !== 1 ? 's' : ''}.`)) return;
+  links.forEach(l => { if (l.tags) l.tags = l.tags.filter(t => t !== name); });
+  save(); render();
+  showToast(`Tag "${name}" deleted`);
+}
+function openTagManager() {
+  renderTagManager();
+  document.getElementById('tagMgrBg').style.display = 'flex';
+}
+function closeTagManager() { document.getElementById('tagMgrBg').style.display = 'none'; }
+function renderTagManager() {
+  const tags = allTags();
+  const content = document.getElementById('tagMgrContent');
+  if (!tags.length) {
+    content.innerHTML = '<p style="text-align:center;color:var(--text2);padding:24px 16px">No tags yet.</p>';
+    return;
+  }
+  content.innerHTML = tags.map(t => {
+    const count = links.filter(l => (l.tags || []).includes(t)).length;
+    return `<div class="fmgr-row">
+      <i class="ti ti-tag" style="color:var(--g3);font-size:14px;flex-shrink:0"></i>
+      <span class="fmgr-name">${esc(t)}</span>
+      <span class="fmgr-count">${count}</span>
+      <div class="fmgr-actions">
+        <button class="icon-btn" title="Rename" data-tag="${esc(t)}"><i class="ti ti-pencil"></i></button>
+        <button class="icon-btn" style="color:#E24B4A" title="Delete" data-tag="${esc(t)}"><i class="ti ti-trash"></i></button>
+      </div>
+    </div>`;
+  }).join('');
+  content.querySelectorAll('[title="Rename"]').forEach(btn => btn.addEventListener('click', () => tmgrStartRename(btn)));
+  content.querySelectorAll('[title="Delete"]').forEach(btn => btn.addEventListener('click', () => {
+    deleteTag(btn.dataset.tag);
+    renderTagManager();
+  }));
+}
+function tmgrStartRename(btn) {
+  const oldName = btn.dataset.tag;
+  const row = btn.closest('.fmgr-row');
+  const nameSpan = row.querySelector('.fmgr-name');
+  const input = document.createElement('input');
+  input.className = 'fmgr-input';
+  input.value = oldName;
+  nameSpan.replaceWith(input);
+  input.focus(); input.select();
+  let committed = false;
+  function commit() {
+    if (committed) return; committed = true;
+    const newName = input.value.trim();
+    if (newName && newName !== oldName) renameTag(oldName, newName);
+    renderTagManager();
+  }
+  input.addEventListener('blur', commit);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); commit(); }
+    if (e.key === 'Escape') { committed = true; renderTagManager(); }
+  });
 }
 function resetStats() {
   if (!confirm('Reset all visit counts to zero?')) return;
