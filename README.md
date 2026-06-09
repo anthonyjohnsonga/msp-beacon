@@ -10,7 +10,7 @@ move between machines, or host on a file share.
 
 ### Links
 - **Add, edit, delete links** — save any URL with a title, description, folder, sub-folder, and tags
-- **Auto-fetch page title** — blurring the URL field fetches the page title automatically
+- **Auto-fetch page title** — blurring the URL field fetches the page title automatically; falls back to `og:title` and `meta[name=title]` if `<title>` is missing
 - **Copy URL** — one-click copy button on every card
 - **Duplicate URL warning** — inline warning when adding a URL that already exists, with an "Add anyway" option
 - **Undo delete** — single and bulk deletes can be undone within 5 seconds via a toast notification
@@ -27,7 +27,7 @@ move between machines, or host on a file share.
 
 ### Search & Filter
 - **Search** — real-time search across title, URL, description, folder, and tags (press `/` or `Ctrl+K`)
-- **Folder & tag filters** — filter the view by folder or tag from toolbar dropdowns
+- **Filter button** — folder filter, tag filter, and sort consolidated into a single toolbar button with an active-count badge
 - **Sort options** — sort by manual order, A→Z, Z→A, newest, oldest, or most visited
 
 ### Views & Appearance
