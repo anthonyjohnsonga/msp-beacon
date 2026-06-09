@@ -132,6 +132,14 @@ select:focus { outline: none; border-color: var(--g4); }
 .theme-swatch.active .swatch-label { color: var(--g2); }
 .drag-handle { width: 26px; height: 26px; border-radius: 8px; border: 0.5px solid var(--g5); background: var(--bg2); color: var(--g3); display: flex; align-items: center; justify-content: center; cursor: grab; font-size: 13px; }
 .drag-handle:hover { background: var(--g5); color: #fff; }
+.fmgr-row { display: flex; align-items: center; gap: 8px; padding: 7px 16px; border-radius: 8px; }
+.fmgr-row:hover { background: var(--bg3); }
+.fmgr-subfolder { padding-left: 36px; }
+.fmgr-name { flex: 1; font-size: 14px; color: var(--text0); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fmgr-count { font-size: 12px; color: var(--text2); flex-shrink: 0; }
+.fmgr-actions { display: flex; gap: 2px; opacity: 0; flex-shrink: 0; }
+.fmgr-row:hover .fmgr-actions { opacity: 1; }
+.fmgr-input { flex: 1; background: var(--bg2); border: 1px solid var(--g4); border-radius: 6px; color: var(--text0); padding: 3px 8px; font-size: 14px; font-family: inherit; min-width: 0; }
 .drag-handle:active { cursor: grabbing; }
 .folder-drag-handle { display: flex; align-items: center; justify-content: center; width: 18px; cursor: grab; color: var(--text2); font-size: 13px; flex-shrink: 0; }
 .folder-drag-handle:hover { color: var(--g3); }
@@ -236,6 +244,7 @@ select:focus { outline: none; border-color: var(--g4); }
         <button class="settings-item" onclick="closeSettings();collapseAll()"><i class="ti ti-chevrons-up"></i> Collapse all</button>
         <button class="settings-item" onclick="closeSettings();expandAll()"><i class="ti ti-chevrons-down"></i> Expand all</button>
         <button class="settings-item" id="checkLinksBtn" onclick="checkLinks()"><i class="ti ti-wifi"></i> Check links</button>
+        <button class="settings-item" onclick="closeSettings();openFolderManager()"><i class="ti ti-folders"></i> Manage folders</button>
         <button class="settings-item" onclick="closeSettings();openStats()"><i class="ti ti-chart-bar"></i> Stats</button>
         <button class="settings-item" onclick="closeSettings();openTheme()"><i class="ti ti-palette"></i> Theme</button>
         <button class="settings-item" onclick="closeSettings();openImport()"><i class="ti ti-file-import"></i> Import</button>
@@ -314,6 +323,16 @@ select:focus { outline: none; border-color: var(--g4); }
     <div class="theme-grid" id="themeGrid"></div>
     <div class="modal-footer">
       <button class="btn" onclick="closeTheme()">Close</button>
+    </div>
+  </div>
+</div>
+
+<div id="folderMgrBg" class="modal-bg" style="display:none" onclick="if(event.target===this)closeFolderManager()">
+  <div class="modal" role="dialog" aria-modal="true" style="width:min(480px,92vw);max-height:80vh;overflow:hidden;display:flex;flex-direction:column">
+    <div class="modal-header"><i class="ti ti-folders"></i><h3>Manage Folders</h3></div>
+    <div id="folderMgrContent" style="overflow-y:auto;flex:1;padding:8px 0"></div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="closeFolderManager()">Done</button>
     </div>
   </div>
 </div>
@@ -1043,6 +1062,16 @@ function deleteFolder(name) {
   save(); render();
   showToast(`Folder "${name}" deleted`);
 }
+function deleteSubfolder(folderName, subName) {
+  const count = links.filter(l => l.folder === folderName && l.subfolder === subName).length;
+  if (!confirm(`Delete sub-folder "${subName}"? ${count} link${count !== 1 ? 's' : ''} will be moved to folder "${folderName}".`)) return;
+  links.forEach(l => { if (l.folder === folderName && l.subfolder === subName) l.subfolder = null; });
+  const key = JSON.stringify([folderName, subName]);
+  delete collapsedSubfolders[key];
+  localStorage.setItem('msp-subfolder-collapsed', JSON.stringify(collapsedSubfolders));
+  save(); render();
+  showToast(`Sub-folder "${subName}" deleted`);
+}
 
 function startFolderRename(btn) {
   const header = btn.closest('.folder-header[data-folder]');
@@ -1478,6 +1507,87 @@ function openStats() {
   document.getElementById('statsBg').style.display = 'flex';
 }
 function closeStats() { document.getElementById('statsBg').style.display = 'none'; }
+function openFolderManager() {
+  renderFolderManager();
+  document.getElementById('folderMgrBg').style.display = 'flex';
+}
+function closeFolderManager() { document.getElementById('folderMgrBg').style.display = 'none'; }
+function renderFolderManager() {
+  const folders = getOrderedFolders(allFolders());
+  const content = document.getElementById('folderMgrContent');
+  if (!folders.length) {
+    content.innerHTML = '<p style="text-align:center;color:var(--text2);padding:24px 16px">No folders yet.</p>';
+    return;
+  }
+  let html = '';
+  folders.forEach(f => {
+    const color = getFolderColor(f);
+    const icon = getFolderIcon(f);
+    const count = links.filter(l => l.folder === f).length;
+    const subs = subfoldersByFolder(f);
+    html += `<div class="fmgr-row">
+      <i class="ti ${esc(icon)}" style="color:${esc(color)};font-size:15px;flex-shrink:0"></i>
+      <span class="fmgr-name">${esc(f)}</span>
+      <span class="fmgr-count">${count}</span>
+      <div class="fmgr-actions">
+        <button class="icon-btn" title="Rename" data-type="folder" data-folder="${esc(f)}" data-subfolder=""><i class="ti ti-pencil"></i></button>
+        <button class="icon-btn" style="color:#E24B4A" title="Delete" data-type="folder" data-folder="${esc(f)}" data-subfolder=""><i class="ti ti-trash"></i></button>
+      </div>
+    </div>`;
+    subs.forEach(sf => {
+      const sfCount = links.filter(l => l.folder === f && l.subfolder === sf).length;
+      html += `<div class="fmgr-row fmgr-subfolder">
+        <i class="ti ti-corner-down-right" style="color:var(--text2);font-size:13px;flex-shrink:0"></i>
+        <span class="fmgr-name">${esc(sf)}</span>
+        <span class="fmgr-count">${sfCount}</span>
+        <div class="fmgr-actions">
+          <button class="icon-btn" title="Rename" data-type="subfolder" data-folder="${esc(f)}" data-subfolder="${esc(sf)}"><i class="ti ti-pencil"></i></button>
+          <button class="icon-btn" style="color:#E24B4A" title="Delete" data-type="subfolder" data-folder="${esc(f)}" data-subfolder="${esc(sf)}"><i class="ti ti-trash"></i></button>
+        </div>
+      </div>`;
+    });
+  });
+  content.innerHTML = html;
+  content.querySelectorAll('[title="Rename"]').forEach(btn => btn.addEventListener('click', () => fmgrStartRename(btn)));
+  content.querySelectorAll('[title="Delete"]').forEach(btn => btn.addEventListener('click', () => fmgrDeleteRow(btn)));
+}
+function fmgrStartRename(btn) {
+  const type = btn.dataset.type;
+  const folder = btn.dataset.folder;
+  const subfolder = btn.dataset.subfolder;
+  const oldName = type === 'folder' ? folder : subfolder;
+  const row = btn.closest('.fmgr-row');
+  const nameSpan = row.querySelector('.fmgr-name');
+  const input = document.createElement('input');
+  input.className = 'fmgr-input';
+  input.value = oldName;
+  nameSpan.replaceWith(input);
+  input.focus(); input.select();
+  let committed = false;
+  function commit() {
+    if (committed) return; committed = true;
+    const newName = input.value.trim();
+    if (newName && newName !== oldName) {
+      if (type === 'folder') renameFolder(folder, newName);
+      else renameSubfolder(folder, subfolder, newName);
+      render();
+    }
+    renderFolderManager();
+  }
+  input.addEventListener('blur', commit);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); commit(); }
+    if (e.key === 'Escape') { committed = true; renderFolderManager(); }
+  });
+}
+function fmgrDeleteRow(btn) {
+  const type = btn.dataset.type;
+  const folder = btn.dataset.folder;
+  const subfolder = btn.dataset.subfolder;
+  if (type === 'folder') deleteFolder(folder);
+  else deleteSubfolder(folder, subfolder);
+  renderFolderManager();
+}
 function resetStats() {
   if (!confirm('Reset all visit counts to zero?')) return;
   links.forEach(l => { l.visits = 0; });
