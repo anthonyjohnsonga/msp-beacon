@@ -189,6 +189,13 @@ select:focus { outline: none; border-color: var(--g4); }
 .stat-never-list { display: flex; flex-direction: column; gap: 2px; max-height: 160px; overflow-y: auto; margin-top: 4px; }
 .stat-never-item { font-size: 12px; color: var(--text1); padding: 3px 6px; border-radius: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .stat-never-item:hover { background: var(--bg3); color: var(--text0); }
+.filter-wrap { position: relative; }
+.filter-menu { position: absolute; top: calc(100% + 6px); left: 0; background: var(--bg1); border: 1px solid var(--g5); border-radius: 10px; z-index: 50; box-shadow: 0 8px 24px rgba(0,0,0,.4); padding: 8px; display: none; flex-direction: column; gap: 6px; min-width: 200px; }
+.filter-menu.open { display: flex; }
+.filter-row { display: flex; flex-direction: column; gap: 4px; }
+.filter-row label { font-size: 11px; color: var(--g3); font-weight: 500; text-transform: uppercase; letter-spacing: .06em; padding: 0 2px; }
+.filter-row select { width: 100%; }
+.filter-badge { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; background: var(--g4); color: #fff; font-size: 10px; font-weight: 600; line-height: 1; }
 </style>
 </head>
 <body>
@@ -204,25 +211,30 @@ select:focus { outline: none; border-color: var(--g4); }
       <input type="text" id="search" placeholder="Search links… (press /)" oninput="debouncedRender()">
       <button class="search-clear" id="searchClear" style="display:none" onclick="clearSearch()"><i class="ti ti-x"></i></button>
     </div>
-    <select id="folderFilter" onchange="render()"><option value="">All folders</option></select>
-    <button class="btn" onclick="collapseAll()" title="Collapse all folders"><i class="ti ti-chevrons-up"></i></button>
-    <button class="btn" onclick="expandAll()" title="Expand all folders"><i class="ti ti-chevrons-down"></i></button>
-    <select id="tagFilter" onchange="render()"><option value="">All tags</option></select>
-    <select id="sortSelect" onchange="onSortChange()">
-      <option value="manual">Manual order</option>
-      <option value="az">A → Z</option>
-      <option value="za">Z → A</option>
-      <option value="newest">Newest first</option>
-      <option value="oldest">Oldest first</option>
-      <option value="most-visited">Most visited</option>
-    </select>
+    <div class="filter-wrap">
+      <button class="btn" id="filterBtn" onclick="toggleFilter(event)" title="Filter &amp; sort"><i class="ti ti-filter"></i> Filter <span id="filterBadge" style="display:none" class="filter-badge"></span></button>
+      <div class="filter-menu" id="filterMenu">
+        <div class="filter-row"><label>Folder</label><select id="folderFilter" onchange="render();updateFilterBadge()"><option value="">All folders</option></select></div>
+        <div class="filter-row"><label>Tag</label><select id="tagFilter" onchange="render();updateFilterBadge()"><option value="">All tags</option></select></div>
+        <div class="filter-row"><label>Sort</label><select id="sortSelect" onchange="onSortChange()">
+          <option value="manual">Manual order</option>
+          <option value="az">A → Z</option>
+          <option value="za">Z → A</option>
+          <option value="newest">Newest first</option>
+          <option value="oldest">Oldest first</option>
+          <option value="most-visited">Most visited</option>
+        </select></div>
+      </div>
+    </div>
     <button class="btn" id="viewToggleBtn" onclick="toggleView()" title="Toggle view"><i class="ti ti-layout-list" id="viewToggleIcon"></i></button>
     <button class="btn" id="densityBtn" onclick="cycleDensity()" title="Card density"></button>
-    <button class="btn" id="selectBtn" onclick="toggleSelectMode()"><i class="ti ti-checkbox"></i> Select</button>
+    <button class="btn" id="selectBtn" onclick="toggleSelectMode()" title="Select"><i class="ti ti-checkbox"></i></button>
     <button class="btn btn-primary" onclick="openModal()"><i class="ti ti-plus"></i> Add link</button>
     <div class="settings-wrap">
       <button class="btn" id="settingsBtn" onclick="toggleSettings(event)"><i class="ti ti-settings"></i> Settings</button>
       <div class="settings-menu" id="settingsMenu">
+        <button class="settings-item" onclick="closeSettings();collapseAll()"><i class="ti ti-chevrons-up"></i> Collapse all</button>
+        <button class="settings-item" onclick="closeSettings();expandAll()"><i class="ti ti-chevrons-down"></i> Expand all</button>
         <button class="settings-item" id="checkLinksBtn" onclick="checkLinks()"><i class="ti ti-wifi"></i> Check links</button>
         <button class="settings-item" onclick="closeSettings();openStats()"><i class="ti ti-chart-bar"></i> Stats</button>
         <button class="settings-item" onclick="closeSettings();openTheme()"><i class="ti ti-palette"></i> Theme</button>
@@ -392,6 +404,7 @@ function toggleView() {
 function onSortChange() {
   currentSort = document.getElementById('sortSelect').value;
   localStorage.setItem('msp-sort', currentSort);
+  updateFilterBadge();
   render();
 }
 function sortLinks(arr) {
@@ -507,6 +520,7 @@ function render() {
   ts.innerHTML = '<option value="">All tags</option>' + allTags().map(t => `<option value="${esc(t)}"${t===tf?' selected':''}>${esc(t)}</option>`).join('');
   const sortEl = document.getElementById('sortSelect');
   if (sortEl) sortEl.value = currentSort;
+  updateFilterBadge();
   let fil = links.filter(l => {
     if (ff && l.folder !== ff) return false;
     if (tf && !(l.tags || []).some(t => t.toLowerCase() === tf.toLowerCase())) return false;
@@ -864,8 +878,25 @@ function toggleSettings(e) {
 function closeSettings() {
   document.getElementById('settingsMenu').classList.remove('open');
 }
+function toggleFilter(e) {
+  e.stopPropagation();
+  document.getElementById('filterMenu').classList.toggle('open');
+}
+function closeFilter() {
+  document.getElementById('filterMenu').classList.remove('open');
+}
+function updateFilterBadge() {
+  const ff = document.getElementById('folderFilter')?.value || '';
+  const tf = document.getElementById('tagFilter')?.value || '';
+  const active = (ff ? 1 : 0) + (tf ? 1 : 0) + (currentSort !== 'manual' ? 1 : 0);
+  const badge = document.getElementById('filterBadge');
+  if (!badge) return;
+  badge.textContent = active;
+  badge.style.display = active ? '' : 'none';
+}
 document.addEventListener('click', e => {
   closeSettings();
+  if (!e.target.closest('#filterMenu') && !e.target.closest('#filterBtn')) closeFilter();
   if (!e.target.closest('#folderColorPicker') && !e.target.closest('.folder-color-swatch')) {
     closeFolderColorPicker();
   }
