@@ -32,6 +32,7 @@ app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 let writeQueue = Promise.resolve();
+let configWriteQueue = Promise.resolve();
 
 async function readLinks() {
   try {
@@ -111,18 +112,21 @@ app.get('/api/config', async (req, res) => {
   }
 });
 
-app.post('/api/config', async (req, res) => {
+app.post('/api/config', (req, res) => {
   const cfg = req.body;
   if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) {
     return res.status(400).json({ error: 'Expected an object' });
   }
-  try {
-    await writeConfig(cfg);
-    res.json({ ok: true });
-  } catch (e) {
-    console.error('POST /api/config error:', e);
-    res.status(500).json({ error: 'Failed to save config' });
-  }
+
+  const writePromise = writeConfig(cfg);
+  configWriteQueue = configWriteQueue.then(() => writePromise).catch(() => {});
+
+  writePromise
+    .then(() => res.json({ ok: true }))
+    .catch(e => {
+      console.error('POST /api/config error:', e);
+      res.status(500).json({ error: 'Failed to save config' });
+    });
 });
 
 app.get('/api/fetch-title', async (req, res) => {

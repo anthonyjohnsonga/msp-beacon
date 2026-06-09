@@ -1105,7 +1105,7 @@ function deleteSubfolder(folderName, subName) {
   const key = JSON.stringify([folderName, subName]);
   delete collapsedSubfolders[key];
   localStorage.setItem('msp-subfolder-collapsed', JSON.stringify(collapsedSubfolders));
-  save(); render();
+  save(); render(); saveConfig();
   showToast(`Sub-folder "${subName}" deleted`);
 }
 
@@ -1153,6 +1153,7 @@ function renameSubfolder(folderName, oldName, newName) {
     localStorage.setItem('msp-subfolder-collapsed', JSON.stringify(collapsedSubfolders));
   }
   save();
+  saveConfig();
 }
 function startSubfolderRename(btn) {
   const header = btn.closest('.subfolder-header');
