@@ -257,6 +257,7 @@ select:focus { outline: none; border-color: var(--g4); }
         <button class="settings-item" onclick="closeSettings();openShortcuts()"><i class="ti ti-keyboard"></i> Keyboard shortcuts</button>
         <button class="settings-item" onclick="closeSettings();openFolderManager()"><i class="ti ti-folders"></i> Manage folders</button>
         <button class="settings-item" onclick="closeSettings();openTagManager()"><i class="ti ti-tags"></i> Manage tags</button>
+        <button class="settings-item" onclick="closeSettings();openArchive()"><i class="ti ti-archive"></i> Archive <span id="archiveBadge" class="filter-badge" style="display:none;margin-left:auto"></span></button>
         <button class="settings-item" onclick="closeSettings();openStats()"><i class="ti ti-chart-bar"></i> Stats</button>
         <button class="settings-item" onclick="closeSettings();openTheme()"><i class="ti ti-palette"></i> Theme</button>
         <button class="settings-item" onclick="closeSettings();openImport()"><i class="ti ti-file-import"></i> Import</button>
@@ -382,6 +383,16 @@ select:focus { outline: none; border-color: var(--g4); }
   </div>
 </div>
 
+<div id="archiveBg" class="modal-bg" style="display:none" onclick="if(event.target===this)closeArchive()">
+  <div class="modal" role="dialog" aria-modal="true" style="width:min(480px,92vw);max-height:80vh;overflow:hidden;display:flex;flex-direction:column">
+    <div class="modal-header"><i class="ti ti-archive"></i><h3>Archive</h3></div>
+    <div id="archiveContent" style="overflow-y:auto;flex:1;padding:8px 0"></div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="closeArchive()">Done</button>
+    </div>
+  </div>
+</div>
+
 <div id="statsBg" class="modal-bg" style="display:none" onclick="if(event.target===this)closeStats()">
   <div class="modal" role="dialog" aria-modal="true" style="width:min(500px,92vw)">
     <div class="modal-header"><i class="ti ti-chart-bar"></i><h3>Link Stats</h3></div>
@@ -412,6 +423,7 @@ select:focus { outline: none; border-color: var(--g4); }
   <input type="text" id="bulkTagInput" placeholder="Add tag…" style="height:32px;font-size:13px;width:110px" onkeydown="if(event.key==='Enter')bulkAddTag()">
   <button class="btn" style="height:32px;font-size:13px;padding:0 10px" onclick="bulkAddTag()"><i class="ti ti-tag"></i> Tag</button>
   <div class="bulk-divider"></div>
+  <button class="btn" style="height:32px;font-size:13px;padding:0 10px" onclick="bulkArchive()"><i class="ti ti-archive"></i> Archive</button>
   <button class="btn" style="height:32px;font-size:13px;padding:0 10px;color:#E24B4A;border-color:#b91c1c" onclick="bulkDelete()"><i class="ti ti-trash"></i> Delete</button>
   <button class="btn" style="height:32px;font-size:13px;padding:0 10px" onclick="exitSelectMode()" title="Exit select mode"><i class="ti ti-x"></i></button>
 </div>
@@ -618,17 +630,17 @@ function hexToRgb(hex) {
 }
 function getFolderColor(f) { return folderColors[f] || '#1D9E75'; }
 function getFolderIcon(f) { return folderIcons[f] || 'ti-folder'; }
-function allFolders() { return [...new Set(links.map(l => l.folder).filter(Boolean))].sort(); }
+function allFolders() { return [...new Set(links.filter(l => !l.archived).map(l => l.folder).filter(Boolean))].sort(); }
 function getOrderedFolders(names) {
   if (!folderOrder) return names.slice().sort();
   const known = new Set(folderOrder);
   const fresh = names.filter(f => !known.has(f)).sort();
   return [...folderOrder.filter(f => names.includes(f)), ...fresh];
 }
-function allTags() { return [...new Set(links.flatMap(l => l.tags || []))].sort(); }
+function allTags() { return [...new Set(links.filter(l => !l.archived).flatMap(l => l.tags || []))].sort(); }
 
 function subfoldersByFolder(folderName) {
-  return [...new Set(links.filter(l => l.folder === folderName && l.subfolder).map(l => l.subfolder))].sort();
+  return [...new Set(links.filter(l => !l.archived && l.folder === folderName && l.subfolder).map(l => l.subfolder))].sort();
 }
 
 function render() {
@@ -644,6 +656,7 @@ function render() {
   if (sortEl) sortEl.value = currentSort;
   updateFilterBadge();
   let fil = links.filter(l => {
+    if (l.archived) return false;
     if (ff && l.folder !== ff) return false;
     if (tf && !(l.tags || []).some(t => t.toLowerCase() === tf.toLowerCase())) return false;
     if (q && !((l.title+l.url+l.desc+(l.folder||'')+(l.subfolder||'')+(l.tags||[]).join(' ')).toLowerCase().includes(q))) return false;
@@ -678,6 +691,7 @@ function render() {
     html += `<div class="folder-section"><div class="folder-header" onclick="toggleFolder(this.dataset.folder)" data-folder="${esc(f)}" style="background:rgba(${fcRgb},.15);border-color:${fc}"><div class="folder-drag-handle" draggable="true" title="Drag to reorder folder" onclick="event.stopPropagation()"><i class="ti ti-grip-vertical"></i></div><i class="ti ti-chevron-right folder-chevron${collapsed ? '' : ' open'}" style="color:${fc}"></i><i class="ti ${getFolderIcon(f)} folder-icon-btn" style="font-size:16px;color:${fc};cursor:pointer" onclick="event.stopPropagation();openFolderIconPicker(this.closest('.folder-header').dataset.folder,this)" title="Change icon"></i><span class="folder-name">${esc(f)}</span><button class="folder-rename-btn" onclick="event.stopPropagation();startFolderRename(this)" title="Rename folder"><i class="ti ti-pencil"></i></button><button class="folder-rename-btn" onclick="event.stopPropagation();deleteFolder(this.closest('.folder-header').dataset.folder)" title="Delete folder" style="color:#E24B4A"><i class="ti ti-trash"></i></button><span class="count-pill" style="background:${fc}">${byF[f].length}</span><div class="folder-color-swatch" onclick="event.stopPropagation();openFolderColorPicker(this.closest('.folder-header').dataset.folder,this)" style="width:16px;height:16px;border-radius:50%;background:${fc};cursor:pointer;margin-left:auto;flex-shrink:0;border:1.5px solid rgba(255,255,255,.2)"></div></div><div class="folder-content" data-folder="${esc(f)}">${folderContent}</div></div>`;
   });
   c.innerHTML = html;
+  updateArchiveBadge();
 }
 
 function renderFolderContents(folderName, folderLinks) {
@@ -747,6 +761,7 @@ function cardHtml(l) {
       <div class="drag-handle" draggable="true" title="Drag to reorder"><i class="ti ti-grip-vertical"></i></div>
       <button class="icon-btn" title="Copy URL" data-action="copy" data-id="${esc(l.id)}" data-url="${esc(l.url)}"><i class="ti ti-copy"></i></button>
       <button class="icon-btn" title="Edit" data-action="edit" data-id="${esc(l.id)}"><i class="ti ti-edit"></i></button>
+      <button class="icon-btn" title="Archive" data-action="archive" data-id="${esc(l.id)}"><i class="ti ti-archive"></i></button>
       <button class="icon-btn" title="Delete" data-action="delete" data-id="${esc(l.id)}"><i class="ti ti-trash"></i></button>
     </div>
     ${statusBadge}
@@ -786,6 +801,7 @@ function cardListHtml(l) {
     <div class="card-row-actions">
       <button class="icon-btn" title="Copy URL" data-action="copy" data-id="${esc(l.id)}" data-url="${esc(l.url)}"><i class="ti ti-copy"></i></button>
       <button class="icon-btn" title="Edit" data-action="edit" data-id="${esc(l.id)}"><i class="ti ti-edit"></i></button>
+      <button class="icon-btn" title="Archive" data-action="archive" data-id="${esc(l.id)}"><i class="ti ti-archive"></i></button>
       <button class="icon-btn" title="Delete" data-action="delete" data-id="${esc(l.id)}"><i class="ti ti-trash"></i></button>
     </div>
   </div>`;
@@ -851,7 +867,7 @@ function saveLink() {
   const tags = document.getElementById('mTags').value.split(',').map(t => t.trim()).filter(Boolean);
   const desc = document.getElementById('mDesc').value.trim();
   if (!editId) {
-    const dup = links.find(l => l.url.trim().toLowerCase() === url.toLowerCase());
+    const dup = links.find(l => !l.archived && l.url.trim().toLowerCase() === url.toLowerCase());
     if (dup) {
       const w = document.getElementById('dupWarning');
       document.getElementById('dupWarningMsg').innerHTML = `A link with this URL already exists — <strong>${esc(dup.title)}</strong>`;
@@ -1116,7 +1132,7 @@ document.addEventListener('keydown', e => {
     closeFolderIconPicker();
     closeFilter();
     closeSettings();
-    ['modalBg','importBg','statsBg','folderMgrBg','tagMgrBg','shortcutsBg','themeBg'].forEach(id => {
+    ['modalBg','importBg','statsBg','folderMgrBg','tagMgrBg','shortcutsBg','themeBg','archiveBg'].forEach(id => {
       const el = document.getElementById(id);
       if (el && el.style.display === 'flex') el.style.display = 'none';
     });
@@ -1232,7 +1248,7 @@ function renameFolder(oldName, newName) {
   saveConfig();
 }
 function deleteFolder(name) {
-  const count = links.filter(l => l.folder === name).length;
+  const count = links.filter(l => !l.archived && l.folder === name).length;
   if (!confirm(`Delete folder "${name}"? ${count} link${count !== 1 ? 's' : ''} will be moved to no folder.`)) return;
   links.forEach(l => { if (l.folder === name) { l.folder = ''; l.subfolder = null; } });
   delete folderColors[name];
@@ -1253,7 +1269,7 @@ function deleteFolder(name) {
   showToast(`Folder "${name}" deleted`);
 }
 function deleteSubfolder(folderName, subName) {
-  const count = links.filter(l => l.folder === folderName && l.subfolder === subName).length;
+  const count = links.filter(l => !l.archived && l.folder === folderName && l.subfolder === subName).length;
   if (!confirm(`Delete sub-folder "${subName}"? ${count} link${count !== 1 ? 's' : ''} will be moved to folder "${folderName}".`)) return;
   links.forEach(l => { if (l.folder === folderName && l.subfolder === subName) l.subfolder = null; });
   const key = JSON.stringify([folderName, subName]);
@@ -1360,6 +1376,7 @@ function setupCardListeners() {
       const id = btn.dataset.id;
       if (action === 'copy') copyUrl(btn.dataset.url, btn);
       else if (action === 'edit') editLink(id);
+      else if (action === 'archive') archiveLink(id);
       else if (action === 'delete') deleteLink(id);
       else if (action === 'favorite') toggleFavorite(id);
       return;
@@ -1679,6 +1696,81 @@ function bulkAddTag() {
   showToast(`Tag "${tag}" added to ${n} link${n > 1 ? 's' : ''}`);
 }
 
+function archiveLink(id) {
+  const l = links.find(x => x.id === id);
+  if (!l) return;
+  commitPendingMove();
+  if (pendingDelete) { clearTimeout(pendingDelete.timer); save(); pendingDelete = null; }
+  l.archived = true;
+  save(); render();
+  showToast('Link archived');
+}
+
+function unarchiveLink(id) {
+  const l = links.find(x => x.id === id);
+  if (!l) return;
+  delete l.archived;
+  save(); render(); renderArchive();
+  updateArchiveBadge();
+  showToast('Link restored');
+}
+
+function permanentDeleteLink(id) {
+  if (!confirm('Permanently delete this link? This cannot be undone.')) return;
+  links = links.filter(l => l.id !== id);
+  save(); renderArchive();
+  updateArchiveBadge();
+  showToast('Link permanently deleted');
+}
+
+function bulkArchive() {
+  if (!selectedIds.size) return;
+  commitPendingMove();
+  if (pendingDelete) { clearTimeout(pendingDelete.timer); save(); pendingDelete = null; }
+  const n = selectedIds.size;
+  links.forEach(l => { if (selectedIds.has(l.id)) l.archived = true; });
+  selectedIds.clear();
+  save(); render(); updateBulkBar();
+  showToast(`${n} link${n > 1 ? 's' : ''} archived`);
+}
+
+function updateArchiveBadge() {
+  const count = links.filter(l => l.archived).length;
+  const badge = document.getElementById('archiveBadge');
+  if (!badge) return;
+  badge.textContent = count;
+  badge.style.display = count ? '' : 'none';
+}
+
+function openArchive() { renderArchive(); document.getElementById('archiveBg').style.display = 'flex'; }
+function closeArchive() { document.getElementById('archiveBg').style.display = 'none'; }
+function renderArchive() {
+  const archived = links.filter(l => l.archived);
+  const content = document.getElementById('archiveContent');
+  if (!archived.length) {
+    content.innerHTML = '<p style="text-align:center;color:var(--text2);padding:24px 16px">No archived links.</p>';
+    return;
+  }
+  content.innerHTML = archived.map(l => `
+    <div class="fmgr-row" style="gap:10px">
+      <i class="ti ti-archive" style="color:var(--text2);font-size:14px;flex-shrink:0"></i>
+      <div style="flex:1;min-width:0">
+        <div class="fmgr-name">${esc(l.title)}</div>
+        <div style="font-size:11px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(getDomain(l.url))}</div>
+      </div>
+      <div class="fmgr-actions" style="opacity:1">
+        <button class="icon-btn" title="Restore" data-archive-id="${esc(l.id)}" data-archive-action="restore"><i class="ti ti-archive-off"></i></button>
+        <button class="icon-btn" style="color:#E24B4A" title="Delete permanently" data-archive-id="${esc(l.id)}" data-archive-action="delete"><i class="ti ti-trash"></i></button>
+      </div>
+    </div>`).join('');
+  content.querySelectorAll('[data-archive-action]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.dataset.archiveAction === 'restore') unarchiveLink(btn.dataset.archiveId);
+      else permanentDeleteLink(btn.dataset.archiveId);
+    });
+  });
+}
+
 async function checkLinks() {
   const btn = document.getElementById('checkLinksBtn');
   if (!btn || btn.disabled) return;
@@ -1773,7 +1865,7 @@ function renderFolderManager() {
   folders.forEach(f => {
     const color = getFolderColor(f);
     const icon = getFolderIcon(f);
-    const count = links.filter(l => l.folder === f).length;
+    const count = links.filter(l => !l.archived && l.folder === f).length;
     const subs = subfoldersByFolder(f);
     html += `<div class="fmgr-row">
       <i class="ti ${esc(icon)}" style="color:${esc(color)};font-size:15px;flex-shrink:0"></i>
@@ -1785,7 +1877,7 @@ function renderFolderManager() {
       </div>
     </div>`;
     subs.forEach(sf => {
-      const sfCount = links.filter(l => l.folder === f && l.subfolder === sf).length;
+      const sfCount = links.filter(l => !l.archived && l.folder === f && l.subfolder === sf).length;
       html += `<div class="fmgr-row fmgr-subfolder">
         <i class="ti ti-corner-down-right" style="color:var(--text2);font-size:13px;flex-shrink:0"></i>
         <span class="fmgr-name">${esc(sf)}</span>
@@ -1849,7 +1941,7 @@ function renameTag(oldName, newName) {
   save(); render();
 }
 function deleteTag(name) {
-  const count = links.filter(l => (l.tags || []).includes(name)).length;
+  const count = links.filter(l => !l.archived && (l.tags || []).includes(name)).length;
   if (!confirm(`Delete tag "${name}"? It will be removed from ${count} link${count !== 1 ? 's' : ''}.`)) return;
   links.forEach(l => { if (l.tags) l.tags = l.tags.filter(t => t !== name); });
   save(); render();
@@ -1868,7 +1960,7 @@ function renderTagManager() {
     return;
   }
   content.innerHTML = tags.map(t => {
-    const count = links.filter(l => (l.tags || []).includes(t)).length;
+    const count = links.filter(l => !l.archived && (l.tags || []).includes(t)).length;
     return `<div class="fmgr-row">
       <i class="ti ti-tag" style="color:var(--g3);font-size:14px;flex-shrink:0"></i>
       <span class="fmgr-name">${esc(t)}</span>
@@ -1915,17 +2007,18 @@ function resetStats() {
   showToast('Stats reset');
 }
 function renderStats() {
-  const totalLinks = links.length;
-  const totalVisits = links.reduce((s, l) => s + (l.visits || 0), 0);
-  const sorted = links.slice().sort((a, b) => (b.visits || 0) - (a.visits || 0));
+  const active = links.filter(l => !l.archived);
+  const totalLinks = active.length;
+  const totalVisits = active.reduce((s, l) => s + (l.visits || 0), 0);
+  const sorted = active.slice().sort((a, b) => (b.visits || 0) - (a.visits || 0));
   const topMax = sorted[0] ? (sorted[0].visits || 0) : 1;
   const top10 = sorted.filter(l => (l.visits || 0) > 0).slice(0, 10);
-  const never = links.filter(l => !(l.visits || 0));
+  const never = active.filter(l => !(l.visits || 0));
 
   const folders = allFolders();
-  const noFolderCount = links.filter(l => !l.folder).length;
+  const noFolderCount = active.filter(l => !l.folder).length;
   const folderRows = folders.map(f => {
-    const count = links.filter(l => l.folder === f).length;
+    const count = active.filter(l => l.folder === f).length;
     return `<div class="stat-row">
       <i class="ti ti-folder" style="font-size:13px;color:var(--g4);flex-shrink:0"></i>
       <span class="stat-row-label">${esc(f)}</span>
