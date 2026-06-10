@@ -38,6 +38,15 @@ select:focus { outline: none; border-color: var(--g4); }
 .search-wrap input[type=text] { width: 100%; padding-left: 32px; padding-right: 30px; }
 .search-icon { position: absolute; left: 10px; font-size: 15px; color: var(--text2); pointer-events: none; }
 .search-clear { position: absolute; right: 6px; width: 22px; height: 22px; border-radius: 50%; border: none; background: var(--bg3); color: var(--text1); display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 12px; padding: 0; }
+.search-history { position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: var(--bg1); border: 1px solid var(--g5); border-radius: 8px; z-index: 60; box-shadow: 0 8px 24px rgba(0,0,0,.4); display: none; flex-direction: column; overflow: hidden; }
+.search-history.open { display: flex; }
+.search-history-item { display: flex; align-items: center; gap: 8px; padding: 7px 12px; cursor: pointer; font-size: 13px; color: var(--text1); }
+.search-history-item:hover { background: var(--bg3); color: var(--text0); }
+.search-history-item i { color: var(--text2); font-size: 13px; flex-shrink: 0; }
+.search-history-del { margin-left: auto; background: none; border: none; color: var(--text2); cursor: pointer; padding: 2px 4px; border-radius: 4px; font-size: 12px; display: flex; align-items: center; flex-shrink: 0; }
+.search-history-del:hover { color: #E24B4A; }
+.search-history-clear { padding: 6px 12px; font-size: 12px; color: var(--text2); cursor: pointer; border-top: 1px solid var(--g6); text-align: center; }
+.search-history-clear:hover { color: var(--g2); background: var(--bg3); }
 .search-clear:hover { background: var(--g5); color: #fff; }
 .btn { display: flex; align-items: center; gap: 6px; white-space: nowrap; padding: 0 14px; height: 36px; border-radius: 8px; border: 0.5px solid var(--border0); background: var(--bg2); color: var(--text0); font-size: 14px; cursor: pointer; font-weight: 500; font-family: inherit; }
 .btn:hover { background: var(--bg3); border-color: var(--g5); }
@@ -216,8 +225,9 @@ select:focus { outline: none; border-color: var(--g4); }
   <div class="toolbar">
     <div class="search-wrap">
       <i class="ti ti-search search-icon"></i>
-      <input type="text" id="search" placeholder="Search links… (press /)" oninput="debouncedRender()">
+      <input type="text" id="search" placeholder="Search links… (press /)" oninput="debouncedRender();hideSearchHistory()" onfocus="showSearchHistory()" onblur="saveSearchTerm(this.value);setTimeout(hideSearchHistory,150)">
       <button class="search-clear" id="searchClear" style="display:none" onclick="clearSearch()"><i class="ti ti-x"></i></button>
+      <div class="search-history" id="searchHistory"></div>
     </div>
     <div class="filter-wrap">
       <button class="btn" id="filterBtn" onclick="toggleFilter(event)" title="Filter &amp; sort"><i class="ti ti-filter"></i> Filter <span id="filterBadge" style="display:none" class="filter-badge"></span></button>
@@ -423,6 +433,7 @@ let dragFolder = null;
 let dragOverEl = null;
 let selectMode = false;
 let activeCardId = null;
+let searchHistory = JSON.parse(localStorage.getItem('msp-search-history') || '[]');
 let selectedIds = new Set();
 let visibleIds = [];
 let favoritesCollapsed = JSON.parse(localStorage.getItem('msp-fav-collapsed') || 'false');
@@ -1011,6 +1022,7 @@ function updateFilterBadge() {
 document.addEventListener('click', e => {
   closeSettings();
   if (!e.target.closest('#filterMenu') && !e.target.closest('#filterBtn')) closeFilter();
+  if (!e.target.closest('.search-wrap')) hideSearchHistory();
   if (!e.target.closest('#folderColorPicker') && !e.target.closest('.folder-color-swatch')) {
     closeFolderColorPicker();
   }
@@ -1023,8 +1035,58 @@ function clearSearch() {
   const s = document.getElementById('search');
   s.value = '';
   document.getElementById('searchClear').style.display = 'none';
+  hideSearchHistory();
   render();
   s.focus();
+}
+
+function saveSearchTerm(term) {
+  term = (term || '').trim();
+  if (term.length < 2) return;
+  searchHistory = [term, ...searchHistory.filter(t => t !== term)].slice(0, 8);
+  localStorage.setItem('msp-search-history', JSON.stringify(searchHistory));
+}
+
+function showSearchHistory() {
+  const el = document.getElementById('searchHistory');
+  if (!searchHistory.length) return;
+  el.innerHTML = searchHistory.map((t, i) => `
+    <div class="search-history-item" data-term="${esc(t)}">
+      <i class="ti ti-history"></i>
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t)}</span>
+      <button class="search-history-del" data-idx="${i}" title="Remove"><i class="ti ti-x"></i></button>
+    </div>`).join('') +
+    `<div class="search-history-clear">Clear history</div>`;
+  el.querySelectorAll('.search-history-item').forEach(item => {
+    item.addEventListener('mousedown', e => {
+      if (e.target.closest('.search-history-del')) return;
+      e.preventDefault();
+      const s = document.getElementById('search');
+      s.value = item.dataset.term;
+      hideSearchHistory();
+      render();
+      document.getElementById('searchClear').style.display = '';
+    });
+  });
+  el.querySelectorAll('.search-history-del').forEach(btn => {
+    btn.addEventListener('mousedown', e => {
+      e.preventDefault(); e.stopPropagation();
+      searchHistory.splice(parseInt(btn.dataset.idx), 1);
+      localStorage.setItem('msp-search-history', JSON.stringify(searchHistory));
+      showSearchHistory();
+    });
+  });
+  el.querySelector('.search-history-clear').addEventListener('mousedown', e => {
+    e.preventDefault();
+    searchHistory = [];
+    localStorage.setItem('msp-search-history', JSON.stringify(searchHistory));
+    hideSearchHistory();
+  });
+  el.classList.add('open');
+}
+
+function hideSearchHistory() {
+  document.getElementById('searchHistory').classList.remove('open');
 }
 
 function anyModalOpen() {
@@ -1041,6 +1103,11 @@ document.addEventListener('keydown', e => {
     e.preventDefault();
     s.focus();
     s.select();
+  }
+
+  if (e.key === 'Enter' && document.activeElement === s) {
+    saveSearchTerm(s.value);
+    hideSearchHistory();
   }
 
   if (e.key === 'Escape') {
