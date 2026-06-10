@@ -77,6 +77,7 @@ services:
       - "3000:3000"
     volumes:
       - ./data:/data
+      - ./config:/data/config
     restart: unless-stopped
     deploy:
       resources:
