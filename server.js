@@ -5,6 +5,7 @@ const http = require('http');
 const https = require('https');
 const dns = require('dns').promises;
 const net = require('net');
+const crypto = require('crypto');
 
 function isPrivateIP(ip) {
   if (net.isIPv4(ip)) {
@@ -27,6 +28,9 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const DATA_FILE = path.join('/data', 'links.json');
 const CONFIG_FILE = path.join('/data/config', 'config.json');
+const FAVICON_DIR = path.join('/data', 'favicons');
+const FAVICON_TTL = 30 * 24 * 60 * 60 * 1000; // re-fetch cached icons after 30 days
+const FAVICON_MAX = 250 * 1024; // 250KB cap per icon
 
 app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
@@ -261,6 +265,164 @@ app.get('/api/fetch-title', async (req, res) => {
   try {
     await fetchTitle(rawUrl, 3);
   } catch { if (!res.headersSent) res.json({ title: '' }); }
+});
+
+// --- Favicon proxy + cache ---------------------------------------------------
+// Fetches each site's real favicon server-side and caches it under /data/favicons
+// so icons stay local (no third-party calls) and work for internal/homelab hosts.
+// Like /api/check-links, this intentionally has NO private-IP block: it fetches
+// the user's own bookmarked domains, which on a homelab include internal IPs.
+
+function sniffImageType(buf) {
+  if (!buf || buf.length < 4) return null;
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return 'image/png';
+  if (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46) return 'image/gif';
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'image/jpeg';
+  if (buf[0] === 0x00 && buf[1] === 0x00 && buf[2] === 0x01 && buf[3] === 0x00) return 'image/x-icon';
+  if (buf.length >= 12 && buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP') return 'image/webp';
+  const head = buf.toString('utf8', 0, Math.min(buf.length, 200)).trim().toLowerCase();
+  if (head.startsWith('<?xml') || head.startsWith('<svg')) return 'image/svg+xml';
+  return null;
+}
+
+// GET a URL into a Buffer, following redirects, with a byte cap. Resolves null on any failure.
+function httpGetBuffer(urlStr, hopsLeft, maxBytes, accept) {
+  return new Promise((resolve) => {
+    let parsed;
+    try { parsed = new URL(urlStr); } catch { return resolve(null); }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return resolve(null);
+    const mod = parsed.protocol === 'https:' ? https : http;
+    const options = {
+      hostname: parsed.hostname,
+      port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
+      path: parsed.pathname + parsed.search,
+      method: 'GET',
+      timeout: 5000,
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; MSP-Beacon/1.0)', 'Accept': accept || '*/*' }
+    };
+    const request = mod.request(options, (incoming) => {
+      const sc = incoming.statusCode;
+      if ((sc === 301 || sc === 302 || sc === 303 || sc === 307 || sc === 308) && incoming.headers.location && hopsLeft > 0) {
+        incoming.resume();
+        let next;
+        try { next = new URL(incoming.headers.location, urlStr).toString(); } catch { return resolve(null); }
+        return resolve(httpGetBuffer(next, hopsLeft - 1, maxBytes, accept));
+      }
+      if (sc < 200 || sc >= 300) { incoming.resume(); return resolve(null); }
+      const chunks = [];
+      let len = 0, done = false;
+      incoming.on('data', (c) => {
+        if (done) return;
+        chunks.push(c);
+        len += c.length;
+        if (len > maxBytes) { done = true; incoming.destroy(); resolve(null); }
+      });
+      incoming.on('end', () => { if (!done) resolve({ buf: Buffer.concat(chunks), contentType: incoming.headers['content-type'] || '' }); });
+      incoming.on('error', () => { if (!done) resolve(null); });
+    });
+    request.on('timeout', () => { request.destroy(); });
+    request.on('error', () => resolve(null));
+    request.end();
+  });
+}
+
+// Parse the page HTML for the best <link rel="icon"> href; fall back to /favicon.ico
+async function resolveFaviconUrl(pageUrl) {
+  const origin = new URL(pageUrl).origin;
+  const page = await httpGetBuffer(pageUrl, 3, 200 * 1024, 'text/html');
+  if (page && /text\/html/i.test(page.contentType)) {
+    const html = page.buf.toString('utf8');
+    const candidates = [];
+    const linkRe = /<link\b[^>]*>/gi;
+    let m;
+    while ((m = linkRe.exec(html))) {
+      const tag = m[0];
+      if (!/rel=["'][^"']*icon[^"']*["']/i.test(tag)) continue;
+      const href = tag.match(/href=["']([^"']+)["']/i);
+      if (!href) continue;
+      let score = 1;
+      const sizes = tag.match(/sizes=["']([^"']+)["']/i);
+      if (sizes) { const n = parseInt(sizes[1], 10); if (!isNaN(n)) score = n; }
+      if (/apple-touch-icon/i.test(tag)) score = Math.max(score, 120);
+      candidates.push({ href: href[1], score });
+    }
+    candidates.sort((a, b) => b.score - a.score);
+    if (candidates.length) {
+      try { return new URL(candidates[0].href, pageUrl).toString(); } catch { /* fall through */ }
+    }
+  }
+  return origin + '/favicon.ico';
+}
+
+// Dedupe concurrent fetches for the same host (many cards load at once on first render)
+const faviconInflight = new Map();
+function fetchFaviconBuffer(rawUrl, hostname) {
+  if (faviconInflight.has(hostname)) return faviconInflight.get(hostname);
+  const p = (async () => {
+    const iconUrl = await resolveFaviconUrl(rawUrl);
+    let icon = await httpGetBuffer(iconUrl, 3, FAVICON_MAX, 'image/*');
+    let type = icon && sniffImageType(icon.buf);
+    if (!type) {
+      const origin = new URL(rawUrl).origin;
+      icon = await httpGetBuffer(origin + '/favicon.ico', 3, FAVICON_MAX, 'image/*');
+      type = icon && sniffImageType(icon.buf);
+    }
+    return type ? { buf: icon.buf, type } : null;
+  })().catch(() => null).finally(() => faviconInflight.delete(hostname));
+  faviconInflight.set(hostname, p);
+  return p;
+}
+
+app.get('/api/favicon', async (req, res) => {
+  const rawUrl = req.query.url;
+  let hostname;
+  try { hostname = new URL(rawUrl).hostname; } catch { return res.status(400).end(); }
+  if (!hostname) return res.status(400).end();
+
+  const hash = crypto.createHash('sha1').update(hostname).digest('hex');
+  const cachePath = path.join(FAVICON_DIR, hash);
+  const nonePath = path.join(FAVICON_DIR, hash + '.none');
+  const fresh = (st) => (Date.now() - st.mtimeMs) < FAVICON_TTL;
+
+  try {
+    await fsp.mkdir(FAVICON_DIR, { recursive: true });
+
+    // Serve cached icon if fresh
+    try {
+      const st = await fsp.stat(cachePath);
+      if (fresh(st)) {
+        const buf = await fsp.readFile(cachePath);
+        res.setHeader('Content-Type', sniffImageType(buf) || 'application/octet-stream');
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        return res.end(buf);
+      }
+    } catch { /* not cached */ }
+
+    // Negative cache: site had no usable favicon recently — don't hammer it
+    try {
+      const st = await fsp.stat(nonePath);
+      if (fresh(st)) { res.setHeader('Cache-Control', 'public, max-age=3600'); return res.status(404).end(); }
+    } catch { /* no negative marker */ }
+
+    // Fetch, cache, serve
+    const result = await fetchFaviconBuffer(rawUrl, hostname);
+    if (result) {
+      const tmp = path.join(FAVICON_DIR, `.${hash}-${Date.now()}`);
+      await fsp.writeFile(tmp, result.buf);
+      await fsp.rename(tmp, cachePath);
+      try { await fsp.unlink(nonePath); } catch { /* none */ }
+      res.setHeader('Content-Type', result.type);
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      return res.end(result.buf);
+    }
+
+    try { await fsp.writeFile(nonePath, ''); } catch { /* ignore */ }
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    return res.status(404).end();
+  } catch (e) {
+    console.error('GET /api/favicon error:', e);
+    return res.status(404).end();
+  }
 });
 
 app.get('/api/check-links', async (req, res) => {

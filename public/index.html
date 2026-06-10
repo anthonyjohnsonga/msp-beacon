@@ -620,7 +620,7 @@ function commitPendingMove() {
   save();
 }
 
-function getFavicon(u) { try { return 'https://www.google.com/s2/favicons?domain=' + new URL(u).hostname + '&sz=64'; } catch { return null; } }
+function getFavicon(u) { try { new URL(u); return '/api/favicon?url=' + encodeURIComponent(u); } catch { return null; } }
 function getDomain(u) { try { return new URL(u).hostname.replace('www.', ''); } catch { return u; } }
 function esc(s) { if (!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function hexToRgb(hex) {
