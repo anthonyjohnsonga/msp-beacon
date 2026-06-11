@@ -234,6 +234,9 @@ select:focus { outline: none; border-color: var(--g4); }
 .home-tile-icon img { width: 100%; height: 100%; object-fit: contain; }
 .home-tile-icon i { font-size: 20px; color: var(--g3); }
 .home-tile-label { font-size: 12px; color: var(--text1); width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-tile[draggable="true"] { cursor: grab; }
+.home-tile.dragging { opacity: 0.35; cursor: grabbing; }
+.home-tile.drag-over { border-color: var(--g3) !important; box-shadow: 0 0 0 2px var(--g4-glow); background: var(--bg1); }
 </style>
 </head>
 <body>
@@ -468,6 +471,7 @@ let currentTheme = localStorage.getItem('msp-theme') || 'Green';
 let dragId = null;
 let dragFolder = null;
 let dragOverEl = null;
+let homeDrag = null;
 let selectMode = false;
 let activeCardId = null;
 let searchHistory = JSON.parse(localStorage.getItem('msp-search-history') || '[]');
@@ -724,20 +728,21 @@ function updateClock() {
   if (g) g.textContent = greeting();
 }
 
-function homeTileHtml(l) {
+function homeTileHtml(l, draggable) {
   const fav = getFavicon(l.url);
   const fi = fav
     ? `<img src="${fav}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span style="display:none;width:100%;height:100%;align-items:center;justify-content:center"><i class="ti ti-world"></i></span>`
     : `<i class="ti ti-world"></i>`;
-  return `<div class="home-tile" data-id="${esc(l.id)}" data-url="${esc(l.url)}" title="${esc(l.title)}"><div class="home-tile-icon">${fi}</div><div class="home-tile-label">${esc(l.title)}</div></div>`;
+  return `<div class="home-tile"${draggable ? ' draggable="true"' : ''} data-id="${esc(l.id)}" data-url="${esc(l.url)}" title="${esc(l.title)}"><div class="home-tile-icon">${fi}</div><div class="home-tile-label">${esc(l.title)}</div></div>`;
 }
 function homeFolderTileHtml(f) {
   const fc = getFolderColor(f);
-  return `<div class="home-tile home-folder-tile" data-folder="${esc(f)}" title="${esc(f)}"><div class="home-tile-icon" style="background:rgba(${hexToRgb(fc)},.15)"><i class="ti ${getFolderIcon(f)}" style="color:${fc}"></i></div><div class="home-tile-label">${esc(f)}</div></div>`;
+  return `<div class="home-tile home-folder-tile" draggable="true" data-folder="${esc(f)}" title="${esc(f)}"><div class="home-tile-icon" style="background:rgba(${hexToRgb(fc)},.15)"><i class="ti ${getFolderIcon(f)}" style="color:${fc}"></i></div><div class="home-tile-label">${esc(f)}</div></div>`;
 }
 function homeSection(title, icon, tilesHtml, count, key) {
   if (!count) return '';
-  return `<div class="home-section"><div class="home-section-head"><i class="ti ${icon}" style="font-size:14px;color:var(--g3)"></i><span class="home-section-title">${title}</span><button class="home-section-all" onclick="homeShowAll('${key}')">show all <i class="ti ti-arrow-right"></i></button></div><div class="home-tiles">${tilesHtml}</div></div>`;
+  const secAttr = key === 'favorites' ? ' data-home-section="favorites"' : '';
+  return `<div class="home-section"><div class="home-section-head"><i class="ti ${icon}" style="font-size:14px;color:var(--g3)"></i><span class="home-section-title">${title}</span><button class="home-section-all" onclick="homeShowAll('${key}')">show all <i class="ti ti-arrow-right"></i></button></div><div class="home-tiles"${secAttr}>${tilesHtml}</div></div>`;
 }
 function homeShowAll(key) {
   if (key === 'most-visited') { currentSort = 'most-visited'; localStorage.setItem('msp-sort', currentSort); }
@@ -761,6 +766,18 @@ function openFolderFromHome(folder) {
   setMode('manager');
 }
 
+// Reorder a favorite by moving its record just before the target's in `links`
+// (same model as manager card reorder — favorites render in links-array order).
+function reorderFavorite(srcId, tgtId) {
+  const si = links.findIndex(l => l.id === srcId);
+  if (si < 0) return;
+  const [moved] = links.splice(si, 1);
+  const ti = links.findIndex(l => l.id === tgtId);
+  if (ti < 0) { links.splice(si, 0, moved); return; }
+  links.splice(ti, 0, moved);
+  save(); render();
+}
+
 function renderHome() {
   const c = document.getElementById('content');
   const active = links.filter(l => !l.archived);
@@ -771,8 +788,8 @@ function renderHome() {
   let html = '<div class="home">';
   html += `<div class="home-clock"><div class="home-time" id="homeTime"></div><div class="home-greeting" id="homeGreeting"></div></div>`;
   html += `<div class="home-search-wrap"><i class="ti ti-search search-icon"></i><input type="text" class="home-search" id="homeSearch" placeholder="Search your links…" autocomplete="off" oninput="homeSearchInput(this.value)"></div>`;
-  html += homeSection('Favorites', 'ti-star-filled', favs.map(homeTileHtml).join(''), favs.length, 'favorites');
-  html += homeSection('Most visited', 'ti-flame', mostVisited.map(homeTileHtml).join(''), mostVisited.length, 'most-visited');
+  html += homeSection('Favorites', 'ti-star-filled', favs.map(l => homeTileHtml(l, true)).join(''), favs.length, 'favorites');
+  html += homeSection('Most visited', 'ti-flame', mostVisited.map(l => homeTileHtml(l, false)).join(''), mostVisited.length, 'most-visited');
   html += homeSection('Folders', 'ti-folders', folders.map(homeFolderTileHtml).join(''), folders.length, 'folders');
   html += '</div>';
   c.innerHTML = html;
@@ -1540,6 +1557,19 @@ function setupDragListeners() {
   const content = document.getElementById('content');
 
   content.addEventListener('dragstart', e => {
+    const homeTile = e.target.closest('.home-tile[draggable="true"]');
+    if (homeTile) {
+      if (homeTile.classList.contains('home-folder-tile')) {
+        homeDrag = { type: 'folder', key: homeTile.dataset.folder };
+      } else if (homeTile.dataset.id && homeTile.closest('[data-home-section="favorites"]')) {
+        homeDrag = { type: 'fav', key: homeTile.dataset.id };
+      } else { return; }
+      dragId = null; dragFolder = null;
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', homeDrag.key);
+      setTimeout(() => homeTile.classList.add('dragging'), 0);
+      return;
+    }
     const handle = e.target.closest('.drag-handle');
     const folderHandle = e.target.closest('.folder-drag-handle');
     if (handle) {
@@ -1564,6 +1594,24 @@ function setupDragListeners() {
   });
 
   content.addEventListener('dragover', e => {
+    if (homeDrag) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      let target = null;
+      if (homeDrag.type === 'folder') {
+        const t = e.target.closest('.home-folder-tile');
+        if (t && t.dataset.folder !== homeDrag.key) target = t;
+      } else {
+        const t = e.target.closest('.home-tile[data-id]');
+        if (t && t.dataset.id !== homeDrag.key && t.closest('[data-home-section="favorites"]')) target = t;
+      }
+      if (target !== dragOverEl) {
+        if (dragOverEl) dragOverEl.classList.remove('drag-over');
+        dragOverEl = target;
+        if (dragOverEl) dragOverEl.classList.add('drag-over');
+      }
+      return;
+    }
     if (!dragId && !dragFolder) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
@@ -1603,6 +1651,30 @@ function setupDragListeners() {
     e.preventDefault();
     if (dragOverEl) dragOverEl.classList.remove('drag-over');
     document.querySelectorAll('.dragging').forEach(el => el.classList.remove('dragging'));
+    if (homeDrag) {
+      if (homeDrag.type === 'folder') {
+        const t = e.target.closest('.home-folder-tile');
+        if (t && t.dataset.folder !== homeDrag.key) {
+          const names = getOrderedFolders(allFolders());
+          const si = names.indexOf(homeDrag.key), ti = names.indexOf(t.dataset.folder);
+          if (si > -1 && ti > -1) {
+            names.splice(si, 1);
+            names.splice(ti, 0, homeDrag.key);
+            folderOrder = names;
+            localStorage.setItem('msp-folder-order', JSON.stringify(folderOrder));
+            render();
+            saveConfig();
+          }
+        }
+      } else {
+        const t = e.target.closest('.home-tile[data-id]');
+        if (t && t.dataset.id !== homeDrag.key && t.closest('[data-home-section="favorites"]')) {
+          reorderFavorite(homeDrag.key, t.dataset.id);
+        }
+      }
+      homeDrag = null; dragOverEl = null;
+      return;
+    }
     if (dragId) {
       const card = e.target.closest('.card[data-id], .card-row[data-id]');
       const sfHeader = e.target.closest('.subfolder-header[data-subfolder]');
@@ -1666,7 +1738,7 @@ function setupDragListeners() {
   });
 
   content.addEventListener('dragend', () => {
-    dragId = null; dragFolder = null;
+    dragId = null; dragFolder = null; homeDrag = null;
     if (dragOverEl) dragOverEl.classList.remove('drag-over');
     dragOverEl = null;
     document.querySelectorAll('.dragging').forEach(el => el.classList.remove('dragging'));
