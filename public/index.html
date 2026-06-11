@@ -244,6 +244,7 @@ select:focus { outline: none; border-color: var(--g4); }
     <div class="saving-indicator" id="saveStatus"></div>
     <button class="btn" id="homeBtn" onclick="goHome()" title="Home"><i class="ti ti-home"></i></button>
     <button class="btn" id="managerBtn" onclick="goManager()" title="Manager view"><i class="ti ti-layout-grid"></i></button>
+    <button class="btn btn-primary" id="headerAddBtn" onclick="openModal()" title="Add link" style="display:none"><i class="ti ti-plus"></i> Add link</button>
     <div class="settings-wrap">
       <button class="btn" id="settingsBtn" onclick="toggleSettings(event)"><i class="ti ti-settings"></i> Settings</button>
       <div class="settings-menu" id="settingsMenu">
@@ -686,6 +687,8 @@ function setMode(mode, navigated = true) {
   const hb = document.getElementById('homeBtn'), mb = document.getElementById('managerBtn');
   if (hb) hb.classList.toggle('active', mode === 'home');
   if (mb) mb.classList.toggle('active', mode === 'manager');
+  const ab = document.getElementById('headerAddBtn');
+  if (ab) ab.style.display = mode === 'home' ? '' : 'none';
   if (mode !== 'home') { clearInterval(homeClockTimer); homeClockTimer = null; }
   render();
 }
