@@ -213,14 +213,56 @@ select:focus { outline: none; border-color: var(--g4); }
 .filter-row label { font-size: 11px; color: var(--g3); font-weight: 500; text-transform: uppercase; letter-spacing: .06em; padding: 0 2px; }
 .filter-row select { width: 100%; }
 .filter-badge { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; background: var(--g4); color: #fff; font-size: 10px; font-weight: 600; line-height: 1; }
+.header-logo { cursor: pointer; }
+/* Homepage / dashboard view */
+.home { max-width: 720px; margin: 0 auto; padding-top: 7vh; display: flex; flex-direction: column; gap: 2.25rem; }
+.home-clock { text-align: center; }
+.home-time { font-size: 56px; font-weight: 300; color: var(--text0); letter-spacing: 1px; line-height: 1; }
+.home-greeting { font-size: 17px; color: var(--text1); margin-top: 10px; }
+.home-search-wrap { position: relative; display: flex; align-items: center; }
+.home-search-wrap .search-icon { position: absolute; left: 18px; font-size: 19px; color: var(--text2); pointer-events: none; }
+.home-search { width: 100%; height: 52px; border-radius: 14px; padding: 0 18px 0 50px; font-size: 17px; background: var(--bg1); border: 1px solid var(--border0); color: var(--text0); font-family: inherit; }
+.home-search:focus { outline: none; border-color: var(--g4); box-shadow: 0 0 0 3px var(--g4-glow); }
+.home-section-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding: 0 4px; }
+.home-section-title { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--g3); }
+.home-section-all { margin-left: auto; font-size: 12px; color: var(--text2); cursor: pointer; background: none; border: none; font-family: inherit; display: flex; align-items: center; gap: 4px; padding: 2px 4px; border-radius: 6px; }
+.home-section-all:hover { color: var(--g2); }
+.home-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(94px, 1fr)); gap: 10px; }
+.home-tile { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px 6px; border-radius: 12px; cursor: pointer; border: 1px solid transparent; text-align: center; min-width: 0; }
+.home-tile:hover { background: var(--bg1); border-color: var(--g5); }
+.home-tile-icon { width: 44px; height: 44px; border-radius: 11px; background: var(--bg2); display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; }
+.home-tile-icon img { width: 100%; height: 100%; object-fit: contain; }
+.home-tile-icon i { font-size: 20px; color: var(--g3); }
+.home-tile-label { font-size: 12px; color: var(--text1); width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 </style>
 </head>
 <body>
 <div class="container">
   <div class="app-header">
-    <i class="ti ti-bookmarks"></i>
-    <span>MSP Beacon</span>
+    <i class="ti ti-bookmarks header-logo" onclick="goHome()"></i>
+    <span class="header-logo" onclick="goHome()">MSP Beacon</span>
     <div class="saving-indicator" id="saveStatus"></div>
+    <button class="btn" id="homeBtn" onclick="goHome()" title="Home"><i class="ti ti-home"></i></button>
+    <button class="btn" id="managerBtn" onclick="goManager()" title="Manager view"><i class="ti ti-layout-grid"></i></button>
+    <div class="settings-wrap">
+      <button class="btn" id="settingsBtn" onclick="toggleSettings(event)"><i class="ti ti-settings"></i> Settings</button>
+      <div class="settings-menu" id="settingsMenu">
+        <button class="settings-item" id="defaultViewItem" onclick="toggleDefaultView()"><i class="ti ti-home"></i> Start on <span id="defaultViewLabel" style="margin-left:auto;color:var(--g2);font-size:12px"></span></button>
+        <button class="settings-item" onclick="closeSettings();collapseAll()"><i class="ti ti-chevrons-up"></i> Collapse all</button>
+        <button class="settings-item" onclick="closeSettings();expandAll()"><i class="ti ti-chevrons-down"></i> Expand all</button>
+        <button class="settings-item" id="checkLinksBtn" onclick="checkLinks()"><i class="ti ti-wifi"></i> Check links</button>
+        <button class="settings-item" onclick="closeSettings();openShortcuts()"><i class="ti ti-keyboard"></i> Keyboard shortcuts</button>
+        <button class="settings-item" onclick="closeSettings();openFolderManager()"><i class="ti ti-folders"></i> Manage folders</button>
+        <button class="settings-item" onclick="closeSettings();openTagManager()"><i class="ti ti-tags"></i> Manage tags</button>
+        <button class="settings-item" onclick="closeSettings();openArchive()"><i class="ti ti-archive"></i> Archive <span id="archiveBadge" class="filter-badge" style="display:none;margin-left:auto"></span></button>
+        <button class="settings-item" onclick="closeSettings();openStats()"><i class="ti ti-chart-bar"></i> Stats</button>
+        <button class="settings-item" onclick="closeSettings();openTheme()"><i class="ti ti-palette"></i> Theme</button>
+        <button class="settings-item" onclick="closeSettings();openImport()"><i class="ti ti-file-import"></i> Import</button>
+        <button class="settings-item" onclick="closeSettings();exportLinks()"><i class="ti ti-file-export"></i> Export</button>
+        <button class="settings-item" onclick="backupData()"><i class="ti ti-database-export"></i> Backup</button>
+        <button class="settings-item" onclick="openRestore()"><i class="ti ti-database-import"></i> Restore</button>
+      </div>
+    </div>
   </div>
   <div class="toolbar">
     <div class="search-wrap">
@@ -248,24 +290,6 @@ select:focus { outline: none; border-color: var(--g4); }
     <button class="btn" id="densityBtn" onclick="cycleDensity()" title="Card density"></button>
     <button class="btn" id="selectBtn" onclick="toggleSelectMode()" title="Select"><i class="ti ti-checkbox"></i></button>
     <button class="btn btn-primary" onclick="openModal()"><i class="ti ti-plus"></i> Add link</button>
-    <div class="settings-wrap">
-      <button class="btn" id="settingsBtn" onclick="toggleSettings(event)"><i class="ti ti-settings"></i> Settings</button>
-      <div class="settings-menu" id="settingsMenu">
-        <button class="settings-item" onclick="closeSettings();collapseAll()"><i class="ti ti-chevrons-up"></i> Collapse all</button>
-        <button class="settings-item" onclick="closeSettings();expandAll()"><i class="ti ti-chevrons-down"></i> Expand all</button>
-        <button class="settings-item" id="checkLinksBtn" onclick="checkLinks()"><i class="ti ti-wifi"></i> Check links</button>
-        <button class="settings-item" onclick="closeSettings();openShortcuts()"><i class="ti ti-keyboard"></i> Keyboard shortcuts</button>
-        <button class="settings-item" onclick="closeSettings();openFolderManager()"><i class="ti ti-folders"></i> Manage folders</button>
-        <button class="settings-item" onclick="closeSettings();openTagManager()"><i class="ti ti-tags"></i> Manage tags</button>
-        <button class="settings-item" onclick="closeSettings();openArchive()"><i class="ti ti-archive"></i> Archive <span id="archiveBadge" class="filter-badge" style="display:none;margin-left:auto"></span></button>
-        <button class="settings-item" onclick="closeSettings();openStats()"><i class="ti ti-chart-bar"></i> Stats</button>
-        <button class="settings-item" onclick="closeSettings();openTheme()"><i class="ti ti-palette"></i> Theme</button>
-        <button class="settings-item" onclick="closeSettings();openImport()"><i class="ti ti-file-import"></i> Import</button>
-        <button class="settings-item" onclick="closeSettings();exportLinks()"><i class="ti ti-file-export"></i> Export</button>
-        <button class="settings-item" onclick="backupData()"><i class="ti ti-database-export"></i> Backup</button>
-        <button class="settings-item" onclick="openRestore()"><i class="ti ti-database-import"></i> Restore</button>
-      </div>
-    </div>
   </div>
   <div id="content"></div>
 </div>
@@ -453,6 +477,11 @@ let searchDebounceTimer = null;
 function debouncedRender() { clearTimeout(searchDebounceTimer); searchDebounceTimer = setTimeout(render, 150); }
 let currentSort = localStorage.getItem('msp-sort') || 'manual';
 let currentView = localStorage.getItem('msp-view') || 'grid';
+let defaultView = localStorage.getItem('msp-default-view') || 'home';
+let currentMode = defaultView;
+let userNavigated = false;
+let homeFolderFilter = null;
+let homeClockTimer = null;
 let currentDensity = localStorage.getItem('msp-density') || 'comfortable';
 const DENSITY_CYCLE = ['compact', 'comfortable', 'spacious'];
 const DENSITY_SETTINGS = {
@@ -499,7 +528,7 @@ function sortLinks(arr) {
 }
 
 function saveConfig() {
-  const cfg = { folderColors, folderIcons, folderOrder, theme: currentTheme };
+  const cfg = { folderColors, folderIcons, folderOrder, theme: currentTheme, defaultView };
   fetch('/api/config', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -523,6 +552,12 @@ function applyServerConfig(cfg) {
   }
   if (cfg.theme && THEMES[cfg.theme]) {
     applyTheme(cfg.theme, false);
+  }
+  if (cfg.defaultView === 'home' || cfg.defaultView === 'manager') {
+    defaultView = cfg.defaultView;
+    localStorage.setItem('msp-default-view', defaultView);
+    updateDefaultViewLabel();
+    if (!userNavigated && currentMode !== defaultView) setMode(defaultView, false);
   }
 }
 
@@ -643,11 +678,115 @@ function subfoldersByFolder(folderName) {
   return [...new Set(links.filter(l => !l.archived && l.folder === folderName && l.subfolder).map(l => l.subfolder))].sort();
 }
 
+function setMode(mode, navigated = true) {
+  currentMode = mode;
+  if (navigated) userNavigated = true;
+  const toolbar = document.querySelector('.toolbar');
+  if (toolbar) toolbar.style.display = mode === 'home' ? 'none' : '';
+  const hb = document.getElementById('homeBtn'), mb = document.getElementById('managerBtn');
+  if (hb) hb.classList.toggle('active', mode === 'home');
+  if (mb) mb.classList.toggle('active', mode === 'manager');
+  if (mode !== 'home') { clearInterval(homeClockTimer); homeClockTimer = null; }
+  render();
+}
+function goHome() { setMode('home'); }
+function goManager() { setMode('manager'); }
+
+function toggleDefaultView() {
+  defaultView = defaultView === 'home' ? 'manager' : 'home';
+  localStorage.setItem('msp-default-view', defaultView);
+  updateDefaultViewLabel();
+  saveConfig();
+}
+function updateDefaultViewLabel() {
+  const el = document.getElementById('defaultViewLabel');
+  if (el) el.textContent = defaultView === 'home' ? 'Home' : 'Manager';
+}
+
+function greeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 18) return 'Good afternoon';
+  return 'Good evening';
+}
+function updateClock() {
+  const t = document.getElementById('homeTime');
+  if (!t) { clearInterval(homeClockTimer); homeClockTimer = null; return; }
+  const now = new Date();
+  let h = now.getHours(); const m = now.getMinutes();
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12; if (h === 0) h = 12;
+  t.textContent = `${h}:${String(m).padStart(2, '0')} ${ampm}`;
+  const g = document.getElementById('homeGreeting');
+  if (g) g.textContent = greeting();
+}
+
+function homeTileHtml(l) {
+  const fav = getFavicon(l.url);
+  const fi = fav
+    ? `<img src="${fav}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span style="display:none;width:100%;height:100%;align-items:center;justify-content:center"><i class="ti ti-world"></i></span>`
+    : `<i class="ti ti-world"></i>`;
+  return `<div class="home-tile" data-id="${esc(l.id)}" data-url="${esc(l.url)}" title="${esc(l.title)}"><div class="home-tile-icon">${fi}</div><div class="home-tile-label">${esc(l.title)}</div></div>`;
+}
+function homeFolderTileHtml(f) {
+  const fc = getFolderColor(f);
+  return `<div class="home-tile home-folder-tile" data-folder="${esc(f)}" title="${esc(f)}"><div class="home-tile-icon" style="background:rgba(${hexToRgb(fc)},.15)"><i class="ti ${getFolderIcon(f)}" style="color:${fc}"></i></div><div class="home-tile-label">${esc(f)}</div></div>`;
+}
+function homeSection(title, icon, tilesHtml, count, key) {
+  if (!count) return '';
+  return `<div class="home-section"><div class="home-section-head"><i class="ti ${icon}" style="font-size:14px;color:var(--g3)"></i><span class="home-section-title">${title}</span><button class="home-section-all" onclick="homeShowAll('${key}')">show all <i class="ti ti-arrow-right"></i></button></div><div class="home-tiles">${tilesHtml}</div></div>`;
+}
+function homeShowAll(key) {
+  if (key === 'most-visited') { currentSort = 'most-visited'; localStorage.setItem('msp-sort', currentSort); }
+  goManager();
+}
+function homeSearchInput(v) {
+  document.getElementById('search').value = v;
+  document.getElementById('searchClear').style.display = v ? '' : 'none';
+  if (v.trim()) {
+    document.getElementById('folderFilter').value = '';
+    document.getElementById('tagFilter').value = '';
+    setMode('manager');
+    const s = document.getElementById('search');
+    s.focus();
+    const len = s.value.length;
+    s.setSelectionRange(len, len);
+  }
+}
+function openFolderFromHome(folder) {
+  homeFolderFilter = folder;
+  setMode('manager');
+}
+
+function renderHome() {
+  const c = document.getElementById('content');
+  const active = links.filter(l => !l.archived);
+  const favs = active.filter(l => l.favorite).slice(0, 8);
+  const mostVisited = active.filter(l => (l.visits || 0) > 0).sort((a, b) => (b.visits || 0) - (a.visits || 0)).slice(0, 8);
+  const folders = getOrderedFolders(allFolders()).slice(0, 8);
+
+  let html = '<div class="home">';
+  html += `<div class="home-clock"><div class="home-time" id="homeTime"></div><div class="home-greeting" id="homeGreeting"></div></div>`;
+  html += `<div class="home-search-wrap"><i class="ti ti-search search-icon"></i><input type="text" class="home-search" id="homeSearch" placeholder="Search your links…" autocomplete="off" oninput="homeSearchInput(this.value)"></div>`;
+  html += homeSection('Favorites', 'ti-star-filled', favs.map(homeTileHtml).join(''), favs.length, 'favorites');
+  html += homeSection('Most visited', 'ti-flame', mostVisited.map(homeTileHtml).join(''), mostVisited.length, 'most-visited');
+  html += homeSection('Folders', 'ti-folders', folders.map(homeFolderTileHtml).join(''), folders.length, 'folders');
+  html += '</div>';
+  c.innerHTML = html;
+
+  updateClock();
+  clearInterval(homeClockTimer);
+  homeClockTimer = setInterval(updateClock, 1000);
+  updateArchiveBadge();
+}
+
 function render() {
+  if (currentMode === 'home') { renderHome(); return; }
   const q = document.getElementById('search').value.toLowerCase();
   const clearBtn = document.getElementById('searchClear');
   if (clearBtn) clearBtn.style.display = q ? '' : 'none';
-  const ff = document.getElementById('folderFilter').value;
+  let ff = document.getElementById('folderFilter').value;
+  if (homeFolderFilter !== null) { ff = homeFolderFilter; homeFolderFilter = null; }
   const tf = document.getElementById('tagFilter').value;
   const fs = document.getElementById('folderFilter'), ts = document.getElementById('tagFilter');
   fs.innerHTML = '<option value="">All folders</option>' + allFolders().map(f => `<option value="${esc(f)}"${f===ff?' selected':''}>${esc(f)}</option>`).join('');
@@ -1117,6 +1256,8 @@ document.addEventListener('keydown', e => {
 
   if ((e.key === '/' || (e.ctrlKey && e.key === 'k')) && !inInput) {
     e.preventDefault();
+    const hs = document.getElementById('homeSearch');
+    if (currentMode === 'home' && hs) { hs.focus(); return; }
     s.focus();
     s.select();
   }
@@ -1381,6 +1522,10 @@ function setupCardListeners() {
       else if (action === 'favorite') toggleFavorite(id);
       return;
     }
+    const folderTile = e.target.closest('.home-folder-tile');
+    if (folderTile) { openFolderFromHome(folderTile.dataset.folder); return; }
+    const tile = e.target.closest('.home-tile');
+    if (tile && tile.dataset.id) { openLink(tile.dataset.id, tile.dataset.url); return; }
     const card = e.target.closest('.card[data-id], .card-row[data-id]');
     if (!card) return;
     if (card.classList.contains('select-mode')) toggleSelect(card.dataset.id);
@@ -2135,8 +2280,10 @@ function closeFolderIconPicker() {
 applyTheme(localStorage.getItem('msp-theme') || 'Green', false);
 applyDensity(currentDensity);
 document.getElementById('viewToggleIcon').className = currentView === 'grid' ? 'ti ti-layout-list' : 'ti ti-layout-grid';
+updateDefaultViewLabel();
 setupCardListeners();
 setupDragListeners();
+setMode(defaultView, false);
 loadLinks();
 </script>
 </body>
