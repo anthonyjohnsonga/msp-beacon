@@ -256,6 +256,8 @@ select:focus { outline: none; border-color: var(--g4); }
 .ctx-item.danger i { color: #E24B4A; }
 .ctx-item.danger:hover { background: rgba(226,75,74,.12); color: #E24B4A; }
 .ctx-sep { height: 1px; background: var(--border0); margin: 4px 6px; }
+.content-badge { font-size: 10px; padding: 2px 7px; border-radius: 20px; background: var(--bg3); color: var(--text1); border: 0.5px solid var(--border0); display: inline-flex; align-items: center; gap: 3px; }
+.content-badge i { font-size: 11px; color: var(--g3); }
 </style>
 </head>
 <body>
@@ -274,6 +276,7 @@ select:focus { outline: none; border-color: var(--g4); }
         <button class="settings-item" onclick="closeSettings();collapseAll()"><i class="ti ti-chevrons-up"></i> Collapse all</button>
         <button class="settings-item" onclick="closeSettings();expandAll()"><i class="ti ti-chevrons-down"></i> Expand all</button>
         <button class="settings-item" id="checkLinksBtn" onclick="checkLinks()"><i class="ti ti-wifi"></i> Check links</button>
+        <button class="settings-item" id="indexContentBtn" onclick="indexAllContent()"><i class="ti ti-file-search"></i> Index page content</button>
         <button class="settings-item" onclick="closeSettings();openShortcuts()"><i class="ti ti-keyboard"></i> Keyboard shortcuts</button>
         <button class="settings-item" onclick="closeSettings();openFolderManager()"><i class="ti ti-folders"></i> Manage folders</button>
         <button class="settings-item" onclick="closeSettings();openTagManager()"><i class="ti ti-tags"></i> Manage tags</button>
@@ -290,7 +293,7 @@ select:focus { outline: none; border-color: var(--g4); }
   <div class="toolbar">
     <div class="search-wrap">
       <i class="ti ti-search search-icon"></i>
-      <input type="text" id="search" placeholder="Search links… (press /)" oninput="debouncedRender();hideSearchHistory()" onfocus="showSearchHistory()" onblur="saveSearchTerm(this.value);setTimeout(hideSearchHistory,150)">
+      <input type="text" id="search" placeholder="Search links &amp; page text… (press /)" oninput="onSearchInput(this.value)" onfocus="showSearchHistory()" onblur="saveSearchTerm(this.value);setTimeout(hideSearchHistory,150)">
       <button class="search-clear" id="searchClear" style="display:none" onclick="clearSearch()"><i class="ti ti-x"></i></button>
       <div class="search-history" id="searchHistory"></div>
     </div>
@@ -514,6 +517,58 @@ let visibleIds = [];
 let favoritesCollapsed = JSON.parse(localStorage.getItem('msp-fav-collapsed') || 'false');
 let searchDebounceTimer = null;
 function debouncedRender() { clearTimeout(searchDebounceTimer); searchDebounceTimer = setTimeout(render, 150); }
+// Full-text content search: server holds per-link page-text snapshots; we merge
+// content matches into the normal search results.
+let contentMatchIds = new Set();   // link ids whose page text matches the current query
+let contentMatchQuery = '';        // query that contentMatchIds corresponds to
+let contentOnlyIds = new Set();    // matched via page text only (no title/url/tag hit) — for the badge
+let contentSearchTimer = null;
+function onSearchInput(v) {
+  debouncedRender();
+  hideSearchHistory();
+  clearTimeout(contentSearchTimer);
+  contentSearchTimer = setTimeout(() => updateContentMatches(v), 300);
+}
+async function updateContentMatches(q) {
+  q = (q || '').trim().toLowerCase();
+  if (q.length < 2) { contentMatchIds = new Set(); contentMatchQuery = ''; render(); return; }
+  try {
+    const res = await fetch('/api/search-content?q=' + encodeURIComponent(q));
+    if (!res.ok) return;
+    const data = await res.json();
+    contentMatchIds = new Set(data.ids || []);
+    contentMatchQuery = q;
+    render();
+  } catch { /* offline / no index — silently fall back to title/url search */ }
+}
+function captureSnapshot(id, url) {
+  if (!/^https?:\/\//i.test(url || '')) return;
+  fetch('/api/snapshot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, url }) }).catch(() => {});
+}
+async function indexAllContent() {
+  closeSettings();
+  const btn = document.getElementById('indexContentBtn');
+  if (btn && btn.disabled) return;
+  let indexed = new Set();
+  try {
+    const res = await fetch('/api/content-status');
+    if (res.ok) indexed = new Set((await res.json()).indexed || []);
+  } catch {}
+  const targets = links.filter(l => !l.archived && /^https?:\/\//i.test(l.url) && !indexed.has(l.id));
+  if (!targets.length) { showToast('All links already indexed'); return; }
+  if (btn) btn.disabled = true;
+  let done = 0;
+  showToast(`Indexing 0/${targets.length}…`);
+  const CONC = 4;
+  for (let i = 0; i < targets.length; i += CONC) {
+    const batch = targets.slice(i, i + CONC);
+    await Promise.all(batch.map(l => fetch('/api/snapshot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: l.id, url: l.url }) }).catch(() => {})));
+    done += batch.length;
+    showToast(`Indexing ${Math.min(done, targets.length)}/${targets.length}…`);
+  }
+  if (btn) btn.disabled = false;
+  showToast(`Indexed ${targets.length} link${targets.length > 1 ? 's' : ''} for content search`);
+}
 let currentSort = localStorage.getItem('msp-sort') || 'manual';
 let currentView = localStorage.getItem('msp-view') || 'grid';
 let defaultView = localStorage.getItem('msp-default-view') || 'home';
@@ -909,11 +964,18 @@ function render() {
   const sortEl = document.getElementById('sortSelect');
   if (sortEl) sortEl.value = currentSort;
   updateFilterBadge();
+  const contentActive = q && contentMatchQuery === q;
+  contentOnlyIds = new Set();
   let fil = links.filter(l => {
     if (l.archived) return false;
     if (ff && l.folder !== ff) return false;
     if (tf && !(l.tags || []).some(t => t.toLowerCase() === tf.toLowerCase())) return false;
-    if (q && !((l.title+l.url+l.desc+(l.folder||'')+(l.subfolder||'')+(l.tags||[]).join(' ')).toLowerCase().includes(q))) return false;
+    if (q) {
+      const textMatch = (l.title+l.url+l.desc+(l.folder||'')+(l.subfolder||'')+(l.tags||[]).join(' ')).toLowerCase().includes(q);
+      const contentMatch = contentActive && contentMatchIds.has(l.id);
+      if (!textMatch && !contentMatch) return false;
+      if (!textMatch && contentMatch) contentOnlyIds.add(l.id);
+    }
     return true;
   });
   fil = sortLinks(fil);
@@ -986,6 +1048,9 @@ function renderFolderContents(folderName, folderLinks) {
   return html;
 }
 
+function contentBadge(id) {
+  return contentOnlyIds.has(id) ? `<span class="content-badge" title="Matched in the page text"><i class="ti ti-file-search"></i> in page</span>` : '';
+}
 function cardHtml(l) {
   const fav = getFavicon(l.url);
   const fi = fav ? `<img src="${fav}" alt="" onerror="this.style.display='none';this.nextSibling.style.display='flex'"><span style="display:none"><i class="ti ti-world"></i></span>` : `<i class="ti ti-world"></i>`;
@@ -993,6 +1058,7 @@ function cardHtml(l) {
   const footer = `<div class="card-footer">
       ${starBtn}
       ${(l.tags || []).map(tagHtml).join('')}
+      ${contentBadge(l.id)}
       ${l.folder ? `<span class="folder-badge"><i class="ti ti-folder" style="font-size:11px"></i> ${esc(l.folder)}${l.subfolder ? ' / ' + esc(l.subfolder) : ''}</span>` : ''}
     </div>`;
   const top = `<div class="card-top"><div class="favicon">${fi}</div>
@@ -1051,6 +1117,7 @@ function cardListHtml(l) {
     <span class="card-row-domain">${esc(getDomain(l.url))}</span>
     ${l.lastVisited ? `<span style="font-size:11px;color:var(--text2);flex-shrink:0">${timeAgo(l.lastVisited)}</span>` : ''}
     <div class="card-row-tags">${(l.tags || []).map(tagHtml).join('')}</div>
+    ${contentBadge(l.id)}
     ${l.folder ? `<span class="folder-badge" style="margin-left:0"><i class="ti ti-folder" style="font-size:11px"></i> ${esc(l.folder)}${l.subfolder ? ' / ' + esc(l.subfolder) : ''}</span>` : ''}
     <button class="star-btn${l.favorite ? ' active' : ''}" data-action="favorite" data-id="${esc(l.id)}" title="${l.favorite ? 'Remove from favorites' : 'Add to favorites'}" style="flex-shrink:0"><i class="ti ti-star${l.favorite ? '-filled' : ''}"></i></button>
     <div class="card-row-actions">
@@ -1132,9 +1199,15 @@ function saveLink() {
   }
   if (editId) {
     const i = links.findIndex(l => l.id === editId);
-    if (i > -1) links[i] = { ...links[i], url, title, desc, folder, subfolder, tags };
+    if (i > -1) {
+      const urlChanged = links[i].url !== url;
+      links[i] = { ...links[i], url, title, desc, folder, subfolder, tags };
+      if (urlChanged) captureSnapshot(editId, url);
+    }
   } else {
-    links.unshift({ id: Date.now().toString(36) + Math.random().toString(36).slice(2), url, title, desc, folder, subfolder, tags });
+    const newId = Date.now().toString(36) + Math.random().toString(36).slice(2);
+    links.unshift({ id: newId, url, title, desc, folder, subfolder, tags });
+    captureSnapshot(newId, url);
   }
   const wasEditing = !!editId;
   save(); closeModal(); render();
@@ -1148,7 +1221,9 @@ function addLinkAnyway() {
   const subfolder = document.getElementById('mSubfolder').value.trim() || null;
   const tags = document.getElementById('mTags').value.split(',').map(t => t.trim()).filter(Boolean);
   const desc = document.getElementById('mDesc').value.trim();
-  links.unshift({ id: Date.now().toString(36) + Math.random().toString(36).slice(2), url, title, desc, folder, subfolder, tags });
+  const newId = Date.now().toString(36) + Math.random().toString(36).slice(2);
+  links.unshift({ id: newId, url, title, desc, folder, subfolder, tags });
+  captureSnapshot(newId, url);
   save(); closeModal(); render();
   showToast('Link saved');
 }

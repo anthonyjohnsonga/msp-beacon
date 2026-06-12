@@ -31,6 +31,9 @@ const CONFIG_FILE = path.join('/data/config', 'config.json');
 const FAVICON_DIR = path.join('/data', 'favicons');
 const FAVICON_TTL = 30 * 24 * 60 * 60 * 1000; // re-fetch cached icons after 30 days
 const FAVICON_MAX = 250 * 1024; // 250KB cap per icon
+const SNAPSHOT_DIR = path.join('/data', 'snapshots'); // per-link extracted page text for full-text search
+const SNAPSHOT_FETCH_MAX = 1024 * 1024; // 1MB cap on fetched HTML
+const SNAPSHOT_TEXT_MAX = 40000; // store up to 40k chars of extracted text per link
 
 app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
@@ -100,7 +103,10 @@ app.post('/api/links', (req, res) => {
   writeQueue = writeQueue.then(() => writePromise).catch(() => {});
 
   writePromise
-    .then(() => res.json({ ok: true }))
+    .then(() => {
+      res.json({ ok: true });
+      pruneSnapshots(new Set(links.map(l => safeId(l.id)))); // best-effort GC of orphaned snapshots
+    })
     .catch(e => {
       console.error('Write failed:', e);
       res.status(500).json({ error: 'Failed to save links' });
@@ -487,6 +493,112 @@ app.get('/api/check-links', async (req, res) => {
     res.status(500).json({ error: 'Failed to check links' });
   }
 });
+
+// --- Full-text content search ------------------------------------------------
+// On demand, fetch a saved link's page, extract readable text, and cache it under
+// /data/snapshots/<id>.txt. An in-memory index (id -> lowercased text) backs the
+// search endpoint. Like /api/favicon and /api/check-links, this has NO private-IP
+// block: it fetches the user's own bookmarked domains (homelab IPs included).
+
+const contentIndex = new Map(); // id -> lowercased extracted text
+
+function safeId(id) { return String(id || '').replace(/[^a-z0-9]/gi, '').slice(0, 64); }
+
+function decodeHtmlEntities(str) {
+  return str
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#39;/g, "'")
+    .replace(/&#(\d+);/g, (_, n) => { try { return String.fromCharCode(Number(n)); } catch { return ' '; } })
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => { try { return String.fromCharCode(parseInt(h, 16)); } catch { return ' '; } });
+}
+
+function extractText(html) {
+  let s = String(html);
+  s = s.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ');
+  s = s.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ');
+  s = s.replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript>/gi, ' ');
+  s = s.replace(/<!--[\s\S]*?-->/g, ' ');
+  s = s.replace(/<[^>]+>/g, ' ');
+  s = decodeHtmlEntities(s);
+  s = s.replace(/\s+/g, ' ').trim();
+  return s.slice(0, SNAPSHOT_TEXT_MAX);
+}
+
+async function loadContentIndex() {
+  try {
+    await fsp.mkdir(SNAPSHOT_DIR, { recursive: true });
+    const files = await fsp.readdir(SNAPSHOT_DIR);
+    for (const f of files) {
+      if (!f.endsWith('.txt')) continue;
+      try {
+        const text = await fsp.readFile(path.join(SNAPSHOT_DIR, f), 'utf8');
+        contentIndex.set(f.slice(0, -4), text.toLowerCase());
+      } catch { /* skip unreadable */ }
+    }
+    console.log(`Content index loaded: ${contentIndex.size} snapshot(s)`);
+  } catch (e) {
+    console.error('Failed to load content index:', e);
+  }
+}
+
+// Remove snapshots (and index entries) for links that no longer exist.
+async function pruneSnapshots(validIds) {
+  try {
+    const files = await fsp.readdir(SNAPSHOT_DIR);
+    for (const f of files) {
+      if (!f.endsWith('.txt')) continue;
+      const id = f.slice(0, -4);
+      if (!validIds.has(id)) {
+        await fsp.unlink(path.join(SNAPSHOT_DIR, f)).catch(() => {});
+        contentIndex.delete(id);
+      }
+    }
+  } catch { /* dir may not exist yet */ }
+}
+
+app.post('/api/snapshot', async (req, res) => {
+  const id = safeId(req.body && req.body.id);
+  const url = req.body && req.body.url;
+  if (!id || !url) return res.status(400).json({ error: 'id and url required' });
+  let parsed;
+  try { parsed = new URL(url); } catch { return res.status(400).json({ error: 'invalid url' }); }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return res.json({ ok: false, length: 0 });
+  try {
+    const page = await httpGetBuffer(url, 3, SNAPSHOT_FETCH_MAX, 'text/html');
+    if (!page || !/text\/html/i.test(page.contentType)) return res.json({ ok: false, length: 0 });
+    const text = extractText(page.buf.toString('utf8'));
+    await fsp.mkdir(SNAPSHOT_DIR, { recursive: true });
+    const tmp = path.join(SNAPSHOT_DIR, `.${id}-${Date.now()}.txt`);
+    await fsp.writeFile(tmp, text, 'utf8');
+    await fsp.rename(tmp, path.join(SNAPSHOT_DIR, id + '.txt'));
+    contentIndex.set(id, text.toLowerCase());
+    res.json({ ok: true, length: text.length });
+  } catch (e) {
+    console.error('POST /api/snapshot error:', e);
+    res.status(500).json({ error: 'snapshot failed' });
+  }
+});
+
+app.get('/api/search-content', (req, res) => {
+  const q = String(req.query.q || '').trim().toLowerCase();
+  if (q.length < 2) return res.json({ ids: [] });
+  const ids = [];
+  for (const [id, text] of contentIndex) {
+    if (text.includes(q)) ids.push(id);
+  }
+  res.json({ ids });
+});
+
+app.get('/api/content-status', (req, res) => {
+  res.json({ indexed: [...contentIndex.keys()] });
+});
+
+loadContentIndex();
 
 app.listen(PORT, () => {
   console.log(`MSP Beacon running on http://0.0.0.0:${PORT}`);
