@@ -497,6 +497,7 @@ let collapsedSubfolders = JSON.parse(localStorage.getItem('msp-subfolder-collaps
 let folderOrder = JSON.parse(localStorage.getItem('msp-folder-order') || 'null');
 let folderColors = JSON.parse(localStorage.getItem('msp-folder-colors') || '{}');
 let subfolderColors = JSON.parse(localStorage.getItem('msp-subfolder-colors') || '{}');
+let tagColors = JSON.parse(localStorage.getItem('msp-tag-colors') || '{}');
 let folderIcons = JSON.parse(localStorage.getItem('msp-folder-icons') || '{}');
 let currentTheme = localStorage.getItem('msp-theme') || 'Green';
 let customAccent = localStorage.getItem('msp-accent') || '#1D9E75';
@@ -567,7 +568,7 @@ function sortLinks(arr) {
 }
 
 function saveConfig() {
-  const cfg = { folderColors, subfolderColors, folderIcons, folderOrder, theme: currentTheme, accent: customAccent, mode: themeMode, defaultView };
+  const cfg = { folderColors, subfolderColors, tagColors, folderIcons, folderOrder, theme: currentTheme, accent: customAccent, mode: themeMode, defaultView };
   fetch('/api/config', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -584,6 +585,10 @@ function applyServerConfig(cfg) {
   if (cfg.subfolderColors && typeof cfg.subfolderColors === 'object') {
     subfolderColors = cfg.subfolderColors;
     localStorage.setItem('msp-subfolder-colors', JSON.stringify(subfolderColors));
+  }
+  if (cfg.tagColors && typeof cfg.tagColors === 'object') {
+    tagColors = cfg.tagColors;
+    localStorage.setItem('msp-tag-colors', JSON.stringify(tagColors));
   }
   if (cfg.folderIcons && typeof cfg.folderIcons === 'object') {
     folderIcons = cfg.folderIcons;
@@ -746,6 +751,16 @@ function deriveAccent(baseHex) {
 function getFolderColor(f) { return folderColors[f] || '#1D9E75'; }
 function subKey(folder, sf) { return JSON.stringify([folder, sf]); }
 function getSubfolderColor(folder, sf) { return subfolderColors[subKey(folder, sf)] || getFolderColor(folder); }
+function getTagColor(t) { return tagColors[t] || null; }
+function accentColor() {
+  const c = getComputedStyle(document.documentElement).getPropertyValue('--g4').trim();
+  return /^#[0-9A-Fa-f]{6}$/.test(c) ? c : '#1D9E75';
+}
+function tagHtml(t) {
+  const tc = getTagColor(t);
+  const style = tc ? ` style="background:rgba(${hexToRgb(tc)},.2);color:${tc};border-color:${tc}"` : '';
+  return `<span class="tag" data-tag="${esc(t)}"${style}>${esc(t)}</span>`;
+}
 function getFolderIcon(f) { return folderIcons[f] || 'ti-folder'; }
 function allFolders() { return [...new Set(links.filter(l => !l.archived).map(l => l.folder).filter(Boolean))].sort(); }
 function getOrderedFolders(names) {
@@ -977,7 +992,7 @@ function cardHtml(l) {
   const starBtn = selectMode ? '' : `<button class="star-btn${l.favorite ? ' active' : ''}" data-action="favorite" data-id="${esc(l.id)}" title="${l.favorite ? 'Remove from favorites' : 'Add to favorites'}"><i class="ti ti-star${l.favorite ? '-filled' : ''}"></i></button>`;
   const footer = `<div class="card-footer">
       ${starBtn}
-      ${(l.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('')}
+      ${(l.tags || []).map(tagHtml).join('')}
       ${l.folder ? `<span class="folder-badge"><i class="ti ti-folder" style="font-size:11px"></i> ${esc(l.folder)}${l.subfolder ? ' / ' + esc(l.subfolder) : ''}</span>` : ''}
     </div>`;
   const top = `<div class="card-top"><div class="favicon">${fi}</div>
@@ -1025,7 +1040,7 @@ function cardListHtml(l) {
       ${statusBadge}
       <span class="card-row-title">${esc(l.title)}</span>
       <span class="card-row-domain">${esc(getDomain(l.url))}</span>
-      <div class="card-row-tags">${(l.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('')}</div>
+      <div class="card-row-tags">${(l.tags || []).map(tagHtml).join('')}</div>
       ${l.folder ? `<span class="folder-badge" style="margin-left:0"><i class="ti ti-folder" style="font-size:11px"></i> ${esc(l.folder)}${l.subfolder ? ' / ' + esc(l.subfolder) : ''}</span>` : ''}
     </div>`;
   }
@@ -1035,7 +1050,7 @@ function cardListHtml(l) {
     <span class="card-row-title">${esc(l.title)}</span>
     <span class="card-row-domain">${esc(getDomain(l.url))}</span>
     ${l.lastVisited ? `<span style="font-size:11px;color:var(--text2);flex-shrink:0">${timeAgo(l.lastVisited)}</span>` : ''}
-    <div class="card-row-tags">${(l.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('')}</div>
+    <div class="card-row-tags">${(l.tags || []).map(tagHtml).join('')}</div>
     ${l.folder ? `<span class="folder-badge" style="margin-left:0"><i class="ti ti-folder" style="font-size:11px"></i> ${esc(l.folder)}${l.subfolder ? ' / ' + esc(l.subfolder) : ''}</span>` : ''}
     <button class="star-btn${l.favorite ? ' active' : ''}" data-action="favorite" data-id="${esc(l.id)}" title="${l.favorite ? 'Remove from favorites' : 'Add to favorites'}" style="flex-shrink:0"><i class="ti ti-star${l.favorite ? '-filled' : ''}"></i></button>
     <div class="card-row-actions">
@@ -1708,8 +1723,25 @@ function cursorAnchor(x, y) {
 function copyLinkUrl(url) {
   navigator.clipboard.writeText(url).then(() => showToast('URL copied')).catch(() => showToast('Copy failed', true));
 }
+function filterByTag(tag) {
+  if (currentMode !== 'manager') setMode('manager');
+  const tf = document.getElementById('tagFilter');
+  if (tf) tf.value = tag;
+  updateFilterBadge();
+  render();
+}
 
 function onContextMenu(e) {
+  const tagEl = e.target.closest('.tag[data-tag]');
+  if (tagEl) {
+    const tag = tagEl.dataset.tag;
+    e.preventDefault();
+    showContextMenu(e.clientX, e.clientY, [
+      { icon: 'ti-palette', label: 'Change color', action: () => openTagColorPicker(tag, cursorAnchor(e.clientX, e.clientY)) },
+      { icon: 'ti-filter', label: 'Filter by this tag', action: () => filterByTag(tag) },
+    ]);
+    return;
+  }
   const linkEl = e.target.closest('.card[data-id], .card-row[data-id], .home-tile[data-id]');
   const folderTile = e.target.closest('.home-folder-tile[data-folder]');
   const subHeader = e.target.closest('.subfolder-header[data-subfolder]');
@@ -2387,12 +2419,23 @@ function renameTag(oldName, newName) {
       l.tags = l.tags.map(t => t === oldName ? newName : t);
     }
   });
+  if (tagColors[oldName] !== undefined) {
+    tagColors[newName] = tagColors[oldName];
+    delete tagColors[oldName];
+    localStorage.setItem('msp-tag-colors', JSON.stringify(tagColors));
+    saveConfig();
+  }
   save(); render();
 }
 function deleteTag(name) {
   const count = links.filter(l => !l.archived && (l.tags || []).includes(name)).length;
   if (!confirm(`Delete tag "${name}"? It will be removed from ${count} link${count !== 1 ? 's' : ''}.`)) return;
   links.forEach(l => { if (l.tags) l.tags = l.tags.filter(t => t !== name); });
+  if (tagColors[name] !== undefined) {
+    delete tagColors[name];
+    localStorage.setItem('msp-tag-colors', JSON.stringify(tagColors));
+    saveConfig();
+  }
   save(); render();
   showToast(`Tag "${name}" deleted`);
 }
@@ -2411,15 +2454,17 @@ function renderTagManager() {
   content.innerHTML = tags.map(t => {
     const count = links.filter(l => !l.archived && (l.tags || []).includes(t)).length;
     return `<div class="fmgr-row">
-      <i class="ti ti-tag" style="color:var(--g3);font-size:14px;flex-shrink:0"></i>
+      <i class="ti ti-tag" style="color:${getTagColor(t) || 'var(--g3)'};font-size:14px;flex-shrink:0"></i>
       <span class="fmgr-name">${esc(t)}</span>
       <span class="fmgr-count">${count}</span>
       <div class="fmgr-actions">
+        <button class="icon-btn" title="Color" data-tagcolor="${esc(t)}"><i class="ti ti-palette"></i></button>
         <button class="icon-btn" title="Rename" data-tag="${esc(t)}"><i class="ti ti-pencil"></i></button>
         <button class="icon-btn" style="color:#E24B4A" title="Delete" data-tag="${esc(t)}"><i class="ti ti-trash"></i></button>
       </div>
     </div>`;
   }).join('');
+  content.querySelectorAll('[data-tagcolor]').forEach(btn => btn.addEventListener('click', e => { e.stopPropagation(); openTagColorPicker(btn.dataset.tagcolor, btn); }));
   content.querySelectorAll('[title="Rename"]').forEach(btn => btn.addEventListener('click', () => tmgrStartRename(btn)));
   content.querySelectorAll('[title="Delete"]').forEach(btn => btn.addEventListener('click', () => {
     deleteTag(btn.dataset.tag);
@@ -2520,20 +2565,22 @@ let colorPickerTarget = null; // { type: 'folder'|'subfolder', folder, sf? }
 
 function renderColorPicker(anchorEl) {
   const picker = document.getElementById('folderColorPicker');
-  const isSub = colorPickerTarget.type === 'subfolder';
-  const isInherited = isSub && subfolderColors[subKey(colorPickerTarget.folder, colorPickerTarget.sf)] == null;
-  const current = isSub
-    ? getSubfolderColor(colorPickerTarget.folder, colorPickerTarget.sf)
-    : getFolderColor(colorPickerTarget.folder);
+  const t = colorPickerTarget;
+  const isSub = t.type === 'subfolder';
+  const isTag = t.type === 'tag';
+  const isDefault = (isSub && subfolderColors[subKey(t.folder, t.sf)] == null) || (isTag && tagColors[t.tag] == null);
+  const current = isSub ? getSubfolderColor(t.folder, t.sf)
+    : isTag ? (tagColors[t.tag] || accentColor())
+    : getFolderColor(t.folder);
   const cur = String(current).toLowerCase();
   const presetMatch = COLOR_PRESETS.some(c => c.toLowerCase() === cur);
   let chips = COLOR_PRESETS.map(c =>
-    `<div onclick="selectPickerColor('${c}')" style="width:24px;height:24px;border-radius:50%;background:${c};cursor:pointer;outline:${(!isInherited && c.toLowerCase() === cur) ? '2px solid #fff' : 'none'};outline-offset:2px"></div>`
+    `<div onclick="selectPickerColor('${c}')" style="width:24px;height:24px;border-radius:50%;background:${c};cursor:pointer;outline:${(!isDefault && c.toLowerCase() === cur) ? '2px solid #fff' : 'none'};outline-offset:2px"></div>`
   ).join('');
   // Custom color — opens the native color wheel; click anywhere on the rainbow chip
-  chips += `<label title="Custom color…" style="width:24px;height:24px;border-radius:50%;cursor:pointer;position:relative;overflow:hidden;display:inline-block;background:conic-gradient(from 90deg,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00);outline:${(!isInherited && !presetMatch) ? '2px solid #fff' : 'none'};outline-offset:2px"><input type="color" value="${esc(current)}" onchange="selectPickerColor(this.value)" style="position:absolute;left:-5px;top:-5px;width:34px;height:34px;opacity:0;cursor:pointer;border:none;padding:0;background:none"></label>`;
-  if (isSub) {
-    chips += `<div onclick="resetSubfolderColor()" title="Inherit folder color" style="width:24px;height:24px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;cursor:pointer;border:1px solid var(--border0);outline:${isInherited ? '2px solid #fff' : 'none'};outline-offset:2px"><i class="ti ti-rotate-2" style="font-size:13px;color:var(--text1)"></i></div>`;
+  chips += `<label title="Custom color…" style="width:24px;height:24px;border-radius:50%;cursor:pointer;position:relative;overflow:hidden;display:inline-block;background:conic-gradient(from 90deg,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00);outline:${(!isDefault && !presetMatch) ? '2px solid #fff' : 'none'};outline-offset:2px"><input type="color" value="${esc(current)}" onchange="selectPickerColor(this.value)" style="position:absolute;left:-5px;top:-5px;width:34px;height:34px;opacity:0;cursor:pointer;border:none;padding:0;background:none"></label>`;
+  if (isSub || isTag) {
+    chips += `<div onclick="resetPickerColor()" title="${isTag ? 'Default color' : 'Inherit folder color'}" style="width:24px;height:24px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;cursor:pointer;border:1px solid var(--border0);outline:${isDefault ? '2px solid #fff' : 'none'};outline-offset:2px"><i class="ti ti-rotate-2" style="font-size:13px;color:var(--text1)"></i></div>`;
   }
   picker.innerHTML = chips;
   picker.style.display = 'flex';
@@ -2552,26 +2599,48 @@ function openSubfolderColorPicker(folder, sf, anchorEl) {
   renderColorPicker(anchorEl);
 }
 
+function openTagColorPicker(tag, anchorEl) {
+  colorPickerTarget = { type: 'tag', tag };
+  renderColorPicker(anchorEl);
+}
+
+function refreshOpenManagers() {
+  if (document.getElementById('tagMgrBg').style.display === 'flex') renderTagManager();
+  if (document.getElementById('folderMgrBg').style.display === 'flex') renderFolderManager();
+}
+
 function selectPickerColor(color) {
   if (!colorPickerTarget) return;
-  if (colorPickerTarget.type === 'subfolder') {
-    subfolderColors[subKey(colorPickerTarget.folder, colorPickerTarget.sf)] = color;
+  const t = colorPickerTarget;
+  if (t.type === 'subfolder') {
+    subfolderColors[subKey(t.folder, t.sf)] = color;
     localStorage.setItem('msp-subfolder-colors', JSON.stringify(subfolderColors));
+  } else if (t.type === 'tag') {
+    tagColors[t.tag] = color;
+    localStorage.setItem('msp-tag-colors', JSON.stringify(tagColors));
   } else {
-    folderColors[colorPickerTarget.folder] = color;
+    folderColors[t.folder] = color;
     localStorage.setItem('msp-folder-colors', JSON.stringify(folderColors));
   }
   closeFolderColorPicker();
   render();
+  refreshOpenManagers();
   saveConfig();
 }
 
-function resetSubfolderColor() {
-  if (!colorPickerTarget || colorPickerTarget.type !== 'subfolder') return;
-  delete subfolderColors[subKey(colorPickerTarget.folder, colorPickerTarget.sf)];
-  localStorage.setItem('msp-subfolder-colors', JSON.stringify(subfolderColors));
+function resetPickerColor() {
+  if (!colorPickerTarget) return;
+  const t = colorPickerTarget;
+  if (t.type === 'subfolder') {
+    delete subfolderColors[subKey(t.folder, t.sf)];
+    localStorage.setItem('msp-subfolder-colors', JSON.stringify(subfolderColors));
+  } else if (t.type === 'tag') {
+    delete tagColors[t.tag];
+    localStorage.setItem('msp-tag-colors', JSON.stringify(tagColors));
+  } else return;
   closeFolderColorPicker();
   render();
+  refreshOpenManagers();
   saveConfig();
 }
 
