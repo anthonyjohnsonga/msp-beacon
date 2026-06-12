@@ -287,6 +287,7 @@ select:focus { outline: none; border-color: var(--g4); }
           <option value="newest">Newest first</option>
           <option value="oldest">Oldest first</option>
           <option value="most-visited">Most visited</option>
+          <option value="recent">Recently visited</option>
         </select></div>
       </div>
     </div>
@@ -529,6 +530,7 @@ function sortLinks(arr) {
   else if (currentSort === 'newest') copy.sort((a, b) => parseInt(b.id, 36) - parseInt(a.id, 36));
   else if (currentSort === 'oldest') copy.sort((a, b) => parseInt(a.id, 36) - parseInt(b.id, 36));
   else if (currentSort === 'most-visited') copy.sort((a, b) => (b.visits || 0) - (a.visits || 0));
+  else if (currentSort === 'recent') copy.sort((a, b) => (b.lastVisited || 0) - (a.lastVisited || 0));
   return copy;
 }
 
@@ -746,6 +748,7 @@ function homeSection(title, icon, tilesHtml, count, key) {
 }
 function homeShowAll(key) {
   if (key === 'most-visited') { currentSort = 'most-visited'; localStorage.setItem('msp-sort', currentSort); }
+  else if (key === 'recent') { currentSort = 'recent'; localStorage.setItem('msp-sort', currentSort); }
   goManager();
 }
 function homeSearchInput(v) {
@@ -782,6 +785,7 @@ function renderHome() {
   const c = document.getElementById('content');
   const active = links.filter(l => !l.archived);
   const favs = active.filter(l => l.favorite).slice(0, 8);
+  const recent = active.filter(l => l.lastVisited).sort((a, b) => (b.lastVisited || 0) - (a.lastVisited || 0)).slice(0, 8);
   const mostVisited = active.filter(l => (l.visits || 0) > 0).sort((a, b) => (b.visits || 0) - (a.visits || 0)).slice(0, 8);
   const folders = getOrderedFolders(allFolders()).slice(0, 8);
 
@@ -789,6 +793,7 @@ function renderHome() {
   html += `<div class="home-clock"><div class="home-time" id="homeTime"></div><div class="home-greeting" id="homeGreeting"></div></div>`;
   html += `<div class="home-search-wrap"><i class="ti ti-search search-icon"></i><input type="text" class="home-search" id="homeSearch" placeholder="Search your links…" autocomplete="off" oninput="homeSearchInput(this.value)"></div>`;
   html += homeSection('Favorites', 'ti-star-filled', favs.map(l => homeTileHtml(l, true)).join(''), favs.length, 'favorites');
+  html += homeSection('Recent', 'ti-history', recent.map(l => homeTileHtml(l, false)).join(''), recent.length, 'recent');
   html += homeSection('Most visited', 'ti-flame', mostVisited.map(l => homeTileHtml(l, false)).join(''), mostVisited.length, 'most-visited');
   html += homeSection('Folders', 'ti-folders', folders.map(homeFolderTileHtml).join(''), folders.length, 'folders');
   html += '</div>';
