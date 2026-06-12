@@ -247,6 +247,15 @@ select:focus { outline: none; border-color: var(--g4); }
 .home-tile[draggable="true"] { cursor: grab; }
 .home-tile.dragging { opacity: 0.35; cursor: grabbing; }
 .home-tile.drag-over { border-color: var(--g3) !important; box-shadow: 0 0 0 2px var(--g4-glow); background: var(--bg1); }
+.ctx-menu { position: fixed; z-index: 400; background: var(--bg1); border: 1px solid var(--g5); border-radius: 10px; padding: 4px; min-width: 172px; box-shadow: 0 8px 24px rgba(0,0,0,.4); display: none; flex-direction: column; }
+.ctx-menu.open { display: flex; }
+.ctx-item { display: flex; align-items: center; gap: 9px; padding: 8px 12px; border-radius: 7px; font-size: 13px; color: var(--text0); cursor: pointer; background: none; border: none; font-family: inherit; width: 100%; text-align: left; white-space: nowrap; }
+.ctx-item:hover { background: var(--bg3); color: var(--g2); }
+.ctx-item i { font-size: 15px; color: var(--g3); width: 16px; text-align: center; }
+.ctx-item.danger { color: #E24B4A; }
+.ctx-item.danger i { color: #E24B4A; }
+.ctx-item.danger:hover { background: rgba(226,75,74,.12); color: #E24B4A; }
+.ctx-sep { height: 1px; background: var(--border0); margin: 4px 6px; }
 </style>
 </head>
 <body>
@@ -455,6 +464,7 @@ select:focus { outline: none; border-color: var(--g4); }
 <input type="file" id="restoreInput" accept=".json" style="display:none" onchange="handleRestoreFile(this)">
 <div class="toast" id="toast"><i class="ti ti-check" id="toastIcon"></i> <span id="toastMsg"></span><button class="toast-undo" id="toastUndo" style="display:none" onclick="undoAction()">Undo</button></div>
 
+<div id="ctxMenu" class="ctx-menu"></div>
 <div id="folderColorPicker" style="display:none;position:fixed;z-index:300;background:var(--bg1);border:1px solid var(--g5);border-radius:10px;padding:8px;gap:6px;flex-wrap:wrap;width:168px;box-shadow:0 8px 24px rgba(0,0,0,.4)"></div>
 <div id="folderIconPicker" style="display:none;position:fixed;z-index:300;background:var(--bg1);border:1px solid var(--g5);border-radius:10px;padding:8px;flex-wrap:wrap;width:224px;gap:4px;box-shadow:0 8px 24px rgba(0,0,0,.4)"></div>
 
@@ -1306,6 +1316,7 @@ function updateFilterBadge() {
   badge.style.display = active ? '' : 'none';
 }
 document.addEventListener('click', e => {
+  hideContextMenu();
   closeSettings();
   if (!e.target.closest('#filterMenu') && !e.target.closest('#filterBtn')) closeFilter();
   if (!e.target.closest('.search-wrap')) hideSearchHistory();
@@ -1400,6 +1411,7 @@ document.addEventListener('keydown', e => {
 
   if (e.key === 'Escape') {
     if (document.activeElement === s) { clearSearch(); s.blur(); return; }
+    hideContextMenu();
     closeFolderColorPicker();
     closeFolderIconPicker();
     closeFilter();
@@ -1686,6 +1698,88 @@ function setupCardListeners() {
     if (card.classList.contains('select-mode')) toggleSelect(card.dataset.id);
     else openLink(card.dataset.id, card.dataset.url);
   });
+  content.addEventListener('contextmenu', onContextMenu);
+}
+
+// Returns a fake anchor element positioned at the cursor, for the color/icon pickers.
+function cursorAnchor(x, y) {
+  return { getBoundingClientRect: () => ({ top: y, bottom: y, left: x, right: x, width: 0, height: 0 }) };
+}
+function copyLinkUrl(url) {
+  navigator.clipboard.writeText(url).then(() => showToast('URL copied')).catch(() => showToast('Copy failed', true));
+}
+
+function onContextMenu(e) {
+  const linkEl = e.target.closest('.card[data-id], .card-row[data-id], .home-tile[data-id]');
+  const folderTile = e.target.closest('.home-folder-tile[data-folder]');
+  const subHeader = e.target.closest('.subfolder-header[data-subfolder]');
+  const folderHeader = e.target.closest('.folder-header[data-folder]');
+  const anchor = cursorAnchor(e.clientX, e.clientY);
+  let items = null;
+
+  if (linkEl && linkEl.dataset.id) {
+    const id = linkEl.dataset.id;
+    const l = links.find(x => x.id === id);
+    if (!l) return;
+    items = [
+      { icon: 'ti-external-link', label: 'Open', action: () => openLink(id, l.url) },
+      { icon: 'ti-copy', label: 'Copy URL', action: () => copyLinkUrl(l.url) },
+      { icon: 'ti-edit', label: 'Edit', action: () => editLink(id) },
+      { icon: l.favorite ? 'ti-star-off' : 'ti-star', label: l.favorite ? 'Unfavorite' : 'Favorite', action: () => toggleFavorite(id) },
+      { sep: true },
+      { icon: 'ti-archive', label: 'Archive', action: () => archiveLink(id) },
+      { icon: 'ti-trash', label: 'Delete', danger: true, action: () => deleteLink(id) },
+    ];
+  } else if (folderTile) {
+    const f = folderTile.dataset.folder;
+    items = [
+      { icon: 'ti-folder-open', label: 'Open folder', action: () => openFolderFromHome(f) },
+      { icon: 'ti-palette', label: 'Change color', action: () => openFolderColorPicker(f, anchor) },
+      { icon: 'ti-photo', label: 'Change icon', action: () => openFolderIconPicker(f, anchor) },
+      { sep: true },
+      { icon: 'ti-trash', label: 'Delete folder', danger: true, action: () => deleteFolder(f) },
+    ];
+  } else if (subHeader) {
+    const f = subHeader.dataset.folder, sf = subHeader.dataset.subfolder;
+    items = [
+      { icon: 'ti-pencil', label: 'Rename', action: () => startSubfolderRename(subHeader.querySelector('.folder-rename-btn')) },
+      { icon: 'ti-palette', label: 'Change color', action: () => openSubfolderColorPicker(f, sf, anchor) },
+    ];
+  } else if (folderHeader) {
+    const f = folderHeader.dataset.folder;
+    items = [
+      { icon: 'ti-pencil', label: 'Rename', action: () => startFolderRename(folderHeader.querySelector('.folder-rename-btn')) },
+      { icon: 'ti-palette', label: 'Change color', action: () => openFolderColorPicker(f, anchor) },
+      { icon: 'ti-photo', label: 'Change icon', action: () => openFolderIconPicker(f, anchor) },
+      { sep: true },
+      { icon: 'ti-trash', label: 'Delete folder', danger: true, action: () => deleteFolder(f) },
+    ];
+  }
+
+  if (!items) return;
+  e.preventDefault();
+  showContextMenu(e.clientX, e.clientY, items);
+}
+
+function showContextMenu(x, y, items) {
+  const menu = document.getElementById('ctxMenu');
+  menu.innerHTML = items.map((it, i) => it.sep
+    ? '<div class="ctx-sep"></div>'
+    : `<button class="ctx-item${it.danger ? ' danger' : ''}" data-ctx="${i}"><i class="ti ${it.icon}"></i>${esc(it.label)}</button>`).join('');
+  menu.querySelectorAll('[data-ctx]').forEach(btn => {
+    btn.addEventListener('click', ev => { ev.stopPropagation(); hideContextMenu(); items[+btn.dataset.ctx].action(); });
+  });
+  menu.style.display = 'flex';
+  menu.style.left = x + 'px';
+  menu.style.top = y + 'px';
+  const rect = menu.getBoundingClientRect();
+  if (rect.right > window.innerWidth - 8) menu.style.left = Math.max(8, x - rect.width) + 'px';
+  if (rect.bottom > window.innerHeight - 8) menu.style.top = Math.max(8, y - rect.height) + 'px';
+  menu.classList.add('open');
+}
+function hideContextMenu() {
+  const menu = document.getElementById('ctxMenu');
+  if (menu) { menu.classList.remove('open'); menu.style.display = 'none'; }
 }
 
 function setupDragListeners() {
@@ -2532,6 +2626,8 @@ document.getElementById('viewToggleIcon').className = currentView === 'grid' ? '
 updateDefaultViewLabel();
 setupCardListeners();
 setupDragListeners();
+window.addEventListener('scroll', hideContextMenu, true);
+window.addEventListener('resize', hideContextMenu);
 setMode(defaultView, false);
 loadLinks();
 </script>
