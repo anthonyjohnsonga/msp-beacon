@@ -21,7 +21,12 @@
   --text1: #8b949e;
   --text2: #6e7681;
   --border0: #30363d;
-  --g4-glow: rgba(29,158,117,.15);
+  --g4-glow: rgba(var(--g4-rgb),.15);
+  --g4-rgb: 29,158,117;
+  --g5-rgb: 15,110,86;
+  --overlay: rgba(255,255,255,.07);
+  --stripe: rgba(255,255,255,.02);
+  --ring: rgba(255,255,255,.2);
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { background: var(--bg0); color: var(--text0); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; }
@@ -62,7 +67,7 @@ select:focus { outline: none; border-color: var(--g4); }
 .card-row-tags { display: flex; gap: 4px; flex-shrink: 0; }
 .card-row-actions { display: none; gap: 4px; flex-shrink: 0; margin-left: auto; }
 .card-row:hover .card-row-actions { display: flex; }
-.card-row.selected { border-color: var(--g4) !important; background: rgba(29,158,117,.1); }
+.card-row.selected { border-color: var(--g4) !important; background: rgba(var(--g4-rgb),.1); }
 .card-row.select-mode { cursor: default; }
 .card-row.select-mode:hover { border-color: var(--g5); box-shadow: none; }
 .card-row.select-mode.selected:hover { border-color: var(--g4) !important; }
@@ -76,8 +81,8 @@ select:focus { outline: none; border-color: var(--g4); }
 .card-url { font-size: 12px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .card-desc { font-size: 13px; color: var(--text1); line-height: 1.5; }
 .card-footer { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: auto; padding-top: 4px; }
-.tag { font-size: 11px; padding: 3px 8px; border-radius: 20px; background: rgba(15,110,86,.25); color: var(--g2); border: 0.5px solid var(--g5); }
-.folder-badge { font-size: 11px; padding: 3px 8px; border-radius: 20px; background: rgba(15,110,86,.25); color: var(--g2); border: 0.5px solid var(--g5); margin-left: auto; display: flex; align-items: center; gap: 4px; }
+.tag { font-size: 11px; padding: 3px 8px; border-radius: 20px; background: rgba(var(--g5-rgb),.25); color: var(--g2); border: 0.5px solid var(--g5); }
+.folder-badge { font-size: 11px; padding: 3px 8px; border-radius: 20px; background: rgba(var(--g5-rgb),.25); color: var(--g2); border: 0.5px solid var(--g5); margin-left: auto; display: flex; align-items: center; gap: 4px; }
 .card-actions { position: absolute; top: 8px; right: 8px; display: none; gap: 4px; }
 .card:hover .card-actions { display: flex; }
 .icon-btn { width: 26px; height: 26px; border-radius: 8px; border: 0.5px solid var(--g5); background: var(--bg2); color: var(--g3); display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 13px; }
@@ -85,14 +90,14 @@ select:focus { outline: none; border-color: var(--g4); }
 .empty { text-align: center; padding: 4rem 1rem; color: var(--text2); font-size: 14px; }
 .empty i { font-size: 36px; display: block; margin-bottom: 10px; color: var(--g5); }
 .folder-section { margin-bottom: 1.5rem; }
-.folder-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding: 6px 10px; background: rgba(15,110,86,.15); border-radius: 8px; border: 0.5px solid var(--g5); cursor: pointer; user-select: none; }
-.folder-header:hover { background: rgba(15,110,86,.25); }
+.folder-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding: 6px 10px; background: rgba(var(--g5-rgb),.15); border-radius: 8px; border: 0.5px solid var(--g5); cursor: pointer; user-select: none; }
+.folder-header:hover { background: rgba(var(--g5-rgb),.25); }
 .folder-chevron { font-size: 14px; color: var(--text2); transition: transform .2s; flex-shrink: 0; }
 .folder-chevron.open { transform: rotate(90deg); }
 .folder-name { font-size: 13px; font-weight: 500; color: var(--g2); }
 .count-pill { font-size: 11px; padding: 1px 7px; border-radius: 20px; background: var(--g5); color: #fff; }
 .folder-rename-btn { background: none; border: none; color: var(--text2); font-size: 12px; cursor: pointer; padding: 2px 4px; border-radius: 4px; display: flex; align-items: center; line-height: 1; }
-.folder-rename-btn:hover { color: var(--g2); background: rgba(255,255,255,.07); }
+.folder-rename-btn:hover { color: var(--g2); background: var(--overlay); }
 .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: flex; align-items: center; justify-content: center; z-index: 100; }
 .modal { background: var(--bg1); border-radius: 12px; border: 1px solid var(--g5); padding: 1.25rem; width: min(460px, 92vw); display: flex; flex-direction: column; gap: 12px; max-height: 90vh; overflow-y: auto; }
 .modal-header { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--g6); padding-bottom: 10px; }
@@ -105,21 +110,21 @@ select:focus { outline: none; border-color: var(--g4); }
 .field textarea:focus { outline: none; border-color: var(--g4); }
 .modal-footer { display: flex; gap: 8px; justify-content: flex-end; padding-top: 4px; border-top: 0.5px solid var(--bg3); margin-top: 4px; }
 .import-drop { border: 1.5px dashed var(--g5); border-radius: 12px; padding: 2rem 1rem; text-align: center; cursor: pointer; color: var(--text1); font-size: 14px; transition: border-color .15s, background .15s; }
-.import-drop:hover, .import-drop.drag { border-color: var(--g3); background: rgba(15,110,86,.1); }
+.import-drop:hover, .import-drop.drag { border-color: var(--g3); background: rgba(var(--g5-rgb),.1); }
 .import-drop i { font-size: 28px; display: block; margin-bottom: 8px; color: var(--g3); }
 .import-preview { max-height: 200px; overflow-y: auto; border: 0.5px solid var(--g5); border-radius: 8px; }
 .import-row { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-bottom: 0.5px solid var(--bg3); }
 .import-row:last-child { border-bottom: none; }
-.import-row:nth-child(odd) { background: rgba(255,255,255,.02); }
+.import-row:nth-child(odd) { background: var(--stripe); }
 .import-row input[type=checkbox] { width: 14px; height: 14px; cursor: pointer; flex-shrink: 0; accent-color: var(--g4); }
 .import-row-info { min-width: 0; flex: 1; }
 .import-row-title { font-size: 13px; color: var(--text0); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .import-row-url { font-size: 11px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.import-row-folder { font-size: 11px; padding: 1px 6px; border-radius: 20px; background: rgba(15,110,86,.25); color: var(--g2); border: 0.5px solid var(--g4); flex-shrink: 0; }
+.import-row-folder { font-size: 11px; padding: 1px 6px; border-radius: 20px; background: rgba(var(--g5-rgb),.25); color: var(--g2); border: 0.5px solid var(--g4); flex-shrink: 0; }
 .import-actions { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--text1); }
 .import-actions a { cursor: pointer; color: var(--g3); text-decoration: none; }
 .import-actions a:hover { text-decoration: underline; }
-.notice { font-size: 12px; color: var(--g2); padding: 8px 12px; background: rgba(15,110,86,.15); border-radius: 8px; display: flex; align-items: center; gap: 8px; border: 0.5px solid var(--g5); }
+.notice { font-size: 12px; color: var(--g2); padding: 8px 12px; background: rgba(var(--g5-rgb),.15); border-radius: 8px; display: flex; align-items: center; gap: 8px; border: 0.5px solid var(--g5); }
 .notice i { color: var(--g3); flex-shrink: 0; }
 .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: var(--bg1); border: 1px solid var(--g5); color: var(--g2); padding: 10px 16px; border-radius: 8px; font-size: 14px; display: flex; align-items: center; gap: 8px; z-index: 200; opacity: 0; transition: opacity .2s; pointer-events: none; }
 .toast.show { opacity: 1; pointer-events: auto; }
@@ -139,6 +144,11 @@ select:focus { outline: none; border-color: var(--g4); }
 .swatch-dot { width: 36px; height: 36px; border-radius: 50%; }
 .swatch-label { font-size: 12px; color: var(--text1); }
 .theme-swatch.active .swatch-label { color: var(--g2); }
+.mode-toggle { display: flex; gap: 6px; }
+.mode-btn { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 8px; border-radius: 8px; border: 0.5px solid var(--border0); background: var(--bg2); color: var(--text1); cursor: pointer; font-size: 13px; font-family: inherit; }
+.mode-btn:hover { border-color: var(--g5); color: var(--text0); }
+.mode-btn.active { background: var(--g5); border-color: var(--g4); color: #fff; }
+.mode-btn i { font-size: 15px; }
 .drag-handle { width: 26px; height: 26px; border-radius: 8px; border: 0.5px solid var(--g5); background: var(--bg2); color: var(--g3); display: flex; align-items: center; justify-content: center; cursor: grab; font-size: 13px; }
 .drag-handle:hover { background: var(--g5); color: #fff; }
 .fmgr-row { display: flex; align-items: center; gap: 8px; padding: 7px 16px; border-radius: 8px; }
@@ -156,8 +166,8 @@ select:focus { outline: none; border-color: var(--g4); }
 .card.dragging { opacity: 0.35; }
 .card.drag-over { border-color: var(--g3) !important; box-shadow: 0 0 0 2px var(--g4-glow), 0 -3px 0 var(--g3) !important; }
 .folder-header.dragging { opacity: 0.5; }
-.folder-header.drag-over { background: rgba(15,110,86,.4) !important; border-color: var(--g3) !important; border-style: dashed !important; }
-.card.selected { border-color: var(--g4) !important; background: rgba(29,158,117,.1); }
+.folder-header.drag-over { background: rgba(var(--g5-rgb),.4) !important; border-color: var(--g3) !important; border-style: dashed !important; }
+.card.selected { border-color: var(--g4) !important; background: rgba(var(--g4-rgb),.1); }
 .card-check { position: absolute; top: 8px; left: 8px; width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid var(--g4); background: var(--bg2); display: flex; align-items: center; justify-content: center; z-index: 2; flex-shrink: 0; }
 .card-check.checked { background: var(--g4); }
 .card-check i { font-size: 11px; color: #fff; display: none; }
@@ -178,8 +188,8 @@ select:focus { outline: none; border-color: var(--g4); }
 .favorites-header:hover { background: rgba(245,166,35,.15); }
 .favorites-title { font-size: 13px; font-weight: 500; color: #F5A623; }
 .subfolder-header { display: flex; align-items: center; gap: 6px; padding: 4px 8px; margin: 8px 0 4px 8px; border-left: 2px solid rgba(100,200,100,.4); cursor: pointer; user-select: none; }
-.subfolder-header:hover { background: rgba(15,110,86,.12); border-radius: 0 6px 6px 0; }
-.subfolder-header.drag-over { background: rgba(15,110,86,.3) !important; border-left-color: var(--g3) !important; border-radius: 0 6px 6px 0; }
+.subfolder-header:hover { background: rgba(var(--g5-rgb),.12); border-radius: 0 6px 6px 0; }
+.subfolder-header.drag-over { background: rgba(var(--g5-rgb),.3) !important; border-left-color: var(--g3) !important; border-radius: 0 6px 6px 0; }
 .subfolder-title { font-size: 12px; font-weight: 500; color: var(--text2); }
 .subfolder-grid { padding-left: 12px; }
 .title-wrap { position: relative; display: flex; align-items: center; }
@@ -363,8 +373,17 @@ select:focus { outline: none; border-color: var(--g4); }
 
 <div id="themeBg" class="modal-bg" style="display:none" onclick="if(event.target===this)closeTheme()">
   <div class="modal" role="dialog" aria-modal="true" style="width:min(360px,92vw)">
-    <div class="modal-header"><i class="ti ti-palette"></i><h3>Choose Theme</h3></div>
-    <div class="theme-grid" id="themeGrid"></div>
+    <div class="modal-header"><i class="ti ti-palette"></i><h3>Appearance</h3></div>
+    <div class="field"><label>Mode</label>
+      <div class="mode-toggle">
+        <button class="mode-btn" data-mode="dark" onclick="applyMode('dark')"><i class="ti ti-moon"></i> Dark</button>
+        <button class="mode-btn" data-mode="light" onclick="applyMode('light')"><i class="ti ti-sun"></i> Light</button>
+        <button class="mode-btn" data-mode="auto" onclick="applyMode('auto')"><i class="ti ti-device-desktop"></i> Auto</button>
+      </div>
+    </div>
+    <div class="field"><label>Accent color</label>
+      <div class="theme-grid" id="themeGrid"></div>
+    </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeTheme()">Close</button>
     </div>
@@ -470,6 +489,8 @@ let folderColors = JSON.parse(localStorage.getItem('msp-folder-colors') || '{}')
 let subfolderColors = JSON.parse(localStorage.getItem('msp-subfolder-colors') || '{}');
 let folderIcons = JSON.parse(localStorage.getItem('msp-folder-icons') || '{}');
 let currentTheme = localStorage.getItem('msp-theme') || 'Green';
+let customAccent = localStorage.getItem('msp-accent') || '#1D9E75';
+let themeMode = localStorage.getItem('msp-mode') || 'dark';
 let dragId = null;
 let dragFolder = null;
 let dragOverEl = null;
@@ -536,7 +557,7 @@ function sortLinks(arr) {
 }
 
 function saveConfig() {
-  const cfg = { folderColors, subfolderColors, folderIcons, folderOrder, theme: currentTheme, defaultView };
+  const cfg = { folderColors, subfolderColors, folderIcons, folderOrder, theme: currentTheme, accent: customAccent, mode: themeMode, defaultView };
   fetch('/api/config', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -562,7 +583,16 @@ function applyServerConfig(cfg) {
     folderOrder = cfg.folderOrder;
     localStorage.setItem('msp-folder-order', JSON.stringify(folderOrder));
   }
-  if (cfg.theme && THEMES[cfg.theme]) {
+  if (cfg.mode === 'dark' || cfg.mode === 'light' || cfg.mode === 'auto') {
+    applyMode(cfg.mode, false);
+  }
+  if (typeof cfg.accent === 'string' && /^#[0-9A-Fa-f]{6}$/.test(cfg.accent)) {
+    customAccent = cfg.accent;
+    localStorage.setItem('msp-accent', customAccent);
+  }
+  if (cfg.theme === 'Custom') {
+    applyTheme('Custom', false);
+  } else if (cfg.theme && THEMES[cfg.theme]) {
     applyTheme(cfg.theme, false);
   }
   if (cfg.defaultView === 'home' || cfg.defaultView === 'manager') {
@@ -674,6 +704,34 @@ function hexToRgb(hex) {
   if (!hex || !/^#[0-9A-Fa-f]{6}$/.test(hex)) return '29,158,117';
   const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
   return `${r},${g},${b}`;
+}
+function hexToHsl(hex) {
+  let r = parseInt(hex.slice(1,3),16)/255, g = parseInt(hex.slice(3,5),16)/255, b = parseInt(hex.slice(5,7),16)/255;
+  const max = Math.max(r,g,b), min = Math.min(r,g,b); let h, s, l = (max+min)/2;
+  if (max === min) { h = s = 0; }
+  else {
+    const d = max - min;
+    s = l > 0.5 ? d/(2-max-min) : d/(max+min);
+    switch (max) { case r: h = (g-b)/d + (g<b?6:0); break; case g: h = (b-r)/d + 2; break; default: h = (r-g)/d + 4; }
+    h /= 6;
+  }
+  return [h*360, s*100, l*100];
+}
+function hslToHex(h, s, l) {
+  h /= 360; s /= 100; l /= 100;
+  const hue2rgb = (p, q, t) => { if (t<0) t+=1; if (t>1) t-=1; if (t<1/6) return p+(q-p)*6*t; if (t<1/2) return q; if (t<2/3) return p+(q-p)*(2/3-t)*6; return p; };
+  let r, g, b;
+  if (s === 0) { r = g = b = l; }
+  else { const q = l < 0.5 ? l*(1+s) : l+s-l*s; const p = 2*l-q; r = hue2rgb(p,q,h+1/3); g = hue2rgb(p,q,h); b = hue2rgb(p,q,h-1/3); }
+  const toHex = x => Math.round(x*255).toString(16).padStart(2,'0');
+  return '#' + toHex(r) + toHex(g) + toHex(b);
+}
+// Build a g1..g6 lightness ramp + glow from a single base accent color.
+function deriveAccent(baseHex) {
+  const [h, s0] = hexToHsl(baseHex);
+  const s = Math.min(85, Math.max(35, s0));
+  const ramp = [93, 75, 60, 42, 30, 20].map(l => hslToHex(h, s, l));
+  return { g1: ramp[0], g2: ramp[1], g3: ramp[2], g4: ramp[3], g5: ramp[4], g6: ramp[5], glow: `rgba(${hexToRgb(ramp[3])},.15)` };
 }
 function getFolderColor(f) { return folderColors[f] || '#1D9E75'; }
 function subKey(folder, sf) { return JSON.stringify([folder, sf]); }
@@ -859,7 +917,7 @@ function render() {
     }
     const fc = getFolderColor(f);
     const fcRgb = hexToRgb(fc);
-    html += `<div class="folder-section"><div class="folder-header" onclick="toggleFolder(this.dataset.folder)" data-folder="${esc(f)}" style="background:rgba(${fcRgb},.15);border-color:${fc}"><div class="folder-drag-handle" draggable="true" title="Drag to reorder folder" onclick="event.stopPropagation()"><i class="ti ti-grip-vertical"></i></div><i class="ti ti-chevron-right folder-chevron${collapsed ? '' : ' open'}" style="color:${fc}"></i><i class="ti ${getFolderIcon(f)} folder-icon-btn" style="font-size:16px;color:${fc};cursor:pointer" onclick="event.stopPropagation();openFolderIconPicker(this.closest('.folder-header').dataset.folder,this)" title="Change icon"></i><span class="folder-name">${esc(f)}</span><button class="folder-rename-btn" onclick="event.stopPropagation();startFolderRename(this)" title="Rename folder"><i class="ti ti-pencil"></i></button><button class="folder-rename-btn" onclick="event.stopPropagation();deleteFolder(this.closest('.folder-header').dataset.folder)" title="Delete folder" style="color:#E24B4A"><i class="ti ti-trash"></i></button><span class="count-pill" style="background:${fc}">${byF[f].length}</span><div class="folder-color-swatch" onclick="event.stopPropagation();openFolderColorPicker(this.closest('.folder-header').dataset.folder,this)" style="width:16px;height:16px;border-radius:50%;background:${fc};cursor:pointer;margin-left:auto;flex-shrink:0;border:1.5px solid rgba(255,255,255,.2)"></div></div><div class="folder-content" data-folder="${esc(f)}">${folderContent}</div></div>`;
+    html += `<div class="folder-section"><div class="folder-header" onclick="toggleFolder(this.dataset.folder)" data-folder="${esc(f)}" style="background:rgba(${fcRgb},.15);border-color:${fc}"><div class="folder-drag-handle" draggable="true" title="Drag to reorder folder" onclick="event.stopPropagation()"><i class="ti ti-grip-vertical"></i></div><i class="ti ti-chevron-right folder-chevron${collapsed ? '' : ' open'}" style="color:${fc}"></i><i class="ti ${getFolderIcon(f)} folder-icon-btn" style="font-size:16px;color:${fc};cursor:pointer" onclick="event.stopPropagation();openFolderIconPicker(this.closest('.folder-header').dataset.folder,this)" title="Change icon"></i><span class="folder-name">${esc(f)}</span><button class="folder-rename-btn" onclick="event.stopPropagation();startFolderRename(this)" title="Rename folder"><i class="ti ti-pencil"></i></button><button class="folder-rename-btn" onclick="event.stopPropagation();deleteFolder(this.closest('.folder-header').dataset.folder)" title="Delete folder" style="color:#E24B4A"><i class="ti ti-trash"></i></button><span class="count-pill" style="background:${fc}">${byF[f].length}</span><div class="folder-color-swatch" onclick="event.stopPropagation();openFolderColorPicker(this.closest('.folder-header').dataset.folder,this)" style="width:16px;height:16px;border-radius:50%;background:${fc};cursor:pointer;margin-left:auto;flex-shrink:0;border:1.5px solid var(--ring)"></div></div><div class="folder-content" data-folder="${esc(f)}">${folderContent}</div></div>`;
   });
   c.innerHTML = html;
   updateArchiveBadge();
@@ -893,7 +951,7 @@ function renderFolderContents(folderName, folderLinks) {
     html += `<span class="subfolder-title">${esc(sf)}</span>`;
     html += `<span class="count-pill" style="font-size:10px;padding:1px 5px;background:rgba(${sfcRgb},.5)">${sfLinks.length}</span>`;
     html += `<button class="folder-rename-btn" onclick="event.stopPropagation();startSubfolderRename(this)" title="Rename sub-folder" style="font-size:11px"><i class="ti ti-pencil"></i></button>`;
-    html += `<div class="subfolder-color-swatch" onclick="event.stopPropagation();openSubfolderColorPicker(this.closest('.subfolder-header').dataset.folder,this.closest('.subfolder-header').dataset.subfolder,this)" title="Change color" style="width:13px;height:13px;border-radius:50%;background:${sfc};cursor:pointer;flex-shrink:0;border:1.5px solid rgba(255,255,255,.2)"></div>`;
+    html += `<div class="subfolder-color-swatch" onclick="event.stopPropagation();openSubfolderColorPicker(this.closest('.subfolder-header').dataset.folder,this.closest('.subfolder-header').dataset.subfolder,this)" title="Change color" style="width:13px;height:13px;border-radius:50%;background:${sfc};cursor:pointer;flex-shrink:0;border:1.5px solid var(--ring)"></div>`;
     html += `</div>`;
     if (!sfCollapsed) {
       html += `<div class="subfolder-grid">${wrap(sfLinks)}</div>`;
@@ -1150,7 +1208,7 @@ function doImport() {
 }
 
 const THEMES = {
-  Green:  { g1:'#E1F5EE', g2:'#9FE1CB', g3:'#5DCAA5', g4:'#1D9E75', g5:'#0F6E56', g6:'#085041', glow:'rgba(29,158,117,.15)' },
+  Green:  { g1:'#E1F5EE', g2:'#9FE1CB', g3:'#5DCAA5', g4:'#1D9E75', g5:'#0F6E56', g6:'#085041', glow:'rgba(var(--g4-rgb),.15)' },
   Blue:   { g1:'#DBEAFE', g2:'#93C5FD', g3:'#60A5FA', g4:'#2563EB', g5:'#1E40AF', g6:'#1E3A8A', glow:'rgba(37,99,235,.15)' },
   Purple: { g1:'#EDE9FE', g2:'#C4B5FD', g3:'#A78BFA', g4:'#7C3AED', g5:'#6D28D9', g6:'#4C1D95', glow:'rgba(124,58,237,.15)' },
   Teal:   { g1:'#CCFBF1', g2:'#5EEAD4', g3:'#2DD4BF', g4:'#0D9488', g5:'#0F766E', g6:'#115E59', glow:'rgba(13,148,136,.15)' },
@@ -1158,12 +1216,33 @@ const THEMES = {
   Red:    { g1:'#FEE2E2', g2:'#FCA5A5', g3:'#F87171', g4:'#DC2626', g5:'#B91C1C', g6:'#7F1D1D', glow:'rgba(220,38,38,.15)' },
 };
 
+const MODES = {
+  dark:  { bg0:'#0d1117', bg1:'#161b22', bg2:'#1c2128', bg3:'#21262d', text0:'#e6edf3', text1:'#8b949e', text2:'#6e7681', border0:'#30363d', overlay:'rgba(255,255,255,.07)', stripe:'rgba(255,255,255,.02)', ring:'rgba(255,255,255,.2)' },
+  light: { bg0:'#f6f8fa', bg1:'#ffffff', bg2:'#eef1f4', bg3:'#e3e7ec', text0:'#1f2328', text1:'#57606a', text2:'#7a828c', border0:'#d0d7de', overlay:'rgba(0,0,0,.06)', stripe:'rgba(0,0,0,.025)', ring:'rgba(0,0,0,.15)' },
+};
+function resolveMode(m) {
+  return m === 'auto'
+    ? (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
+    : m;
+}
+function applyMode(mode, save = true) {
+  themeMode = mode;
+  localStorage.setItem('msp-mode', mode);
+  const m = MODES[resolveMode(mode)] || MODES.dark;
+  const r = document.documentElement.style;
+  Object.entries(m).forEach(([k, v]) => r.setProperty('--' + k, v));
+  document.querySelectorAll('.mode-btn').forEach(el => el.classList.toggle('active', el.dataset.mode === mode));
+  if (save) saveConfig();
+}
+
 function applyTheme(name, save = true) {
-  const t = THEMES[name] || THEMES.Green;
+  const t = name === 'Custom' ? deriveAccent(customAccent) : (THEMES[name] || THEMES.Green);
   const r = document.documentElement.style;
   r.setProperty('--g1', t.g1); r.setProperty('--g2', t.g2); r.setProperty('--g3', t.g3);
   r.setProperty('--g4', t.g4); r.setProperty('--g5', t.g5); r.setProperty('--g6', t.g6);
   r.setProperty('--g4-glow', t.glow);
+  r.setProperty('--g4-rgb', hexToRgb(t.g4));
+  r.setProperty('--g5-rgb', hexToRgb(t.g5));
   currentTheme = name;
   localStorage.setItem('msp-theme', name);
   document.querySelectorAll('.theme-swatch').forEach(el => {
@@ -1172,14 +1251,33 @@ function applyTheme(name, save = true) {
   if (save) saveConfig();
 }
 
+function previewCustomAccent(hex) {
+  customAccent = hex;
+  localStorage.setItem('msp-accent', hex);
+  applyTheme('Custom', false);
+}
+function setCustomAccent(hex) {
+  customAccent = hex;
+  localStorage.setItem('msp-accent', hex);
+  applyTheme('Custom', true);
+}
+
 function openTheme() {
-  const saved = localStorage.getItem('msp-theme') || 'Green';
   const grid = document.getElementById('themeGrid');
-  grid.innerHTML = Object.entries(THEMES).map(([name, t]) => `
-    <div class="theme-swatch${name===saved?' active':''}" data-theme="${name}" onclick="applyTheme('${name}')">
+  const presets = Object.entries(THEMES).map(([name, t]) => `
+    <div class="theme-swatch${name===currentTheme?' active':''}" data-theme="${name}" onclick="applyTheme('${name}')">
       <div class="swatch-dot" style="background:linear-gradient(135deg,${t.g3},${t.g5})"></div>
       <span class="swatch-label">${name}</span>
     </div>`).join('');
+  const custom = `
+    <div class="theme-swatch${currentTheme==='Custom'?' active':''}" data-theme="Custom">
+      <label class="swatch-dot" title="Pick any color" style="cursor:pointer;position:relative;overflow:hidden;display:block;background:conic-gradient(from 90deg,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00)">
+        <input type="color" value="${esc(customAccent)}" oninput="previewCustomAccent(this.value)" onchange="setCustomAccent(this.value)" style="position:absolute;left:-6px;top:-6px;width:48px;height:48px;opacity:0;cursor:pointer;border:none;padding:0;background:none">
+      </label>
+      <span class="swatch-label">Custom</span>
+    </div>`;
+  grid.innerHTML = presets + custom;
+  document.querySelectorAll('.mode-btn').forEach(el => el.classList.toggle('active', el.dataset.mode === themeMode));
   document.getElementById('themeBg').style.display = 'flex';
 }
 function closeTheme() { document.getElementById('themeBg').style.display = 'none'; }
@@ -2424,7 +2522,11 @@ function closeFolderIconPicker() {
   iconPickerFolder = null;
 }
 
-applyTheme(localStorage.getItem('msp-theme') || 'Green', false);
+applyMode(themeMode, false);
+applyTheme(currentTheme, false);
+if (window.matchMedia) {
+  window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => { if (themeMode === 'auto') applyMode('auto', false); });
+}
 applyDensity(currentDensity);
 document.getElementById('viewToggleIcon').className = currentView === 'grid' ? 'ti ti-layout-list' : 'ti ti-layout-grid';
 updateDefaultViewLabel();
