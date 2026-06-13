@@ -109,7 +109,13 @@ app.post('/api/links', (req, res) => {
   writePromise
     .then(() => {
       res.json({ ok: true });
-      pruneSnapshots(new Set(links.map(l => safeId(l.id)))); // best-effort GC of orphaned snapshots
+      // Best-effort GC of orphaned snapshots. Most saves (favorite toggle,
+      // reorder, edit) delete no links, so only scan the snapshot dir when an
+      // indexed snapshot is actually missing from the saved set.
+      const validIds = new Set(links.map(l => safeId(l.id)));
+      let orphaned = false;
+      for (const id of contentIndex.keys()) { if (!validIds.has(id)) { orphaned = true; break; } }
+      if (orphaned) pruneSnapshots(validIds);
     })
     .catch(e => {
       console.error('Write failed:', e);
