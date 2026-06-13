@@ -131,6 +131,7 @@ app.post('/api/config', (req, res) => {
     return res.status(400).json({ error: 'Expected an object' });
   }
 
+  syncAllowedFeeds(cfg);
   const writePromise = writeConfig(cfg);
   configWriteQueue = configWriteQueue.then(() => writePromise).catch(() => {});
 
@@ -506,6 +507,24 @@ app.get('/api/check-links', async (req, res) => {
 
 const feedCache = new Map(); // url -> { title, items, fetchedAt, error }
 const feedInFlight = new Map(); // url -> Promise (dedupe concurrent fetches)
+const allowedFeedUrls = new Set(); // only fetch feeds the user has actually saved
+
+// Rebuild the fetch allowlist from a config blob and evict any cached feed that
+// is no longer configured — this keeps /api/rss from being an open fetch proxy
+// and bounds feedCache to the user's configured feeds.
+function syncAllowedFeeds(cfg) {
+  allowedFeedUrls.clear();
+  const feeds = cfg && Array.isArray(cfg.rssFeeds) ? cfg.rssFeeds : [];
+  for (const f of feeds) {
+    if (f && typeof f.url === 'string') allowedFeedUrls.add(f.url.trim());
+  }
+  for (const url of feedCache.keys()) {
+    if (!allowedFeedUrls.has(url)) feedCache.delete(url);
+  }
+}
+async function loadAllowedFeeds() {
+  syncAllowedFeeds(await readConfig());
+}
 
 // Pull the first capture of any of the given tag names out of an XML fragment.
 function xmlTag(fragment, ...names) {
@@ -600,6 +619,7 @@ app.get('/api/rss', async (req, res) => {
   let parsed;
   try { parsed = new URL(url); } catch { return res.status(400).json({ error: 'invalid url' }); }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return res.status(400).json({ error: 'invalid url' });
+  if (!allowedFeedUrls.has(url)) return res.status(403).json({ error: 'feed not configured' });
   const feed = await getFeed(url);
   res.json({ url, title: feed.title, items: feed.items, error: feed.error });
 });
@@ -709,6 +729,7 @@ app.get('/api/content-status', (req, res) => {
 });
 
 loadContentIndex();
+loadAllowedFeeds();
 
 app.listen(PORT, () => {
   console.log(`MSP Beacon running on http://0.0.0.0:${PORT}`);
