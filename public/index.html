@@ -552,6 +552,7 @@ let contentMatchIds = new Set();   // link ids whose page text matches the curre
 let contentMatchQuery = '';        // query that contentMatchIds corresponds to
 let contentOnlyIds = new Set();    // matched via page text only (no title/url/tag hit) — for the badge
 let contentSearchTimer = null;
+let contentSearchToken = 0;        // guards against out-of-order /api/search-content responses
 function onSearchInput(v) {
   debouncedRender();
   hideSearchHistory();
@@ -559,12 +560,14 @@ function onSearchInput(v) {
   contentSearchTimer = setTimeout(() => updateContentMatches(v), 300);
 }
 async function updateContentMatches(q) {
+  const token = ++contentSearchToken; // any newer call (incl. a clear) supersedes us
   q = (q || '').trim().toLowerCase();
   if (q.length < 2) { contentMatchIds = new Set(); contentMatchQuery = ''; render(); return; }
   try {
     const res = await fetch('/api/search-content?q=' + encodeURIComponent(q));
     if (!res.ok) return;
     const data = await res.json();
+    if (token !== contentSearchToken) return; // a newer query/clear superseded us
     contentMatchIds = new Set(data.ids || []);
     contentMatchQuery = q;
     render();
