@@ -24,6 +24,22 @@ function isPrivateIP(ip) {
   return true;
 }
 
+// --- Outbound-fetch / SSRF policy (single source of truth) -----------------
+// Every server-side fetch validates its target with parseHttpUrl() (http/https
+// only). Two trust tiers govern private/internal IPs:
+//   • Untrusted input — a URL the user just typed but hasn't saved — is checked
+//     against isPrivateIP() and refused if it resolves to a private/internal
+//     address. Currently only /api/fetch-title.
+//   • Trusted, user-saved targets (/api/favicon, /api/check-links,
+//     /api/snapshot) and allowlisted feeds (/api/rss) DELIBERATELY fetch
+//     private/homelab IPs — that's the point of a self-hosted dashboard.
+// Change the policy here, not at each call site.
+function parseHttpUrl(str) {
+  let u;
+  try { u = new URL(str); } catch { return null; }
+  return (u.protocol === 'http:' || u.protocol === 'https:') ? u : null;
+}
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 const DATA_FILE = path.join('/data', 'links.json');
@@ -194,11 +210,11 @@ app.get('/api/fetch-title', async (req, res) => {
   if (!rawUrl) return res.json({ title: '' });
 
   async function fetchTitle(urlStr, hopsLeft) {
-    let parsed;
-    try { parsed = new URL(urlStr); } catch { return res.json({ title: '' }); }
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return res.json({ title: '' });
+    const parsed = parseHttpUrl(urlStr);
+    if (!parsed) return res.json({ title: '' });
 
     // SSRF protection: resolve hostname and block private/internal IPs
+    // (untrusted tier — see outbound-fetch policy up top).
     try {
       const { address } = await dns.lookup(parsed.hostname);
       if (isPrivateIP(address)) return res.json({ title: '' });
@@ -275,8 +291,7 @@ app.get('/api/fetch-title', async (req, res) => {
 // --- Favicon proxy + cache ---------------------------------------------------
 // Fetches each site's real favicon server-side and caches it under /data/favicons
 // so icons stay local (no third-party calls) and work for internal/homelab hosts.
-// Like /api/check-links, this intentionally has NO private-IP block: it fetches
-// the user's own bookmarked domains, which on a homelab include internal IPs.
+// Trusted, user-saved targets — see the outbound-fetch policy up top.
 
 function sniffImageType(buf) {
   if (!buf || buf.length < 4) return null;
@@ -293,9 +308,8 @@ function sniffImageType(buf) {
 // GET a URL into a Buffer, following redirects, with a byte cap. Resolves null on any failure.
 function httpGetBuffer(urlStr, hopsLeft, maxBytes, accept) {
   return new Promise((resolve) => {
-    let parsed;
-    try { parsed = new URL(urlStr); } catch { return resolve(null); }
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return resolve(null);
+    const parsed = parseHttpUrl(urlStr);
+    if (!parsed) return resolve(null);
     const mod = parsed.protocol === 'https:' ? https : http;
     const options = {
       hostname: parsed.hostname,
@@ -440,9 +454,8 @@ app.get('/api/check-links', async (req, res) => {
     }
 
     async function checkOne(link) {
-      let parsed;
-      try { parsed = new URL(link.url); } catch { return [link.id, 'broken']; }
-      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return [link.id, 'broken'];
+      const parsed = parseHttpUrl(link.url);
+      if (!parsed) return [link.id, 'broken'];
       const mod = parsed.protocol === 'https:' ? https : http;
       const options = {
         hostname: parsed.hostname,
@@ -497,8 +510,7 @@ app.get('/api/check-links', async (req, res) => {
 // Fetch user-chosen feeds, parse RSS 2.0 / Atom with Node built-ins (no deps),
 // and cache parsed items in memory with a TTL. The feed list itself lives in
 // config.json (rssFeeds), so it persists through the existing /api/config route.
-// Like /api/favicon and /api/check-links, this has NO private-IP block: it
-// fetches the user's own chosen feeds (homelab hosts included).
+// Feeds are allowlisted + trusted — see the outbound-fetch policy up top.
 
 const feedCache = new Map(); // url -> { title, items, fetchedAt, error }
 const feedInFlight = new Map(); // url -> Promise (dedupe concurrent fetches)
@@ -611,9 +623,7 @@ async function getFeed(url) {
 
 app.get('/api/rss', async (req, res) => {
   const url = String(req.query.url || '').trim();
-  let parsed;
-  try { parsed = new URL(url); } catch { return res.status(400).json({ error: 'invalid url' }); }
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return res.status(400).json({ error: 'invalid url' });
+  if (!parseHttpUrl(url)) return res.status(400).json({ error: 'invalid url' });
   if (!allowedFeedUrls.has(url)) return res.status(403).json({ error: 'feed not configured' });
   const feed = await getFeed(url);
   res.json({ url, title: feed.title, items: feed.items, error: feed.error });
@@ -622,8 +632,8 @@ app.get('/api/rss', async (req, res) => {
 // --- Full-text content search ------------------------------------------------
 // On demand, fetch a saved link's page, extract readable text, and cache it under
 // /data/snapshots/<id>.txt. An in-memory index (id -> lowercased text) backs the
-// search endpoint. Like /api/favicon and /api/check-links, this has NO private-IP
-// block: it fetches the user's own bookmarked domains (homelab IPs included).
+// search endpoint. Trusted, user-saved targets — see the outbound-fetch policy
+// up top.
 
 const contentIndex = new Map(); // id -> lowercased extracted text
 
@@ -701,9 +711,7 @@ app.post('/api/snapshot', async (req, res) => {
   const id = safeId(req.body && req.body.id);
   const url = req.body && req.body.url;
   if (!id || !url) return res.status(400).json({ error: 'id and url required' });
-  let parsed;
-  try { parsed = new URL(url); } catch { return res.status(400).json({ error: 'invalid url' }); }
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return res.json({ ok: false, length: 0 });
+  if (!parseHttpUrl(url)) return res.json({ ok: false, length: 0 });
   try {
     const page = await httpGetBuffer(url, 3, SNAPSHOT_FETCH_MAX, 'text/html');
     if (!page || !/text\/html/i.test(page.contentType)) return res.json({ ok: false, length: 0 });
