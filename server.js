@@ -34,6 +34,9 @@ const FAVICON_MAX = 250 * 1024; // 250KB cap per icon
 const SNAPSHOT_DIR = path.join('/data', 'snapshots'); // per-link extracted page text for full-text search
 const SNAPSHOT_FETCH_MAX = 1024 * 1024; // 1MB cap on fetched HTML
 const SNAPSHOT_TEXT_MAX = 40000; // store up to 40k chars of extracted text per link
+const RSS_FETCH_MAX = 2 * 1024 * 1024; // 2MB cap on a fetched feed
+const RSS_TTL = 15 * 60 * 1000; // serve cached feed for 15 min before refetching
+const RSS_ITEMS_MAX = 30; // keep up to 30 items per feed
 
 app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
@@ -492,6 +495,111 @@ app.get('/api/check-links', async (req, res) => {
     console.error('GET /api/check-links error:', e);
     res.status(500).json({ error: 'Failed to check links' });
   }
+});
+
+// --- RSS / Atom feed widget --------------------------------------------------
+// Fetch user-chosen feeds, parse RSS 2.0 / Atom with Node built-ins (no deps),
+// and cache parsed items in memory with a TTL. The feed list itself lives in
+// config.json (rssFeeds), so it persists through the existing /api/config route.
+// Like /api/favicon and /api/check-links, this has NO private-IP block: it
+// fetches the user's own chosen feeds (homelab hosts included).
+
+const feedCache = new Map(); // url -> { title, items, fetchedAt, error }
+const feedInFlight = new Map(); // url -> Promise (dedupe concurrent fetches)
+
+// Pull the first capture of any of the given tag names out of an XML fragment.
+function xmlTag(fragment, ...names) {
+  for (const name of names) {
+    const m = fragment.match(new RegExp(`<${name}\\b[^>]*>([\\s\\S]*?)<\\/${name}>`, 'i'));
+    if (m) return m[1];
+  }
+  return '';
+}
+
+function stripCdata(s) {
+  const m = String(s).match(/<!\[CDATA\[([\s\S]*?)\]\]>/);
+  return m ? m[1] : String(s);
+}
+
+function cleanText(s) {
+  return decodeHtmlEntities(stripCdata(s).replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
+}
+
+// Atom links carry the URL in an href attribute; prefer rel="alternate"/no rel.
+function atomLink(fragment) {
+  const links = fragment.match(/<link\b[^>]*>/gi) || [];
+  let fallback = '';
+  for (const tag of links) {
+    const rel = (tag.match(/rel=["']([^"']+)["']/i) || [])[1] || 'alternate';
+    const href = (tag.match(/href=["']([^"']+)["']/i) || [])[1];
+    if (!href) continue;
+    if (rel === 'alternate') return href;
+    if (!fallback) fallback = href;
+  }
+  return fallback;
+}
+
+function parseFeed(xml) {
+  const s = String(xml);
+  const items = [];
+  // RSS <item> ... </item> or Atom <entry> ... </entry>
+  const blockRe = /<(item|entry)\b[\s\S]*?<\/\1>/gi;
+  let m;
+  while ((m = blockRe.exec(s)) && items.length < RSS_ITEMS_MAX) {
+    const block = m[0];
+    const isAtom = m[1].toLowerCase() === 'entry';
+    const title = cleanText(xmlTag(block, 'title')) || '(untitled)';
+    let link = isAtom ? atomLink(block) : cleanText(xmlTag(block, 'link'));
+    if (!link) link = cleanText(xmlTag(block, 'guid')); // some feeds only carry a guid URL
+    const dateStr = cleanText(xmlTag(block, 'pubDate', 'published', 'updated', 'dc:date'));
+    const ts = dateStr ? Date.parse(dateStr) : NaN;
+    if (link && /^https?:\/\//i.test(link)) {
+      items.push({ title, link, ts: isNaN(ts) ? null : ts });
+    }
+  }
+  // Feed title sits before the first item/entry.
+  const head = s.slice(0, m ? s.indexOf(m[0]) : s.length);
+  const feedTitle = cleanText(xmlTag(head, 'title')) || '';
+  return { title: feedTitle, items };
+}
+
+async function fetchFeed(url) {
+  const page = await httpGetBuffer(url, 3, RSS_FETCH_MAX, 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*');
+  if (!page) throw new Error('fetch failed');
+  return parseFeed(page.buf.toString('utf8'));
+}
+
+async function getFeed(url) {
+  const cached = feedCache.get(url);
+  if (cached && Date.now() - cached.fetchedAt < RSS_TTL) return cached;
+  if (feedInFlight.has(url)) return feedInFlight.get(url);
+  const p = (async () => {
+    try {
+      const { title, items } = await fetchFeed(url);
+      const entry = { title, items, fetchedAt: Date.now(), error: null };
+      feedCache.set(url, entry);
+      return entry;
+    } catch (e) {
+      // On failure, keep serving the last good copy if we have one.
+      if (cached) return cached;
+      const entry = { title: '', items: [], fetchedAt: Date.now(), error: 'unreachable' };
+      feedCache.set(url, entry);
+      return entry;
+    } finally {
+      feedInFlight.delete(url);
+    }
+  })();
+  feedInFlight.set(url, p);
+  return p;
+}
+
+app.get('/api/rss', async (req, res) => {
+  const url = String(req.query.url || '').trim();
+  let parsed;
+  try { parsed = new URL(url); } catch { return res.status(400).json({ error: 'invalid url' }); }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return res.status(400).json({ error: 'invalid url' });
+  const feed = await getFeed(url);
+  res.json({ url, title: feed.title, items: feed.items, error: feed.error });
 });
 
 // --- Full-text content search ------------------------------------------------
