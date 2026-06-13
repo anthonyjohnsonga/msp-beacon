@@ -703,7 +703,9 @@ app.post('/api/snapshot', async (req, res) => {
     if (!page || !/text\/html/i.test(page.contentType)) return res.json({ ok: false, length: 0 });
     const text = extractText(page.buf.toString('utf8'));
     await fsp.mkdir(SNAPSHOT_DIR, { recursive: true });
-    const tmp = path.join(SNAPSHOT_DIR, `.${id}-${Date.now()}.txt`);
+    // Temp suffix must NOT be .txt — loadContentIndex/pruneSnapshots scan *.txt,
+    // so a .txt temp would be indexed as a bogus entry or unlinked mid-write.
+    const tmp = path.join(SNAPSHOT_DIR, `.${id}-${Date.now()}.tmp`);
     await fsp.writeFile(tmp, text, 'utf8');
     await fsp.rename(tmp, path.join(SNAPSHOT_DIR, id + '.txt'));
     contentIndex.set(id, text.toLowerCase());
@@ -728,11 +730,14 @@ app.get('/api/content-status', (req, res) => {
   res.json({ indexed: [...contentIndex.keys()] });
 });
 
-loadContentIndex();
-loadAllowedFeeds();
-
-app.listen(PORT, () => {
-  console.log(`MSP Beacon running on http://0.0.0.0:${PORT}`);
-  console.log(`Data file: ${DATA_FILE}`);
-  console.log(`Config file: ${CONFIG_FILE}`);
+// Load the content index and RSS allowlist before accepting requests, so the
+// first request after a restart doesn't hit an empty allowlist (403s on valid
+// feeds) or an empty search index. Both helpers swallow their own errors, so
+// the server still starts if a load fails.
+Promise.all([loadContentIndex(), loadAllowedFeeds()]).finally(() => {
+  app.listen(PORT, () => {
+    console.log(`MSP Beacon running on http://0.0.0.0:${PORT}`);
+    console.log(`Data file: ${DATA_FILE}`);
+    console.log(`Config file: ${CONFIG_FILE}`);
+  });
 });
