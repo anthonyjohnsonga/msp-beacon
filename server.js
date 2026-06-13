@@ -46,6 +46,7 @@ const DATA_FILE = path.join('/data', 'links.json');
 const CONFIG_FILE = path.join('/data/config', 'config.json');
 const FAVICON_DIR = path.join('/data', 'favicons');
 const FAVICON_TTL = 30 * 24 * 60 * 60 * 1000; // re-fetch cached icons after 30 days
+const WALLPAPER_FILE = path.join('/data', 'wallpaper'); // single uploaded homepage background
 const FAVICON_MAX = 250 * 1024; // 250KB cap per icon
 const SNAPSHOT_DIR = path.join('/data', 'snapshots'); // per-link extracted page text for full-text search
 const SNAPSHOT_FETCH_MAX = 1024 * 1024; // 1MB cap on fetched HTML
@@ -442,6 +443,37 @@ app.get('/api/favicon', async (req, res) => {
     console.error('GET /api/favicon error:', e);
     return res.status(404).end();
   }
+});
+
+// Homepage background image — a single file under /data, kept local (no
+// third-party), like favicons. Upload is validated by magic bytes and served
+// with the sniffed content-type.
+app.post('/api/wallpaper', express.raw({ type: '*/*', limit: '8mb' }), async (req, res) => {
+  if (!sniffImageType(req.body)) return res.status(400).json({ error: 'not an image' });
+  try {
+    await fsp.mkdir(path.dirname(WALLPAPER_FILE), { recursive: true });
+    const tmp = `${WALLPAPER_FILE}.tmp-${Date.now()}`;
+    await fsp.writeFile(tmp, req.body);
+    await fsp.rename(tmp, WALLPAPER_FILE);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('POST /api/wallpaper error:', e);
+    res.status(500).json({ error: 'save failed' });
+  }
+});
+
+app.get('/api/wallpaper', async (req, res) => {
+  try {
+    const buf = await fsp.readFile(WALLPAPER_FILE);
+    res.setHeader('Content-Type', sniffImageType(buf) || 'application/octet-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.end(buf);
+  } catch { res.status(404).end(); }
+});
+
+app.delete('/api/wallpaper', async (req, res) => {
+  try { await fsp.unlink(WALLPAPER_FILE); } catch { /* already gone */ }
+  res.json({ ok: true });
 });
 
 app.get('/api/check-links', async (req, res) => {

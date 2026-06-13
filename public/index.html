@@ -229,6 +229,15 @@ select:focus { outline: none; border-color: var(--g4); }
 .filter-badge { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; background: var(--g4); color: #fff; font-size: 10px; font-weight: 600; line-height: 1; }
 .header-logo { cursor: pointer; }
 /* Homepage / dashboard view */
+/* Homepage wallpaper: fixed layers behind the app, shown only in home mode. */
+#homeBgImg, #homeBgScrim { position: fixed; inset: 0; z-index: 0; pointer-events: none; display: none; }
+#homeBgImg { background-size: cover; background-position: center; background-repeat: no-repeat; transform: scale(1.06); }
+.container { position: relative; z-index: 1; }
+.bg-preset-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.bg-preset { height: 32px; border-radius: 7px; border: 2px solid transparent; cursor: pointer; }
+.bg-preset.active { border-color: var(--g3); }
+.bg-slider-row { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text1); margin-top: 6px; }
+.bg-slider-row input[type=range] { flex: 1; accent-color: var(--g4); }
 .home { max-width: 720px; margin: 0 auto; padding-top: 7vh; display: flex; flex-direction: column; gap: 2.25rem; }
 .home-clock { text-align: center; }
 .home-time { font-size: 56px; font-weight: 300; color: var(--text0); letter-spacing: 1px; line-height: 1; }
@@ -277,6 +286,8 @@ select:focus { outline: none; border-color: var(--g4); }
 </style>
 </head>
 <body>
+<div id="homeBgImg"></div>
+<div id="homeBgScrim"></div>
 <div class="container">
   <div class="app-header">
     <i class="ti ti-bookmarks header-logo" onclick="goHome()"></i>
@@ -430,6 +441,21 @@ select:focus { outline: none; border-color: var(--g4); }
     <div class="field"><label>Accent color</label>
       <div class="theme-grid" id="themeGrid"></div>
     </div>
+    <div class="field"><label>Homepage background</label>
+      <div class="mode-toggle">
+        <button class="mode-btn" data-bgsrc="none" onclick="setBgType('none')"><i class="ti ti-ban"></i> None</button>
+        <button class="mode-btn" data-bgsrc="preset" onclick="setBgType('preset')"><i class="ti ti-color-swatch"></i> Presets</button>
+        <button class="mode-btn" data-bgsrc="url" onclick="setBgType('url')"><i class="ti ti-link"></i> URL</button>
+        <button class="mode-btn" data-bgsrc="upload" onclick="document.getElementById('bgUpload').click()"><i class="ti ti-upload"></i> Upload</button>
+      </div>
+      <input type="file" id="bgUpload" accept="image/*" style="display:none" onchange="uploadWallpaper(this.files[0]); this.value=''">
+      <div id="bgPresetWrap" style="display:none;margin-top:8px"><div class="bg-preset-grid" id="bgPresetGrid"></div></div>
+      <input type="text" id="bgUrlInput" placeholder="https://…/image.jpg" style="display:none;margin-top:8px" onchange="setBgUrl(this.value)">
+      <div id="bgAdjust" style="display:none">
+        <div class="bg-slider-row"><span style="width:34px">Dim</span><input type="range" min="0" max="80" id="bgDim" oninput="setBgDim(this.value)"><span id="bgDimVal" style="width:36px;text-align:right"></span></div>
+        <div class="bg-slider-row"><span style="width:34px">Blur</span><input type="range" min="0" max="20" id="bgBlur" oninput="setBgBlur(this.value)"><span id="bgBlurVal" style="width:36px;text-align:right"></span></div>
+      </div>
+    </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeTheme()">Close</button>
     </div>
@@ -552,6 +578,91 @@ let subfolderColors = JSON.parse(localStorage.getItem('msp-subfolder-colors') ||
 let tagColors = JSON.parse(localStorage.getItem('msp-tag-colors') || '{}');
 let folderIcons = JSON.parse(localStorage.getItem('msp-folder-icons') || '{}');
 let rssFeeds = JSON.parse(localStorage.getItem('msp-rss-feeds') || '[]'); // [{url, name}]
+
+// Homepage background. type: none|preset|url|upload; value = preset id / image URL
+// / cache-bust token; dim 0-80 (% black scrim); blur 0-20 px.
+const BG_PRESETS = {
+  aurora: 'linear-gradient(135deg,#1e3c72,#2a5298)',
+  dusk:   'linear-gradient(135deg,#355c7d,#6c5b7b,#c06c84)',
+  ember:  'linear-gradient(135deg,#642b73,#c6426e)',
+  forest: 'linear-gradient(135deg,#134e5e,#71b280)',
+  slate:  'linear-gradient(135deg,#232526,#414345)',
+  ocean:  'linear-gradient(135deg,#0f2027,#203a43,#2c5364)',
+};
+const clampNum = (n, lo, hi) => Math.max(lo, Math.min(hi, Number(n) || 0));
+function normalizeHomeBg(v) {
+  v = v && typeof v === 'object' ? v : {};
+  const type = ['none', 'preset', 'url', 'upload'].includes(v.type) ? v.type : 'none';
+  return { type, value: typeof v.value === 'string' ? v.value : '', dim: clampNum(v.dim, 0, 80), blur: clampNum(v.blur, 0, 20) };
+}
+let homeBg = normalizeHomeBg((() => { try { return JSON.parse(localStorage.getItem('msp-home-bg')); } catch { return null; } })());
+
+function applyHomeBg() {
+  const img = document.getElementById('homeBgImg'), scrim = document.getElementById('homeBgScrim');
+  if (!img || !scrim) return;
+  let bg = '';
+  if (currentMode === 'home' && homeBg.type !== 'none') {
+    if (homeBg.type === 'preset') bg = BG_PRESETS[homeBg.value] || '';
+    else if (homeBg.type === 'url') bg = (homeBg.value && !/["\n\r]/.test(homeBg.value)) ? `url("${homeBg.value}")` : '';
+    else if (homeBg.type === 'upload') bg = `url("/api/wallpaper?t=${encodeURIComponent(homeBg.value || '0')}")`;
+  }
+  if (!bg) { img.style.display = 'none'; scrim.style.display = 'none'; return; }
+  img.style.backgroundImage = bg;
+  img.style.filter = homeBg.blur ? `blur(${homeBg.blur}px)` : 'none';
+  img.style.display = 'block';
+  scrim.style.background = `rgba(0,0,0,${homeBg.dim / 100})`;
+  scrim.style.display = 'block';
+}
+function persistHomeBg() {
+  localStorage.setItem('msp-home-bg', JSON.stringify(homeBg));
+  saveConfig();
+  applyHomeBg();
+}
+function setBgType(t) {
+  homeBg.type = t;
+  if (t === 'preset' && !BG_PRESETS[homeBg.value]) homeBg.value = 'aurora';
+  persistHomeBg();
+  renderBgControls();
+}
+function setBgPreset(id) { homeBg.type = 'preset'; homeBg.value = id; persistHomeBg(); renderBgControls(); }
+function setBgUrl(v) {
+  v = (v || '').trim();
+  if (v) {
+    let ok = false;
+    try { ok = /^https?:$/.test(new URL(v).protocol); } catch {}
+    if (!ok && /^data:image\//i.test(v)) ok = true;
+    if (!ok) { showToast('Enter an http(s) or image URL', true); return; }
+  }
+  homeBg.type = 'url'; homeBg.value = v; persistHomeBg(); renderBgControls();
+}
+function setBgDim(v) { homeBg.dim = clampNum(v, 0, 80); document.getElementById('bgDimVal').textContent = homeBg.dim + '%'; persistHomeBg(); }
+function setBgBlur(v) { homeBg.blur = clampNum(v, 0, 20); document.getElementById('bgBlurVal').textContent = homeBg.blur + 'px'; persistHomeBg(); }
+async function uploadWallpaper(file) {
+  if (!file) return;
+  if (file.size > 8 * 1024 * 1024) { showToast('Image too large (max 8MB)', true); return; }
+  try {
+    const res = await fetch('/api/wallpaper', { method: 'POST', headers: { 'Content-Type': file.type || 'application/octet-stream' }, body: file });
+    if (!res.ok) { showToast('Upload failed', true); return; }
+    homeBg.type = 'upload'; homeBg.value = String(Date.now()); // cache-bust the served image
+    persistHomeBg(); renderBgControls(); showToast('Background updated');
+  } catch { showToast('Upload failed', true); }
+}
+function renderBgControls() {
+  document.querySelectorAll('.mode-btn[data-bgsrc]').forEach(el => el.classList.toggle('active', el.dataset.bgsrc === homeBg.type));
+  const presetWrap = document.getElementById('bgPresetWrap'), urlInput = document.getElementById('bgUrlInput'), adjust = document.getElementById('bgAdjust');
+  presetWrap.style.display = homeBg.type === 'preset' ? '' : 'none';
+  urlInput.style.display = homeBg.type === 'url' ? '' : 'none';
+  adjust.style.display = homeBg.type !== 'none' ? '' : 'none';
+  if (homeBg.type === 'preset') {
+    presetWrap.querySelector('#bgPresetGrid').innerHTML = Object.entries(BG_PRESETS).map(([id, g]) =>
+      `<div class="bg-preset${homeBg.value === id ? ' active' : ''}" style="background:${g}" title="${id}" onclick="setBgPreset('${id}')"></div>`).join('');
+  }
+  if (homeBg.type === 'url') urlInput.value = homeBg.value || '';
+  document.getElementById('bgDim').value = homeBg.dim;
+  document.getElementById('bgDimVal').textContent = homeBg.dim + '%';
+  document.getElementById('bgBlur').value = homeBg.blur;
+  document.getElementById('bgBlurVal').textContent = homeBg.blur + 'px';
+}
 let currentTheme = localStorage.getItem('msp-theme') || 'Green';
 let customAccent = localStorage.getItem('msp-accent') || '#1D9E75';
 let themeMode = localStorage.getItem('msp-mode') || 'dark';
@@ -678,7 +789,7 @@ function sortLinks(arr) {
 }
 
 function saveConfig() {
-  const cfg = { folderColors, subfolderColors, tagColors, folderIcons, folderOrder, rssFeeds, theme: currentTheme, accent: customAccent, mode: themeMode, defaultView };
+  const cfg = { folderColors, subfolderColors, tagColors, folderIcons, folderOrder, rssFeeds, theme: currentTheme, accent: customAccent, mode: themeMode, defaultView, homeBg };
   fetch('/api/config', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -704,6 +815,10 @@ function applyServerConfig(cfg) {
     // smuggle a non-color string into the tag-chip style attribute (XSS).
     tagColors = Object.fromEntries(Object.entries(cfg.tagColors).filter(([, v]) => isHexColor(v)));
     localStorage.setItem('msp-tag-colors', JSON.stringify(tagColors));
+  }
+  if (cfg.homeBg && typeof cfg.homeBg === 'object') {
+    homeBg = normalizeHomeBg(cfg.homeBg);
+    localStorage.setItem('msp-home-bg', JSON.stringify(homeBg));
   }
   if (cfg.folderIcons && typeof cfg.folderIcons === 'object') {
     folderIcons = cfg.folderIcons;
@@ -1018,6 +1133,7 @@ function renderHome() {
   if (rssFeeds.length) loadHomeFeeds();
   loadHomeStatus();
   updateArchiveBadge();
+  applyHomeBg();
 }
 
 // Fetch every configured feed in parallel, merge + sort by date, show the newest.
@@ -1086,6 +1202,7 @@ async function loadHomeStatus() {
 }
 
 function render() {
+  applyHomeBg();
   if (currentMode === 'home') { renderHome(); return; }
   const q = document.getElementById('search').value.toLowerCase();
   const clearBtn = document.getElementById('searchClear');
@@ -1466,7 +1583,7 @@ function applyMode(mode, save = true) {
   const m = MODES[resolveMode(mode)] || MODES.dark;
   const r = document.documentElement.style;
   Object.entries(m).forEach(([k, v]) => r.setProperty('--' + k, v));
-  document.querySelectorAll('.mode-btn').forEach(el => el.classList.toggle('active', el.dataset.mode === mode));
+  document.querySelectorAll('.mode-btn[data-mode]').forEach(el => el.classList.toggle('active', el.dataset.mode === mode));
   if (save) saveConfig();
 }
 
@@ -1512,7 +1629,8 @@ function openTheme() {
       <span class="swatch-label">Custom</span>
     </div>`;
   grid.innerHTML = presets + custom;
-  document.querySelectorAll('.mode-btn').forEach(el => el.classList.toggle('active', el.dataset.mode === themeMode));
+  document.querySelectorAll('.mode-btn[data-mode]').forEach(el => el.classList.toggle('active', el.dataset.mode === themeMode));
+  renderBgControls();
   document.getElementById('themeBg').style.display = 'flex';
 }
 function closeTheme() { document.getElementById('themeBg').style.display = 'none'; }
