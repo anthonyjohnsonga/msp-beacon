@@ -34,6 +34,7 @@ const FAVICON_MAX = 250 * 1024; // 250KB cap per icon
 const SNAPSHOT_DIR = path.join('/data', 'snapshots'); // per-link extracted page text for full-text search
 const SNAPSHOT_FETCH_MAX = 1024 * 1024; // 1MB cap on fetched HTML
 const SNAPSHOT_TEXT_MAX = 40000; // store up to 40k chars of extracted text per link
+const SNAPSHOT_PRUNE_GRACE_MS = 5 * 60 * 1000; // never GC a snapshot newer than this
 const RSS_FETCH_MAX = 2 * 1024 * 1024; // 2MB cap on a fetched feed
 const RSS_TTL = 15 * 60 * 1000; // serve cached feed for 15 min before refetching
 const RSS_ITEMS_MAX = 30; // keep up to 30 items per feed
@@ -677,16 +678,25 @@ async function loadContentIndex() {
 }
 
 // Remove snapshots (and index entries) for links that no longer exist.
+// validIds comes from whatever links array the client just saved, which may be
+// stale (a second device with out-of-date state). To avoid that stale save
+// deleting a snapshot another device just captured, skip any snapshot file
+// younger than SNAPSHOT_PRUNE_GRACE_MS — a genuine orphan (deleted link) is
+// reclaimed on a later save once it ages past the grace window.
 async function pruneSnapshots(validIds) {
   try {
     const files = await fsp.readdir(SNAPSHOT_DIR);
     for (const f of files) {
       if (!f.endsWith('.txt')) continue;
       const id = f.slice(0, -4);
-      if (!validIds.has(id)) {
-        await fsp.unlink(path.join(SNAPSHOT_DIR, f)).catch(() => {});
-        contentIndex.delete(id);
-      }
+      if (validIds.has(id)) continue;
+      const full = path.join(SNAPSHOT_DIR, f);
+      try {
+        const st = await fsp.stat(full);
+        if (Date.now() - st.mtimeMs < SNAPSHOT_PRUNE_GRACE_MS) continue;
+      } catch { continue; }
+      await fsp.unlink(full).catch(() => {});
+      contentIndex.delete(id);
     }
   } catch { /* dir may not exist yet */ }
 }
