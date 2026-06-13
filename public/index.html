@@ -808,7 +808,7 @@ function commitPendingMove() {
 }
 
 function getFavicon(u) { try { new URL(u); return '/api/favicon?url=' + encodeURIComponent(u); } catch { return null; } }
-function getDomain(u) { try { return new URL(u).hostname.replace('www.', ''); } catch { return u; } }
+function getDomain(u) { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return u; } }
 function esc(s) { if (!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function isHexColor(c) { return typeof c === 'string' && /^#[0-9A-Fa-f]{6}$/.test(c); }
 function hexToRgb(hex) {
@@ -1004,7 +1004,7 @@ async function loadHomeFeeds() {
       const r = await fetch('/api/rss?url=' + encodeURIComponent(f.url));
       if (!r.ok) return { ok: false, name: f.name || f.url };
       const data = await r.json();
-      const src = f.name || data.title || hostOf(f.url);
+      const src = f.name || data.title || getDomain(f.url);
       return { ok: !data.error, name: src, items: (data.items || []).map(it => ({ ...it, src })) };
     } catch { return { ok: false, name: f.name || f.url }; }
   }));
@@ -1024,7 +1024,6 @@ async function loadHomeFeeds() {
 }
 
 function openFeedItem(url) { window.open(url, '_blank', 'noopener'); }
-function hostOf(u) { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return u; } }
 
 // Live up/down dots on homepage link tiles, reusing /api/check-links.
 function statusDotClass(id) {
@@ -2720,7 +2719,7 @@ function renderFeedManager() {
   }
   content.innerHTML = rssFeeds.map(f => `<div class="fmgr-row">
       <i class="ti ti-rss" style="color:var(--g3);font-size:14px;flex-shrink:0"></i>
-      <span class="fmgr-name" title="${esc(f.url)}">${esc(f.name || hostOf(f.url))}</span>
+      <span class="fmgr-name" title="${esc(f.url)}">${esc(f.name || getDomain(f.url))}</span>
       <div class="fmgr-actions">
         <button class="icon-btn" style="color:#E24B4A" title="Remove" data-feed="${esc(f.url)}"><i class="ti ti-trash"></i></button>
       </div>
