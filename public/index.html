@@ -667,12 +667,15 @@ function saveConfig() {
 
 function applyServerConfig(cfg) {
   if (!cfg || typeof cfg !== 'object') return;
+  // Only keep valid hex values — a restored/edited config must not be able to
+  // smuggle a non-color string into a folder/subfolder style attribute (XSS),
+  // the same guard applied to tagColors below.
   if (cfg.folderColors && typeof cfg.folderColors === 'object') {
-    folderColors = cfg.folderColors;
+    folderColors = Object.fromEntries(Object.entries(cfg.folderColors).filter(([, v]) => isHexColor(v)));
     localStorage.setItem('msp-folder-colors', JSON.stringify(folderColors));
   }
   if (cfg.subfolderColors && typeof cfg.subfolderColors === 'object') {
-    subfolderColors = cfg.subfolderColors;
+    subfolderColors = Object.fromEntries(Object.entries(cfg.subfolderColors).filter(([, v]) => isHexColor(v)));
     localStorage.setItem('msp-subfolder-colors', JSON.stringify(subfolderColors));
   }
   if (cfg.tagColors && typeof cfg.tagColors === 'object') {
@@ -844,9 +847,9 @@ function deriveAccent(baseHex) {
   const ramp = [93, 75, 60, 42, 30, 20].map(l => hslToHex(h, s, l));
   return { g1: ramp[0], g2: ramp[1], g3: ramp[2], g4: ramp[3], g5: ramp[4], g6: ramp[5], glow: `rgba(${hexToRgb(ramp[3])},.15)` };
 }
-function getFolderColor(f) { return folderColors[f] || '#1D9E75'; }
+function getFolderColor(f) { return isHexColor(folderColors[f]) ? folderColors[f] : '#1D9E75'; }
 function subKey(folder, sf) { return JSON.stringify([folder, sf]); }
-function getSubfolderColor(folder, sf) { return subfolderColors[subKey(folder, sf)] || getFolderColor(folder); }
+function getSubfolderColor(folder, sf) { const c = subfolderColors[subKey(folder, sf)]; return isHexColor(c) ? c : getFolderColor(folder); }
 function getTagColor(t) { return isHexColor(tagColors[t]) ? tagColors[t] : null; }
 function accentColor() {
   const c = getComputedStyle(document.documentElement).getPropertyValue('--g4').trim();
