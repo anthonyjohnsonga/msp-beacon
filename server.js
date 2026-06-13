@@ -238,32 +238,20 @@ app.get('/api/fetch-title', async (req, res) => {
       incoming.on('end', () => { if (!done) sendTitle(); });
       incoming.on('error', () => { if (!res.headersSent) sendTitle(); });
 
-      function decodeEntities(str) {
-        return str
-          .replace(/&amp;/g, '&')
-          .replace(/&lt;/g, '<')
-          .replace(/&gt;/g, '>')
-          .replace(/&quot;/g, '"')
-          .replace(/&apos;/g, "'")
-          .replace(/&#39;/g, "'")
-          .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
-          .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCharCode(parseInt(h, 16)))
-          .trim();
-      }
       function sendTitle() {
         if (res.headersSent) return;
         // Try <title> first
         const titleMatch = buf.match(/<title[^>]*>([^<]*)<\/title>/i);
-        const titleText = titleMatch ? decodeEntities(titleMatch[1]) : '';
+        const titleText = titleMatch ? decodeHtmlEntities(titleMatch[1]).trim() : '';
         if (titleText) return res.json({ title: titleText });
         // Fall back to og:title
         const ogMatch = buf.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)
           || buf.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i);
-        if (ogMatch) return res.json({ title: decodeEntities(ogMatch[1]) });
+        if (ogMatch) return res.json({ title: decodeHtmlEntities(ogMatch[1]).trim() });
         // Fall back to meta name="title"
         const metaMatch = buf.match(/<meta[^>]+name=["']title["'][^>]+content=["']([^"']+)["']/i)
           || buf.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']title["']/i);
-        if (metaMatch) return res.json({ title: decodeEntities(metaMatch[1]) });
+        if (metaMatch) return res.json({ title: decodeHtmlEntities(metaMatch[1]).trim() });
         res.json({ title: '' });
       }
     });
@@ -635,6 +623,8 @@ const contentIndex = new Map(); // id -> lowercased extracted text
 
 function safeId(id) { return String(id || '').replace(/[^a-z0-9]/gi, '').slice(0, 64); }
 
+// Shared HTML-entity decoder: used by extractText (snapshots) and the
+// /api/fetch-title route (hoisted, so the earlier route can call it).
 function decodeHtmlEntities(str) {
   return str
     .replace(/&nbsp;/g, ' ')
