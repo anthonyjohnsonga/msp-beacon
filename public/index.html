@@ -673,7 +673,9 @@ function applyServerConfig(cfg) {
     localStorage.setItem('msp-subfolder-colors', JSON.stringify(subfolderColors));
   }
   if (cfg.tagColors && typeof cfg.tagColors === 'object') {
-    tagColors = cfg.tagColors;
+    // Only keep valid hex values — a restored/edited config must not be able to
+    // smuggle a non-color string into the tag-chip style attribute (XSS).
+    tagColors = Object.fromEntries(Object.entries(cfg.tagColors).filter(([, v]) => isHexColor(v)));
     localStorage.setItem('msp-tag-colors', JSON.stringify(tagColors));
   }
   if (cfg.folderIcons && typeof cfg.folderIcons === 'object') {
@@ -805,6 +807,7 @@ function commitPendingMove() {
 function getFavicon(u) { try { new URL(u); return '/api/favicon?url=' + encodeURIComponent(u); } catch { return null; } }
 function getDomain(u) { try { return new URL(u).hostname.replace('www.', ''); } catch { return u; } }
 function esc(s) { if (!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function isHexColor(c) { return typeof c === 'string' && /^#[0-9A-Fa-f]{6}$/.test(c); }
 function hexToRgb(hex) {
   if (!hex || !/^#[0-9A-Fa-f]{6}$/.test(hex)) return '29,158,117';
   const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
@@ -841,7 +844,7 @@ function deriveAccent(baseHex) {
 function getFolderColor(f) { return folderColors[f] || '#1D9E75'; }
 function subKey(folder, sf) { return JSON.stringify([folder, sf]); }
 function getSubfolderColor(folder, sf) { return subfolderColors[subKey(folder, sf)] || getFolderColor(folder); }
-function getTagColor(t) { return tagColors[t] || null; }
+function getTagColor(t) { return isHexColor(tagColors[t]) ? tagColors[t] : null; }
 function accentColor() {
   const c = getComputedStyle(document.documentElement).getPropertyValue('--g4').trim();
   return /^#[0-9A-Fa-f]{6}$/.test(c) ? c : '#1D9E75';
