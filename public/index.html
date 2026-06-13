@@ -1612,7 +1612,9 @@ document.addEventListener('keydown', e => {
     closeFolderIconPicker();
     closeFilter();
     closeSettings();
-    ['modalBg','importBg','statsBg','folderMgrBg','tagMgrBg','feedsBg','shortcutsBg','themeBg','archiveBg'].forEach(id => {
+    const feedsEl = document.getElementById('feedsBg');
+    if (feedsEl && feedsEl.style.display === 'flex') closeFeedManager(); // routes through the homepage refresh
+    ['modalBg','importBg','statsBg','folderMgrBg','tagMgrBg','shortcutsBg','themeBg','archiveBg'].forEach(id => {
       const el = document.getElementById(id);
       if (el && el.style.display === 'flex') el.style.display = 'none';
     });

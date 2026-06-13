@@ -580,8 +580,10 @@ async function getFeed(url) {
       feedCache.set(url, entry);
       return entry;
     } catch (e) {
-      // On failure, keep serving the last good copy if we have one.
-      if (cached) return cached;
+      // On failure, keep serving the last good copy if we have one — but bump
+      // its timestamp so a flapping feed honors the same RSS_TTL backoff as a
+      // fresh failure, instead of being refetched on every single request.
+      if (cached) { cached.fetchedAt = Date.now(); return cached; }
       const entry = { title: '', items: [], fetchedAt: Date.now(), error: 'unreachable' };
       feedCache.set(url, entry);
       return entry;
