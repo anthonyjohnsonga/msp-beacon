@@ -81,7 +81,13 @@ select:focus { outline: none; border-color: var(--g4); }
 .card-url { font-size: 12px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .card-desc { font-size: 13px; color: var(--text1); line-height: 1.5; }
 .card-footer { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: auto; padding-top: 4px; }
-.tag { font-size: 11px; padding: 3px 8px; border-radius: 20px; background: rgba(var(--g5-rgb),.25); color: var(--g2); border: 0.5px solid var(--g5); }
+.tag { font-size: 11px; padding: 3px 8px; border-radius: 20px; background: rgba(var(--g5-rgb),.25); color: var(--g2); border: 0.5px solid var(--g5); cursor: pointer; }
+.tag:hover { background: rgba(var(--g5-rgb),.45); color: var(--text0); }
+.tag-suggest { position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: var(--bg1); border: 1px solid var(--g5); border-radius: 8px; z-index: 70; box-shadow: 0 8px 24px rgba(0,0,0,.4); display: none; flex-direction: column; overflow-y: auto; max-height: 196px; }
+.tag-suggest.open { display: flex; }
+.tag-suggest-item { display: flex; align-items: center; gap: 8px; padding: 7px 12px; cursor: pointer; font-size: 13px; color: var(--text1); }
+.tag-suggest-item i { font-size: 13px; flex-shrink: 0; }
+.tag-suggest-item:hover, .tag-suggest-item.active { background: var(--bg3); color: var(--text0); }
 .folder-badge { font-size: 11px; padding: 3px 8px; border-radius: 20px; background: rgba(var(--g5-rgb),.25); color: var(--g2); border: 0.5px solid var(--g5); margin-left: auto; display: flex; align-items: center; gap: 4px; }
 .card-actions { position: absolute; top: 8px; right: 8px; display: none; gap: 4px; }
 .card:hover .card-actions { display: flex; }
@@ -382,7 +388,12 @@ select:focus { outline: none; border-color: var(--g4); }
       <input type="text" id="mSubfolder" placeholder="Sub-folder name…" list="subfolderList" autocomplete="off" onfocus="updateSubfolderDatalist()">
       <datalist id="subfolderList"></datalist>
     </div>
-    <div class="field"><label>Tags (comma separated)</label><input type="text" id="mTags" placeholder="e.g. tools, dev, reference"></div>
+    <div class="field"><label>Tags (comma separated)</label>
+      <div style="position:relative">
+        <input type="text" id="mTags" placeholder="e.g. tools, dev, reference" autocomplete="off" oninput="onTagInput()" onfocus="onTagInput()" onblur="setTimeout(hideTagSuggest,150)" onkeydown="onTagKeydown(event)">
+        <div class="tag-suggest" id="tagSuggest"></div>
+      </div>
+    </div>
     <div id="dupWarning" style="display:none;background:rgba(245,166,35,.08);border:0.5px solid rgba(245,166,35,.35);border-radius:8px;padding:10px 12px;font-size:13px;display:none;align-items:center;gap:8px;flex-wrap:wrap">
       <i class="ti ti-alert-triangle" style="color:#F5A623;flex-shrink:0"></i>
       <span id="dupWarningMsg" style="flex:1;min-width:0;color:var(--text0)"></span>
@@ -994,7 +1005,7 @@ function accentColor() {
 function tagHtml(t) {
   const tc = getTagColor(t);
   const style = tc ? ` style="background:rgba(${hexToRgb(tc)},.2);color:${tc};border-color:${tc}"` : '';
-  return `<span class="tag" data-tag="${esc(t)}"${style}>${esc(t)}</span>`;
+  return `<span class="tag" data-tag="${esc(t)}" title="Filter by &quot;${esc(t)}&quot;"${style}>${esc(t)}</span>`;
 }
 function getFolderIcon(f) { return folderIcons[f] || 'ti-folder'; }
 function allFolders() { return [...new Set(links.filter(l => !l.archived).map(l => l.folder).filter(Boolean))].sort(); }
@@ -1429,6 +1440,69 @@ function updateSubfolderDatalist() {
   const subs = selectedFolder ? subfoldersByFolder(selectedFolder) : [];
   const dl = document.getElementById('subfolderList');
   dl.innerHTML = subs.map(s => `<option value="${esc(s)}">`).join('');
+}
+
+// --- Tag autocomplete (add/edit modal) -------------------------------------
+// Suggests existing tags for the comma-separated segment currently being typed,
+// excluding tags already entered in the field.
+let tagSuggestMatches = [];
+let tagSuggestIndex = -1;
+function onTagInput() {
+  const input = document.getElementById('mTags');
+  const box = document.getElementById('tagSuggest');
+  const parts = input.value.split(',');
+  const seg = parts[parts.length - 1].trim().toLowerCase();
+  const used = new Set(parts.slice(0, -1).map(t => t.trim().toLowerCase()).filter(Boolean));
+  tagSuggestMatches = allTags()
+    .filter(t => !used.has(t.toLowerCase()) && (!seg || t.toLowerCase().includes(seg)))
+    .slice(0, 8);
+  if (!tagSuggestMatches.length) return hideTagSuggest();
+  tagSuggestIndex = -1;
+  box.innerHTML = tagSuggestMatches.map((t, i) =>
+    `<div class="tag-suggest-item" data-i="${i}"><i class="ti ti-tag" style="color:${getTagColor(t) || 'var(--g3)'}"></i>${esc(t)}</div>`
+  ).join('');
+  box.querySelectorAll('.tag-suggest-item').forEach(el =>
+    el.addEventListener('mousedown', e => { e.preventDefault(); pickTagSuggest(+el.dataset.i); })
+  );
+  box.classList.add('open');
+}
+function pickTagSuggest(i) {
+  const tag = tagSuggestMatches[i];
+  if (tag == null) return;
+  const input = document.getElementById('mTags');
+  const parts = input.value.split(',');
+  parts[parts.length - 1] = ' ' + tag;
+  input.value = parts.join(',').replace(/^\s+/, '') + ', ';
+  input.focus();
+  hideTagSuggest();
+}
+function onTagKeydown(e) {
+  const box = document.getElementById('tagSuggest');
+  if (!box.classList.contains('open')) return;
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    tagSuggestIndex = Math.min(tagSuggestIndex + 1, tagSuggestMatches.length - 1);
+    highlightTagSuggest();
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    tagSuggestIndex = Math.max(tagSuggestIndex - 1, 0);
+    highlightTagSuggest();
+  } else if (e.key === 'Enter' && tagSuggestIndex >= 0) {
+    e.preventDefault();
+    pickTagSuggest(tagSuggestIndex);
+  } else if (e.key === 'Escape') {
+    e.stopPropagation(); // close the dropdown without closing the modal
+    hideTagSuggest();
+  }
+}
+function highlightTagSuggest() {
+  document.querySelectorAll('#tagSuggest .tag-suggest-item')
+    .forEach((el, i) => el.classList.toggle('active', i === tagSuggestIndex));
+}
+function hideTagSuggest() {
+  const box = document.getElementById('tagSuggest');
+  if (box) box.classList.remove('open');
+  tagSuggestIndex = -1;
 }
 
 function saveLink() {
@@ -2023,6 +2097,8 @@ function setupCardListeners() {
   });
   content.addEventListener('mouseleave', () => { activeCardId = null; });
   content.addEventListener('click', e => {
+    const tagChip = e.target.closest('.tag[data-tag]');
+    if (tagChip) { filterByTag(tagChip.dataset.tag); return; }
     const btn = e.target.closest('[data-action]');
     if (btn) {
       const action = btn.dataset.action;
