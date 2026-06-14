@@ -40,6 +40,8 @@ move between machines, or host on a file share.
 
 ### Homepage / Dashboard
 - **Home dashboard** — a start page with a live clock, time-of-day greeting, a prominent search box, and quick-access tiles for your links and folders
+- **Customizable widget layout** — click **Edit dashboard** (header button or Settings → View) to drag the widgets (Clock, Search, Favorites, Recent, Most visited, Folders, Latest) into any order and show/hide each one. Your layout saves to your config and syncs across devices
+- **Link group widgets** — add your own widgets that hold a titled set of hand-picked app/link tiles, separate from your saved bookmarks — an app-launcher feel for your homelab services
 - **Live status dots** — each homepage tile shows a colored dot reflecting the link's most recent health-check result
 - **RSS / Atom feeds** — add feeds under Settings → Manage feeds to get a "Latest" headlines widget on the homepage
 - **Custom homepage background** — set a backdrop from a built-in gradient, an image URL, or your own uploaded image (stored locally on your server, no third-party calls), with dim and blur sliders to keep everything readable
