@@ -297,6 +297,10 @@ select:focus { outline: none; border-color: var(--g4); }
 .add-widget-bar .add-widget-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--g3); }
 .add-widget-bar .btn { height: 30px; font-size: 12px; }
 .lg-tile-remove { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; border-radius: 50%; border: none; background: #E24B4A; color: #fff; font-size: 10px; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; }
+.lg-add-form { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.lg-add-form input { flex: 1 1 120px; min-width: 0; height: 32px; font-size: 13px; }
+.lg-add-form .btn { height: 32px; font-size: 12px; flex-shrink: 0; }
+.widget-toolbar .lg-rename-input { height: 24px; font-size: 12px; margin-right: auto; max-width: 240px; }
 .ctx-menu { position: fixed; z-index: 400; background: var(--bg1); border: 1px solid var(--g5); border-radius: 10px; padding: 4px; min-width: 172px; box-shadow: 0 8px 24px rgba(0,0,0,.4); display: none; flex-direction: column; }
 .ctx-menu.open { display: flex; }
 .ctx-item { display: flex; align-items: center; gap: 9px; padding: 8px 12px; border-radius: 7px; font-size: 13px; color: var(--text0); cursor: pointer; background: none; border: none; font-family: inherit; width: 100%; text-align: left; white-space: nowrap; }
@@ -1249,10 +1253,16 @@ function widgetInner(w, data) {
     case 'linkgroup': {
       const items = w.items || [];
       if (!items.length && !edit) return '';
-      const inner = items.length
-        ? `<div class="home-tiles">${items.map((it, i) => linkgroupTileHtml(it, w.id, i)).join('')}</div>`
-        : '<div class="home-widget-empty">No links yet — use ＋ to add one</div>';
-      return `<div class="home-section"><div class="home-section-head"><i class="ti ti-apps" style="font-size:14px;color:var(--g3)"></i><span class="home-section-title">${esc(w.title || 'Links')}</span></div>${inner}</div>`;
+      const tiles = items.length ? `<div class="home-tiles">${items.map((it, i) => linkgroupTileHtml(it, w.id, i)).join('')}</div>` : '';
+      const emptyMsg = (!items.length && edit) ? '<div class="home-widget-empty">No links yet — add one below.</div>' : '';
+      const addForm = edit
+        ? `<div class="lg-add-form">`
+          + `<input class="lg-add-url" type="text" placeholder="https://… URL" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();lgAddSubmit('${w.id}',this)}">`
+          + `<input class="lg-add-title" type="text" placeholder="Label (optional)" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();lgAddSubmit('${w.id}',this)}">`
+          + `<button class="btn" onclick="lgAddSubmit('${w.id}',this)"><i class="ti ti-plus"></i> Add</button>`
+          + `</div>`
+        : '';
+      return `<div class="home-section"><div class="home-section-head"><i class="ti ti-apps" style="font-size:14px;color:var(--g3)"></i><span class="home-section-title">${esc(w.title || 'Links')}</span></div>${tiles}${emptyMsg}${addForm}</div>`;
     }
     default: return '';
   }
@@ -1269,8 +1279,7 @@ function widgetToolbar(w) {
   const label = w.type === 'linkgroup' ? (w.title || 'Link group') : (WIDGET_LABELS[w.type] || w.type);
   let extra = '';
   if (w.type === 'linkgroup') {
-    extra = `<button class="icon-btn" title="Rename group" onclick="linkgroupRename('${w.id}')"><i class="ti ti-pencil"></i></button>`
-          + `<button class="icon-btn" title="Add link" onclick="linkgroupAddItem('${w.id}')"><i class="ti ti-plus"></i></button>`
+    extra = `<button class="icon-btn lg-rename-btn" title="Rename group" onclick="lgStartRename('${w.id}',this)"><i class="ti ti-pencil"></i></button>`
           + `<button class="icon-btn" style="color:#E24B4A" title="Remove widget" onclick="widgetRemove('${w.id}')"><i class="ti ti-trash"></i></button>`;
   }
   return `<div class="widget-toolbar"><span class="widget-drag-handle" draggable="true" title="Drag to reorder"><i class="ti ti-grip-vertical"></i></span><i class="ti ${WIDGET_ICONS[w.type] || 'ti-square'} widget-tb-icon"></i><span class="widget-tb-label">${esc(label)}</span><button class="icon-btn" title="${w.enabled ? 'Hide' : 'Show'}" onclick="widgetToggle('${w.id}')"><i class="ti ${w.enabled ? 'ti-eye' : 'ti-eye-off'}"></i></button>${extra}</div>`;
@@ -1350,30 +1359,59 @@ function addSectionWidget(type) {
   persistDashboard(); render();
 }
 function addLinkGroup() {
-  ensureDashboard().push({
-    id: 'lg-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-    type: 'linkgroup', enabled: true, title: 'New group', items: []
-  });
+  const id = 'lg-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  ensureDashboard().push({ id, type: 'linkgroup', enabled: true, title: 'New group', items: [] });
   persistDashboard(); render();
+  const btn = document.querySelector(`.home-widget[data-widget-id="${id}"] .lg-rename-btn`);
+  if (btn) lgStartRename(id, btn); // start naming the new group immediately
 }
-function linkgroupRename(id) {
+// Inline rename of a link group's title — replaces the toolbar label with an
+// input; commit on blur/Enter, cancel on Escape (same pattern as the Tag
+// Manager's tmgrStartRename).
+function lgStartRename(id, btn) {
+  const toolbar = btn.closest('.widget-toolbar');
   const w = ensureDashboard().find(x => x.id === id);
-  if (!w) return;
-  const name = prompt('Group name:', w.title || 'Links');
-  if (name === null) return;
-  w.title = (name.trim() || 'Links').slice(0, 60);
-  persistDashboard(); render();
+  const span = toolbar && toolbar.querySelector('.widget-tb-label');
+  if (!w || !span) return;
+  const old = w.title || 'Links';
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'fmgr-input lg-rename-input';
+  input.value = old;
+  span.replaceWith(input);
+  input.focus(); input.select();
+  let committed = false;
+  function commit() {
+    if (committed) return; committed = true;
+    const v = input.value.trim();
+    if (v && v !== old) { w.title = v.slice(0, 60); persistDashboard(); }
+    render();
+  }
+  input.addEventListener('blur', commit);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); commit(); }
+    else if (e.key === 'Escape') { e.stopPropagation(); committed = true; render(); }
+  });
 }
-function linkgroupAddItem(id) {
+// Add a link to a group from the inline add-form (URL + optional label),
+// mirroring the feed manager's addFeed(). Refocuses the URL field for rapid entry.
+function lgAddSubmit(id, el) {
+  const form = el.closest('.lg-add-form');
+  if (!form) return;
+  const urlEl = form.querySelector('.lg-add-url');
+  const titleEl = form.querySelector('.lg-add-title');
+  let url = urlEl.value.trim();
+  if (!url) { urlEl.focus(); return; }
+  if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+  try { new URL(url); } catch { showToast('Invalid URL', true); return; }
   const w = ensureDashboard().find(x => x.id === id);
   if (!w || w.type !== 'linkgroup') return;
   if ((w.items || []).length >= LINKGROUP_MAX_ITEMS) { showToast('Link group is full', true); return; }
-  const url = (prompt('Link URL (https://…):') || '').trim();
-  if (!url) return;
-  if (!/^https?:\/\//i.test(url)) { showToast('Enter a valid http(s) URL', true); return; }
-  let title = (prompt('Label:', '') || '').trim() || getDomain(url);
+  const title = titleEl.value.trim() || getDomain(url);
   w.items = [...(w.items || []), { title: title.slice(0, 80), url }];
   persistDashboard(); render();
+  const next = document.querySelector(`.home-widget[data-widget-id="${id}"] .lg-add-url`);
+  if (next) next.focus();
 }
 function linkgroupRemoveItem(id, idx) {
   const w = ensureDashboard().find(x => x.id === id);
