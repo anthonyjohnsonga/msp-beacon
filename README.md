@@ -14,6 +14,7 @@ move between machines, or host on a file share.
 - **Copy URL** — one-click copy button on every card
 - **Duplicate URL warning** — inline warning when adding a URL that already exists, with an "Add anyway" option
 - **Undo delete** — single and bulk deletes can be undone within 5 seconds via a toast notification
+- **Archive** — archive links to tuck them out of the main view without deleting; browse and restore them from Settings → Archive
 - **Favorites** — star any link to pin it to a collapsible Favorites section at the top
 
 ### Organization
@@ -23,21 +24,33 @@ move between machines, or host on a file share.
 - **Folder rename** — inline rename via pencil icon; updates all links, colors, order, and icon atomically
 - **Subfolder rename** — pencil icon on subfolder headers enables inline rename; updates all links and collapsed state
 - **Delete folder** — trash icon removes the folder and moves its links to no folder
-- **Tags** — tag links for filtering; filter by tag from the toolbar
+- **Tags** — tag links freely, independent of folders, with autocomplete that suggests existing tags as you type so you don't create near-duplicates
+- **Tag colors & Tag Manager** — assign a custom color to any tag and rename, recolor, or delete tags from Settings → Manage tags
 - **Drag to reorder** — drag cards to reorder within folders; drag folders to reorder sections; drop a card onto a folder or sub-folder header to move it
 - **Bulk actions** — checkbox select mode to delete, move, or tag multiple links at once
 - **Collapse all / Expand all** — Settings menu buttons to collapse or expand every folder at once
 
 ### Search & Filter
 - **Search** — real-time search across title, URL, description, folder, and tags (press `/` or `Ctrl+K`)
+- **Full-text content search** — optionally index the page text behind your links (Settings → Index page content); search then matches words found *on the page*, not just the title and URL
+- **Search history** — recent searches drop down under the search box for quick re-use
 - **Filter button** — folder filter, tag filter, and sort consolidated into a single toolbar button with an active-count badge
+- **Click a tag to filter** — click any tag chip on a card to instantly filter to that tag (or right-click for more options)
 - **Sort options** — sort by manual order, A→Z, Z→A, newest, oldest, or most visited
+
+### Homepage / Dashboard
+- **Home dashboard** — a start page with a live clock, time-of-day greeting, a prominent search box, and quick-access tiles for your links and folders
+- **Live status dots** — each homepage tile shows a colored dot reflecting the link's most recent health-check result
+- **RSS / Atom feeds** — add feeds under Settings → Manage feeds to get a "Latest" headlines widget on the homepage
+- **Custom homepage background** — set a backdrop from a built-in gradient, an image URL, or your own uploaded image (stored locally on your server, no third-party calls), with dim and blur sliders to keep everything readable
+- **Default view** — choose whether the app opens on the Home dashboard or the link Manager
 
 ### Views & Appearance
 - **List view toggle** — switch between card grid and compact row layout; preference saved
 - **Card density toggle** — cycle through compact, comfortable, and spacious grid layouts
 - **Folder color accent on cards** — cards show a colored left border matching their folder
-- **Themes** — 6 built-in color themes (Green, Blue, Purple, Teal, Orange, Red)
+- **Themes & accent color** — 6 built-in color themes (Green, Blue, Purple, Teal, Orange, Red) plus a custom accent color
+- **Light & dark mode** — toggle between light and dark appearance
 
 ### Stats & Health
 - **Visit counter** — tracks how many times each link has been opened
@@ -48,11 +61,12 @@ move between machines, or host on a file share.
 ### Import & Export
 - **Import bookmarks** — drop a browser-exported HTML file to import from Chrome, Edge, or Firefox; preview and select before importing
 - **Export bookmarks** — export all links as a browser-compatible HTML bookmark file
+- **Full backup & restore** — export everything (all links plus your settings) to a single JSON file, and restore it later in one step
 
 ### General
 - **Auto-save** — changes save automatically with a debounced write queue and atomic file writes
-- **Favicon display** — automatically fetches site favicons for each link
-- **Persistent state** — collapsed folders, folder order, theme, view, density, and sort are saved to `localStorage`
+- **Favicon display** — fetches and caches each site's favicon locally (no third-party calls; works for internal/homelab hosts)
+- **Persistent state** — collapsed folders, folder order, theme, accent, mode, view, density, and sort are saved to `localStorage` and synced via `config.json`
 - **Self-hosted & portable** — all data lives in a single `links.json` file; easy to back up or move
 
 ---
