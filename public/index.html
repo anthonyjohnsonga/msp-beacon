@@ -278,6 +278,25 @@ select:focus { outline: none; border-color: var(--g4); }
 .home-tile[draggable="true"] { cursor: grab; }
 .home-tile.dragging { opacity: 0.35; cursor: grabbing; }
 .home-tile.drag-over { border-color: var(--g3) !important; box-shadow: 0 0 0 2px var(--g4-glow); background: var(--bg1); }
+/* Dashboard edit mode */
+.dashboard-edit-banner { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 12px; background: rgba(var(--g5-rgb),.18); border: 1px solid var(--g5); font-size: 13px; color: var(--text1); }
+.dashboard-edit-banner > span { flex: 1; min-width: 0; }
+.dashboard-edit-banner .btn { height: 30px; }
+.home-widget { border: 1px dashed var(--g5); border-radius: 12px; padding: 10px; background: rgba(var(--g5-rgb),.06); }
+.home-widget.disabled { opacity: 0.5; }
+.home-widget.dragging { opacity: 0.4; }
+.home-widget.drag-over { border-style: solid; border-color: var(--g3); box-shadow: 0 0 0 2px var(--g4-glow); }
+.widget-toolbar { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--g6); }
+.widget-drag-handle { cursor: grab; color: var(--text2); display: flex; align-items: center; padding: 2px; }
+.widget-drag-handle:active { cursor: grabbing; }
+.widget-drag-handle:hover { color: var(--g3); }
+.widget-tb-icon { font-size: 14px; color: var(--g3); }
+.widget-tb-label { font-size: 12px; font-weight: 600; color: var(--text1); margin-right: auto; }
+.home-widget-empty { font-size: 12px; color: var(--text2); padding: 10px 4px; text-align: center; }
+.add-widget-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px; border: 1px dashed var(--g5); border-radius: 12px; }
+.add-widget-bar .add-widget-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--g3); }
+.add-widget-bar .btn { height: 30px; font-size: 12px; }
+.lg-tile-remove { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; border-radius: 50%; border: none; background: #E24B4A; color: #fff; font-size: 10px; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; }
 .ctx-menu { position: fixed; z-index: 400; background: var(--bg1); border: 1px solid var(--g5); border-radius: 10px; padding: 4px; min-width: 172px; box-shadow: 0 8px 24px rgba(0,0,0,.4); display: none; flex-direction: column; }
 .ctx-menu.open { display: flex; }
 .ctx-item { display: flex; align-items: center; gap: 9px; padding: 8px 12px; border-radius: 7px; font-size: 13px; color: var(--text0); cursor: pointer; background: none; border: none; font-family: inherit; width: 100%; text-align: left; white-space: nowrap; }
@@ -301,6 +320,7 @@ select:focus { outline: none; border-color: var(--g4); }
     <div class="saving-indicator" id="saveStatus"></div>
     <button class="btn" id="homeBtn" onclick="goHome()" title="Home"><i class="ti ti-home"></i></button>
     <button class="btn" id="managerBtn" onclick="goManager()" title="Manager view"><i class="ti ti-layout-grid"></i></button>
+    <button class="btn" id="editDashBtn" onclick="toggleDashboardEdit()" title="Edit dashboard" style="display:none"><i class="ti ti-layout-dashboard"></i></button>
     <button class="btn btn-primary" id="headerAddBtn" onclick="openModal()" title="Add link" style="display:none"><i class="ti ti-plus"></i> Add link</button>
     <div class="settings-wrap">
       <button class="btn" id="settingsBtn" onclick="toggleSettings(event)"><i class="ti ti-settings"></i> Settings</button>
@@ -308,6 +328,7 @@ select:focus { outline: none; border-color: var(--g4); }
         <div class="settings-group">
           <div class="settings-group-label">View</div>
           <button class="settings-item" id="defaultViewItem" onclick="toggleDefaultView()"><i class="ti ti-home"></i> Start on <span id="defaultViewLabel" style="margin-left:auto;color:var(--g2);font-size:12px"></span></button>
+          <button class="settings-item" onclick="toggleDashboardEdit()"><i class="ti ti-layout-dashboard"></i> Edit dashboard</button>
           <button class="settings-item" onclick="closeSettings();collapseAll()"><i class="ti ti-chevrons-up"></i> Collapse all</button>
           <button class="settings-item" onclick="closeSettings();expandAll()"><i class="ti ti-chevrons-down"></i> Expand all</button>
         </div>
@@ -753,6 +774,67 @@ let homeFolderFilter = null;
 let homeClockTimer = null;
 let feedLoadToken = 0;
 let lastHomeStatusAt = 0;
+
+// --- Dashboard (homepage widget layout) ------------------------------------
+// The homepage renders an ordered, toggleable list of widgets. Section widgets
+// wrap the existing homepage sections; 'linkgroup' is a user-defined set of link
+// tiles. The layout persists in config.json (key: dashboard) + localStorage, so
+// it backs up and syncs like every other setting. Existing users with no saved
+// layout fall back to DEFAULT_DASHBOARD — i.e. today's exact section order.
+const SECTION_WIDGETS = ['clock', 'search', 'favorites', 'recent', 'most-visited', 'folders', 'latest'];
+const WIDGET_LABELS = {
+  clock: 'Clock & greeting', search: 'Search box', favorites: 'Favorites',
+  recent: 'Recent', 'most-visited': 'Most visited', folders: 'Folders',
+  latest: 'Latest (RSS)', linkgroup: 'Link group'
+};
+const WIDGET_ICONS = {
+  clock: 'ti-clock', search: 'ti-search', favorites: 'ti-star-filled',
+  recent: 'ti-history', 'most-visited': 'ti-flame', folders: 'ti-folders',
+  latest: 'ti-rss', linkgroup: 'ti-apps'
+};
+const DEFAULT_DASHBOARD = SECTION_WIDGETS.map(type => ({ id: type, type, enabled: true }));
+const LINKGROUP_MAX_ITEMS = 50;
+let dashboard = JSON.parse(localStorage.getItem('msp-dashboard') || 'null');
+let dashboardEditMode = false;
+
+function getDashboard() {
+  return Array.isArray(dashboard) && dashboard.length ? dashboard : DEFAULT_DASHBOARD.map(w => ({ ...w }));
+}
+function persistDashboard() {
+  localStorage.setItem('msp-dashboard', JSON.stringify(dashboard));
+  saveConfig();
+}
+// Accept only known widget shapes — a restored/hand-edited config must not be
+// able to inject unknown types or non-http link URLs into the homepage.
+function sanitizeDashboard(arr) {
+  if (!Array.isArray(arr)) return null;
+  const out = [];
+  const seenSection = new Set();
+  const seenId = new Set();
+  for (const w of arr) {
+    if (!w || typeof w !== 'object') continue;
+    const type = w.type;
+    const enabled = w.enabled !== false;
+    if (SECTION_WIDGETS.includes(type)) {
+      if (seenSection.has(type)) continue; // one of each section
+      seenSection.add(type);
+      out.push({ id: type, type, enabled });
+    } else if (type === 'linkgroup') {
+      // ids are inlined into onclick handlers, so only accept a safe pattern —
+      // regenerate anything else (hostile/hand-edited config can't inject script).
+      let id = (typeof w.id === 'string' && /^lg-[a-z0-9]+$/i.test(w.id)) ? w.id : '';
+      if (!id || seenId.has(id)) id = 'lg-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+      seenId.add(id);
+      const title = (typeof w.title === 'string' ? w.title : 'Links').slice(0, 60);
+      const items = Array.isArray(w.items) ? w.items
+        .filter(it => it && typeof it.title === 'string' && typeof it.url === 'string' && /^https?:\/\//i.test(it.url))
+        .slice(0, LINKGROUP_MAX_ITEMS)
+        .map(it => ({ title: it.title.slice(0, 80), url: it.url })) : [];
+      out.push({ id, type: 'linkgroup', enabled, title, items });
+    }
+  }
+  return out.length ? out : null;
+}
 let currentDensity = localStorage.getItem('msp-density') || 'comfortable';
 const DENSITY_CYCLE = ['compact', 'comfortable', 'spacious'];
 const DENSITY_SETTINGS = {
@@ -800,7 +882,7 @@ function sortLinks(arr) {
 }
 
 function saveConfig() {
-  const cfg = { folderColors, subfolderColors, tagColors, folderIcons, folderOrder, rssFeeds, theme: currentTheme, accent: customAccent, mode: themeMode, defaultView, homeBg };
+  const cfg = { folderColors, subfolderColors, tagColors, folderIcons, folderOrder, rssFeeds, theme: currentTheme, accent: customAccent, mode: themeMode, defaultView, homeBg, dashboard };
   fetch('/api/config', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -830,6 +912,10 @@ function applyServerConfig(cfg) {
   if (cfg.homeBg && typeof cfg.homeBg === 'object') {
     homeBg = normalizeHomeBg(cfg.homeBg);
     localStorage.setItem('msp-home-bg', JSON.stringify(homeBg));
+  }
+  if ('dashboard' in cfg) {
+    dashboard = sanitizeDashboard(cfg.dashboard);
+    localStorage.setItem('msp-dashboard', JSON.stringify(dashboard));
   }
   if (cfg.folderIcons && typeof cfg.folderIcons === 'object') {
     folderIcons = cfg.folderIcons;
@@ -1031,7 +1117,9 @@ function setMode(mode, navigated = true) {
   if (mb) mb.classList.toggle('active', mode === 'manager');
   const ab = document.getElementById('headerAddBtn');
   if (ab) ab.style.display = mode === 'home' ? '' : 'none';
-  if (mode !== 'home') { clearInterval(homeClockTimer); homeClockTimer = null; }
+  const edb = document.getElementById('editDashBtn');
+  if (edb) { edb.style.display = mode === 'home' ? '' : 'none'; edb.classList.toggle('active', mode === 'home' && dashboardEditMode); }
+  if (mode !== 'home') { clearInterval(homeClockTimer); homeClockTimer = null; dashboardEditMode = false; }
   render();
 }
 function goHome() { setMode('home'); }
@@ -1117,23 +1205,101 @@ function reorderFavorite(srcId, tgtId) {
   save(); render();
 }
 
+// A linkgroup tile opens a user-entered URL (not a saved link), so it carries
+// data-href instead of data-id — no visit bump, no status dot.
+function linkgroupTileHtml(it, gid, idx) {
+  const fav = getFavicon(it.url);
+  const fi = fav
+    ? `<img src="${fav}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span style="display:none;width:100%;height:100%;align-items:center;justify-content:center"><i class="ti ti-world"></i></span>`
+    : `<i class="ti ti-world"></i>`;
+  const rm = dashboardEditMode
+    ? `<button class="lg-tile-remove" title="Remove link" onclick="linkgroupRemoveItem('${gid}',${idx})"><i class="ti ti-x"></i></button>` : '';
+  return `<div class="home-tile" data-href="${esc(it.url)}" title="${esc(it.title)}"><div class="home-tile-icon">${fi}${rm}</div><div class="home-tile-label">${esc(it.title)}</div></div>`;
+}
+
+// Build the inner content for a single widget. Returns '' for a data-driven
+// widget that is empty when NOT editing (preserves today's auto-hide behavior).
+function widgetInner(w, data) {
+  const edit = dashboardEditMode;
+  const placeholder = '<div class="home-widget-empty">Nothing to show yet</div>';
+  switch (w.type) {
+    case 'clock':
+      return `<div class="home-clock"><div class="home-time" id="homeTime"></div><div class="home-greeting" id="homeGreeting"></div></div>`;
+    case 'search':
+      return `<div class="home-search-wrap"><i class="ti ti-search search-icon"></i><input type="text" class="home-search" id="homeSearch" placeholder="Search your links…" autocomplete="off" oninput="homeSearchInput(this.value)"></div>`;
+    case 'favorites':
+      if (!data.favorites.length) return edit ? sectionShell('Favorites', 'ti-star-filled', placeholder) : '';
+      return homeSection('Favorites', 'ti-star-filled', data.favorites.map(l => homeTileHtml(l, !edit)).join(''), 1, 'favorites');
+    case 'recent':
+      if (!data.recent.length) return edit ? sectionShell('Recent', 'ti-history', placeholder) : '';
+      return homeSection('Recent', 'ti-history', data.recent.map(l => homeTileHtml(l, false)).join(''), 1, 'recent');
+    case 'most-visited':
+      if (!data['most-visited'].length) return edit ? sectionShell('Most visited', 'ti-flame', placeholder) : '';
+      return homeSection('Most visited', 'ti-flame', data['most-visited'].map(l => homeTileHtml(l, false)).join(''), 1, 'most-visited');
+    case 'folders':
+      if (!data.folders.length) return edit ? sectionShell('Folders', 'ti-folders', placeholder) : '';
+      return homeSection('Folders', 'ti-folders', data.folders.map(homeFolderTileHtml).join(''), 1, 'folders');
+    case 'latest':
+      if (!rssFeeds.length) return edit ? sectionShell('Latest', 'ti-rss', '<div class="home-widget-empty">No feeds configured</div>') : '';
+      return `<div class="home-section"><div class="home-section-head"><i class="ti ti-rss" style="font-size:14px;color:var(--g3)"></i><span class="home-section-title">Latest</span><button class="home-section-all" onclick="closeSettings();openFeedManager()">manage <i class="ti ti-settings"></i></button></div><div class="home-feed" id="homeFeed"><div class="home-feed-msg"><i class="ti ti-loader" style="animation:spin 1s linear infinite"></i> Loading feeds…</div></div></div>`;
+    case 'linkgroup': {
+      const items = w.items || [];
+      if (!items.length && !edit) return '';
+      const inner = items.length
+        ? `<div class="home-tiles">${items.map((it, i) => linkgroupTileHtml(it, w.id, i)).join('')}</div>`
+        : '<div class="home-widget-empty">No links yet — use ＋ to add one</div>';
+      return `<div class="home-section"><div class="home-section-head"><i class="ti ti-apps" style="font-size:14px;color:var(--g3)"></i><span class="home-section-title">${esc(w.title || 'Links')}</span></div>${inner}</div>`;
+    }
+    default: return '';
+  }
+}
+// A section header + body with no tiles (used for empty widgets in edit mode).
+function sectionShell(title, icon, body) {
+  return `<div class="home-section"><div class="home-section-head"><i class="ti ${icon}" style="font-size:14px;color:var(--g3)"></i><span class="home-section-title">${title}</span></div>${body}</div>`;
+}
+
+// Edit-mode toolbar shown above each widget (drag handle, label, show/hide, and
+// link-group controls). Widget ids are validated to /^lg-[a-z0-9]+$/i or are a
+// fixed section name, so inlining them in onclick is safe.
+function widgetToolbar(w) {
+  const label = w.type === 'linkgroup' ? (w.title || 'Link group') : (WIDGET_LABELS[w.type] || w.type);
+  let extra = '';
+  if (w.type === 'linkgroup') {
+    extra = `<button class="icon-btn" title="Rename group" onclick="linkgroupRename('${w.id}')"><i class="ti ti-pencil"></i></button>`
+          + `<button class="icon-btn" title="Add link" onclick="linkgroupAddItem('${w.id}')"><i class="ti ti-plus"></i></button>`
+          + `<button class="icon-btn" style="color:#E24B4A" title="Remove widget" onclick="widgetRemove('${w.id}')"><i class="ti ti-trash"></i></button>`;
+  }
+  return `<div class="widget-toolbar"><span class="widget-drag-handle" draggable="true" title="Drag to reorder"><i class="ti ti-grip-vertical"></i></span><i class="ti ${WIDGET_ICONS[w.type] || 'ti-square'} widget-tb-icon"></i><span class="widget-tb-label">${esc(label)}</span><button class="icon-btn" title="${w.enabled ? 'Hide' : 'Show'}" onclick="widgetToggle('${w.id}')"><i class="ti ${w.enabled ? 'ti-eye' : 'ti-eye-off'}"></i></button>${extra}</div>`;
+}
+
+function renderWidget(w, data) {
+  if (!w.enabled && !dashboardEditMode) return '';
+  const inner = widgetInner(w, data);
+  if (!dashboardEditMode) return inner; // normal mode: identical DOM to before, no wrapper
+  return `<div class="home-widget${w.enabled ? '' : ' disabled'}" data-widget-id="${esc(w.id)}">${widgetToolbar(w)}${inner}</div>`;
+}
+
 function renderHome() {
   const c = document.getElementById('content');
   const active = links.filter(l => !l.archived);
-  const favs = active.filter(l => l.favorite).slice(0, 8);
-  const recent = active.filter(l => l.lastVisited).sort((a, b) => (b.lastVisited || 0) - (a.lastVisited || 0)).slice(0, 8);
-  const mostVisited = active.filter(l => (l.visits || 0) > 0).sort((a, b) => (b.visits || 0) - (a.visits || 0)).slice(0, 8);
-  const folders = getOrderedFolders(allFolders()).slice(0, 8);
+  const data = {
+    favorites: active.filter(l => l.favorite).slice(0, 8),
+    recent: active.filter(l => l.lastVisited).sort((a, b) => (b.lastVisited || 0) - (a.lastVisited || 0)).slice(0, 8),
+    'most-visited': active.filter(l => (l.visits || 0) > 0).sort((a, b) => (b.visits || 0) - (a.visits || 0)).slice(0, 8),
+    folders: getOrderedFolders(allFolders()).slice(0, 8),
+  };
+  const list = getDashboard();
 
-  let html = '<div class="home">';
-  html += `<div class="home-clock"><div class="home-time" id="homeTime"></div><div class="home-greeting" id="homeGreeting"></div></div>`;
-  html += `<div class="home-search-wrap"><i class="ti ti-search search-icon"></i><input type="text" class="home-search" id="homeSearch" placeholder="Search your links…" autocomplete="off" oninput="homeSearchInput(this.value)"></div>`;
-  html += homeSection('Favorites', 'ti-star-filled', favs.map(l => homeTileHtml(l, true)).join(''), favs.length, 'favorites');
-  html += homeSection('Recent', 'ti-history', recent.map(l => homeTileHtml(l, false)).join(''), recent.length, 'recent');
-  html += homeSection('Most visited', 'ti-flame', mostVisited.map(l => homeTileHtml(l, false)).join(''), mostVisited.length, 'most-visited');
-  html += homeSection('Folders', 'ti-folders', folders.map(homeFolderTileHtml).join(''), folders.length, 'folders');
-  if (rssFeeds.length) {
-    html += `<div class="home-section"><div class="home-section-head"><i class="ti ti-rss" style="font-size:14px;color:var(--g3)"></i><span class="home-section-title">Latest</span><button class="home-section-all" onclick="closeSettings();openFeedManager()">manage <i class="ti ti-settings"></i></button></div><div class="home-feed" id="homeFeed"><div class="home-feed-msg"><i class="ti ti-loader" style="animation:spin 1s linear infinite"></i> Loading feeds…</div></div></div>`;
+  let html = `<div class="home${dashboardEditMode ? ' editing' : ''}">`;
+  if (dashboardEditMode) {
+    html += `<div class="dashboard-edit-banner"><i class="ti ti-layout-dashboard"></i><span>Editing dashboard — drag to reorder, toggle the eye to show/hide.</span><button class="btn btn-primary" onclick="toggleDashboardEdit()"><i class="ti ti-check"></i> Done</button></div>`;
+  }
+  html += list.map(w => renderWidget(w, data)).join('');
+  if (dashboardEditMode) {
+    const present = new Set(list.map(w => w.type));
+    const chips = SECTION_WIDGETS.filter(t => !present.has(t))
+      .map(t => `<button class="btn" onclick="addSectionWidget('${t}')"><i class="ti ${WIDGET_ICONS[t]}"></i> ${esc(WIDGET_LABELS[t])}</button>`).join('');
+    html += `<div class="add-widget-bar"><span class="add-widget-label">Add widget</span>${chips}<button class="btn" onclick="addLinkGroup()"><i class="ti ti-apps"></i> Link group</button></div>`;
   }
   html += '</div>';
   c.innerHTML = html;
@@ -1141,10 +1307,75 @@ function renderHome() {
   updateClock();
   clearInterval(homeClockTimer);
   homeClockTimer = setInterval(updateClock, 1000);
-  if (rssFeeds.length) loadHomeFeeds();
+  if (rssFeeds.length && list.some(w => w.type === 'latest' && w.enabled)) loadHomeFeeds();
   loadHomeStatus();
   updateArchiveBadge();
   applyHomeBg();
+}
+
+// --- Dashboard edit actions -------------------------------------------------
+// Materialize the default layout into a concrete array before mutating, so the
+// first edit of an unconfigured dashboard starts from today's section order.
+function ensureDashboard() {
+  if (!Array.isArray(dashboard) || !dashboard.length) dashboard = DEFAULT_DASHBOARD.map(w => ({ ...w }));
+  return dashboard;
+}
+function toggleDashboardEdit() {
+  dashboardEditMode = !dashboardEditMode;
+  if (dashboardEditMode) ensureDashboard();
+  closeSettings();
+  if (currentMode !== 'home') setMode('home'); else render();
+  const btn = document.getElementById('editDashBtn');
+  if (btn) btn.classList.toggle('active', dashboardEditMode);
+}
+function widgetToggle(id) {
+  const w = ensureDashboard().find(x => x.id === id);
+  if (!w) return;
+  w.enabled = !w.enabled;
+  persistDashboard(); render();
+}
+function widgetRemove(id) {
+  dashboard = ensureDashboard().filter(x => x.id !== id);
+  persistDashboard(); render();
+}
+function addSectionWidget(type) {
+  if (!SECTION_WIDGETS.includes(type)) return;
+  const d = ensureDashboard();
+  if (d.some(w => w.type === type)) return;
+  d.push({ id: type, type, enabled: true });
+  persistDashboard(); render();
+}
+function addLinkGroup() {
+  ensureDashboard().push({
+    id: 'lg-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    type: 'linkgroup', enabled: true, title: 'New group', items: []
+  });
+  persistDashboard(); render();
+}
+function linkgroupRename(id) {
+  const w = ensureDashboard().find(x => x.id === id);
+  if (!w) return;
+  const name = prompt('Group name:', w.title || 'Links');
+  if (name === null) return;
+  w.title = (name.trim() || 'Links').slice(0, 60);
+  persistDashboard(); render();
+}
+function linkgroupAddItem(id) {
+  const w = ensureDashboard().find(x => x.id === id);
+  if (!w || w.type !== 'linkgroup') return;
+  if ((w.items || []).length >= LINKGROUP_MAX_ITEMS) { showToast('Link group is full', true); return; }
+  const url = (prompt('Link URL (https://…):') || '').trim();
+  if (!url) return;
+  if (!/^https?:\/\//i.test(url)) { showToast('Enter a valid http(s) URL', true); return; }
+  let title = (prompt('Label:', '') || '').trim() || getDomain(url);
+  w.items = [...(w.items || []), { title: title.slice(0, 80), url }];
+  persistDashboard(); render();
+}
+function linkgroupRemoveItem(id, idx) {
+  const w = ensureDashboard().find(x => x.id === id);
+  if (!w || !Array.isArray(w.items)) return;
+  w.items.splice(idx, 1);
+  persistDashboard(); render();
 }
 
 // Fetch every configured feed in parallel, merge + sort by date, show the newest.
@@ -2097,6 +2328,9 @@ function setupCardListeners() {
   });
   content.addEventListener('mouseleave', () => { activeCardId = null; });
   content.addEventListener('click', e => {
+    // In dashboard edit mode, tiles/links don't navigate — only the toolbar's
+    // inline-onclick controls act (they fire independently of this delegate).
+    if (dashboardEditMode) return;
     const tagChip = e.target.closest('.tag[data-tag]');
     if (tagChip) { filterByTag(tagChip.dataset.tag); return; }
     const btn = e.target.closest('[data-action]');
@@ -2114,6 +2348,7 @@ function setupCardListeners() {
     if (folderTile) { openFolderFromHome(folderTile.dataset.folder); return; }
     const tile = e.target.closest('.home-tile');
     if (tile && tile.dataset.id) { openLink(tile.dataset.id, tile.dataset.url); return; }
+    if (tile && tile.dataset.href) { window.open(tile.dataset.href, '_blank', 'noopener'); return; }
     const card = e.target.closest('.card[data-id], .card-row[data-id]');
     if (!card) return;
     if (card.classList.contains('select-mode')) toggleSelect(card.dataset.id);
@@ -2224,8 +2459,20 @@ function setupDragListeners() {
   const content = document.getElementById('content');
 
   content.addEventListener('dragstart', e => {
+    const wHandle = e.target.closest('.widget-drag-handle');
+    if (wHandle) {
+      const wrap = wHandle.closest('[data-widget-id]');
+      if (!wrap) return;
+      homeDrag = { type: 'widget', key: wrap.dataset.widgetId };
+      dragId = null; dragFolder = null;
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', homeDrag.key);
+      setTimeout(() => wrap.classList.add('dragging'), 0);
+      return;
+    }
     const homeTile = e.target.closest('.home-tile[draggable="true"]');
     if (homeTile) {
+      if (dashboardEditMode) return; // tile reorder is disabled while editing widgets
       if (homeTile.classList.contains('home-folder-tile')) {
         homeDrag = { type: 'folder', key: homeTile.dataset.folder };
       } else if (homeTile.dataset.id && homeTile.closest('[data-home-section="favorites"]')) {
@@ -2261,6 +2508,18 @@ function setupDragListeners() {
   });
 
   content.addEventListener('dragover', e => {
+    if (homeDrag && homeDrag.type === 'widget') {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const t = e.target.closest('.home-widget[data-widget-id]');
+      const target = (t && t.dataset.widgetId !== homeDrag.key) ? t : null;
+      if (target !== dragOverEl) {
+        if (dragOverEl) dragOverEl.classList.remove('drag-over');
+        dragOverEl = target;
+        if (dragOverEl) dragOverEl.classList.add('drag-over');
+      }
+      return;
+    }
     if (homeDrag) {
       e.preventDefault();
       e.dataTransfer.dropEffect = 'move';
@@ -2318,6 +2577,21 @@ function setupDragListeners() {
     e.preventDefault();
     if (dragOverEl) dragOverEl.classList.remove('drag-over');
     document.querySelectorAll('.dragging').forEach(el => el.classList.remove('dragging'));
+    if (homeDrag && homeDrag.type === 'widget') {
+      const t = e.target.closest('.home-widget[data-widget-id]');
+      if (t && t.dataset.widgetId !== homeDrag.key) {
+        const d = ensureDashboard();
+        const si = d.findIndex(w => w.id === homeDrag.key);
+        const ti = d.findIndex(w => w.id === t.dataset.widgetId);
+        if (si > -1 && ti > -1) {
+          const [m] = d.splice(si, 1);
+          d.splice(ti, 0, m);
+          persistDashboard(); render();
+        }
+      }
+      homeDrag = null; dragOverEl = null;
+      return;
+    }
     if (homeDrag) {
       if (homeDrag.type === 'folder') {
         const t = e.target.closest('.home-folder-tile');
