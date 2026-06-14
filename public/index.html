@@ -2050,8 +2050,11 @@ document.addEventListener('keydown', e => {
 
   if ((e.key === '/' || (e.ctrlKey && e.key === 'k')) && !inInput) {
     e.preventDefault();
-    const hs = document.getElementById('homeSearch');
-    if (currentMode === 'home' && hs) { hs.focus(); return; }
+    if (currentMode === 'home') {
+      const hs = document.getElementById('homeSearch');
+      if (hs) { hs.focus(); return; }
+      setMode('manager'); // search widget is hidden — flip to manager so the search box is usable
+    }
     s.focus();
     s.select();
   }
