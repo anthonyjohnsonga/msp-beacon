@@ -193,6 +193,9 @@ select:focus { outline: none; border-color: var(--g4); }
 .star-btn { background: none; border: none; padding: 0; cursor: pointer; font-size: 15px; color: var(--text2); display: flex; align-items: center; flex-shrink: 0; transition: color .15s; }
 .star-btn:hover { color: #F5A623; }
 .star-btn.active { color: #F5A623; }
+.rl-btn { background: none; border: none; padding: 0; cursor: pointer; font-size: 15px; color: var(--text2); display: flex; align-items: center; flex-shrink: 0; transition: color .15s; }
+.rl-btn:hover { color: #4A9EE2; }
+.rl-btn.active { color: #4A9EE2; }
 .favorites-section { margin-bottom: 1.5rem; }
 .favorites-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding: 6px 10px; background: rgba(245,166,35,.08); border-radius: 8px; border: 0.5px solid rgba(245,166,35,.35); cursor: pointer; user-select: none; }
 .favorites-header:hover { background: rgba(245,166,35,.15); }
@@ -378,6 +381,7 @@ select:focus { outline: none; border-color: var(--g4); }
       <div class="filter-menu" id="filterMenu">
         <div class="filter-row"><label>Folder</label><select id="folderFilter" onchange="render();updateFilterBadge()"><option value="">All folders</option></select></div>
         <div class="filter-row"><label>Tag</label><select id="tagFilter" onchange="render();updateFilterBadge()"><option value="">All tags</option></select></div>
+        <div class="filter-row"><label>Status</label><select id="statusFilter" onchange="render();updateFilterBadge()"><option value="">All</option><option value="readlater">Read later</option></select></div>
         <div class="filter-row"><label>Sort</label><select id="sortSelect" onchange="onSortChange()">
           <option value="manual">Manual order</option>
           <option value="az">A → Z</option>
@@ -785,16 +789,16 @@ let lastHomeStatusAt = 0;
 // tiles. The layout persists in config.json (key: dashboard) + localStorage, so
 // it backs up and syncs like every other setting. Existing users with no saved
 // layout fall back to DEFAULT_DASHBOARD — i.e. today's exact section order.
-const SECTION_WIDGETS = ['clock', 'search', 'favorites', 'recent', 'most-visited', 'folders', 'latest'];
+const SECTION_WIDGETS = ['clock', 'search', 'favorites', 'readlater', 'recent', 'most-visited', 'folders', 'latest'];
 const WIDGET_LABELS = {
   clock: 'Clock & greeting', search: 'Search box', favorites: 'Favorites',
-  recent: 'Recent', 'most-visited': 'Most visited', folders: 'Folders',
-  latest: 'Latest (RSS)', linkgroup: 'Link group'
+  readlater: 'Read later', recent: 'Recent', 'most-visited': 'Most visited',
+  folders: 'Folders', latest: 'Latest (RSS)', linkgroup: 'Link group'
 };
 const WIDGET_ICONS = {
   clock: 'ti-clock', search: 'ti-search', favorites: 'ti-star-filled',
-  recent: 'ti-history', 'most-visited': 'ti-flame', folders: 'ti-folders',
-  latest: 'ti-rss', linkgroup: 'ti-apps'
+  readlater: 'ti-bookmark', recent: 'ti-history', 'most-visited': 'ti-flame',
+  folders: 'ti-folders', latest: 'ti-rss', linkgroup: 'ti-apps'
 };
 const DEFAULT_DASHBOARD = SECTION_WIDGETS.map(type => ({ id: type, type, enabled: true }));
 const LINKGROUP_MAX_ITEMS = 50;
@@ -1177,6 +1181,7 @@ function homeSection(title, icon, tilesHtml, count, key) {
 function homeShowAll(key) {
   if (key === 'most-visited') { currentSort = 'most-visited'; localStorage.setItem('msp-sort', currentSort); }
   else if (key === 'recent') { currentSort = 'recent'; localStorage.setItem('msp-sort', currentSort); }
+  else if (key === 'readlater') { const el = document.getElementById('statusFilter'); if (el) el.value = 'readlater'; }
   goManager();
 }
 function homeSearchInput(v) {
@@ -1185,6 +1190,7 @@ function homeSearchInput(v) {
   if (v.trim()) {
     document.getElementById('folderFilter').value = '';
     document.getElementById('tagFilter').value = '';
+    const stEl = document.getElementById('statusFilter'); if (stEl) stEl.value = '';
     setMode('manager');
     const s = document.getElementById('search');
     s.focus();
@@ -1234,6 +1240,9 @@ function widgetInner(w, data) {
     case 'favorites':
       if (!data.favorites.length) return edit ? sectionShell('Favorites', 'ti-star-filled', placeholder) : '';
       return homeSection('Favorites', 'ti-star-filled', data.favorites.map(l => homeTileHtml(l, !edit)).join(''), 1, 'favorites');
+    case 'readlater':
+      if (!data.readlater.length) return edit ? sectionShell('Read later', 'ti-bookmark', placeholder) : '';
+      return homeSection('Read later', 'ti-bookmark', data.readlater.map(l => homeTileHtml(l, false)).join(''), 1, 'readlater');
     case 'recent':
       if (!data.recent.length) return edit ? sectionShell('Recent', 'ti-history', placeholder) : '';
       return homeSection('Recent', 'ti-history', data.recent.map(l => homeTileHtml(l, false)).join(''), 1, 'recent');
@@ -1297,6 +1306,7 @@ function renderHome() {
   const active = links.filter(l => !l.archived);
   const data = {
     favorites: active.filter(l => l.favorite).slice(0, 8),
+    readlater: active.filter(l => l.readLater).slice(0, 8),
     recent: active.filter(l => l.lastVisited).sort((a, b) => (b.lastVisited || 0) - (a.lastVisited || 0)).slice(0, 8),
     'most-visited': active.filter(l => (l.visits || 0) > 0).sort((a, b) => (b.visits || 0) - (a.visits || 0)).slice(0, 8),
     folders: getOrderedFolders(allFolders()).slice(0, 8),
@@ -1494,6 +1504,7 @@ function render() {
   let ff = document.getElementById('folderFilter').value;
   if (homeFolderFilter !== null) { ff = homeFolderFilter; homeFolderFilter = null; }
   const tf = document.getElementById('tagFilter').value;
+  const stf = document.getElementById('statusFilter')?.value || '';
   const fs = document.getElementById('folderFilter'), ts = document.getElementById('tagFilter');
   fs.innerHTML = '<option value="">All folders</option>' + allFolders().map(f => `<option value="${esc(f)}"${f===ff?' selected':''}>${esc(f)}</option>`).join('');
   ts.innerHTML = '<option value="">All tags</option>' + allTags().map(t => `<option value="${esc(t)}"${t===tf?' selected':''}>${esc(t)}</option>`).join('');
@@ -1506,6 +1517,7 @@ function render() {
     if (l.archived) return false;
     if (ff && l.folder !== ff) return false;
     if (tf && !(l.tags || []).some(t => t.toLowerCase() === tf.toLowerCase())) return false;
+    if (stf === 'readlater' && !l.readLater) return false;
     if (q) {
       const textMatch = (l.title+l.url+l.desc+(l.folder||'')+(l.subfolder||'')+(l.tags||[]).join(' ')).toLowerCase().includes(q);
       const contentMatch = contentActive && contentMatchIds.has(l.id);
@@ -1523,7 +1535,7 @@ function render() {
   }
   const cardFn = currentView === 'list' ? cardListHtml : cardHtml;
   const wrap = items => currentView === 'list' ? `<div class="link-list">${items.map(cardFn).join('')}</div>` : `<div class="grid">${items.map(cardFn).join('')}</div>`;
-  if (ff || q || tf) { c.innerHTML = wrap(fil); return; }
+  if (ff || q || tf || stf) { c.innerHTML = wrap(fil); return; }
   const byF = {}, noF = [];
   fil.forEach(l => { l.folder ? (byF[l.folder] = byF[l.folder] || [], byF[l.folder].push(l)) : noF.push(l); });
   let html = '';
@@ -1591,8 +1603,10 @@ function cardHtml(l) {
   const fav = getFavicon(l.url);
   const fi = fav ? `<img src="${fav}" alt="" onerror="this.style.display='none';this.nextSibling.style.display='flex'"><span style="display:none"><i class="ti ti-world"></i></span>` : `<i class="ti ti-world"></i>`;
   const starBtn = selectMode ? '' : `<button class="star-btn${l.favorite ? ' active' : ''}" data-action="favorite" data-id="${esc(l.id)}" title="${l.favorite ? 'Remove from favorites' : 'Add to favorites'}"><i class="ti ti-star${l.favorite ? '-filled' : ''}"></i></button>`;
+  const rlBtn = selectMode ? '' : `<button class="rl-btn${l.readLater ? ' active' : ''}" data-action="readlater" data-id="${esc(l.id)}" title="${l.readLater ? 'Remove from read later' : 'Save to read later'}"><i class="ti ti-bookmark${l.readLater ? '-filled' : ''}"></i></button>`;
   const footer = `<div class="card-footer">
       ${starBtn}
+      ${rlBtn}
       ${(l.tags || []).map(tagHtml).join('')}
       ${contentBadge(l.id)}
       ${l.folder ? `<span class="folder-badge"><i class="ti ti-folder" style="font-size:11px"></i> ${esc(l.folder)}${l.subfolder ? ' / ' + esc(l.subfolder) : ''}</span>` : ''}
@@ -1656,6 +1670,7 @@ function cardListHtml(l) {
     ${contentBadge(l.id)}
     ${l.folder ? `<span class="folder-badge" style="margin-left:0"><i class="ti ti-folder" style="font-size:11px"></i> ${esc(l.folder)}${l.subfolder ? ' / ' + esc(l.subfolder) : ''}</span>` : ''}
     <button class="star-btn${l.favorite ? ' active' : ''}" data-action="favorite" data-id="${esc(l.id)}" title="${l.favorite ? 'Remove from favorites' : 'Add to favorites'}" style="flex-shrink:0"><i class="ti ti-star${l.favorite ? '-filled' : ''}"></i></button>
+    <button class="rl-btn${l.readLater ? ' active' : ''}" data-action="readlater" data-id="${esc(l.id)}" title="${l.readLater ? 'Remove from read later' : 'Save to read later'}" style="flex-shrink:0"><i class="ti ti-bookmark${l.readLater ? '-filled' : ''}"></i></button>
     <div class="card-row-actions">
       <button class="icon-btn" title="Copy URL" data-action="copy" data-id="${esc(l.id)}" data-url="${esc(l.url)}"><i class="ti ti-copy"></i></button>
       <button class="icon-btn" title="Edit" data-action="edit" data-id="${esc(l.id)}"><i class="ti ti-edit"></i></button>
@@ -1999,7 +2014,8 @@ function closeFilter() {
 function updateFilterBadge() {
   const ff = document.getElementById('folderFilter')?.value || '';
   const tf = document.getElementById('tagFilter')?.value || '';
-  const active = (ff ? 1 : 0) + (tf ? 1 : 0) + (currentSort !== 'manual' ? 1 : 0);
+  const stf = document.getElementById('statusFilter')?.value || '';
+  const active = (ff ? 1 : 0) + (tf ? 1 : 0) + (stf ? 1 : 0) + (currentSort !== 'manual' ? 1 : 0);
   const badge = document.getElementById('filterBadge');
   if (!badge) return;
   badge.textContent = active;
@@ -2387,6 +2403,7 @@ function setupCardListeners() {
       else if (action === 'archive') archiveLink(id);
       else if (action === 'delete') deleteLink(id);
       else if (action === 'favorite') toggleFavorite(id);
+      else if (action === 'readlater') toggleReadLater(id);
       return;
     }
     const folderTile = e.target.closest('.home-folder-tile');
@@ -2444,6 +2461,7 @@ function onContextMenu(e) {
       { icon: 'ti-copy', label: 'Copy URL', action: () => copyLinkUrl(l.url) },
       { icon: 'ti-edit', label: 'Edit', action: () => editLink(id) },
       { icon: l.favorite ? 'ti-star-off' : 'ti-star', label: l.favorite ? 'Unfavorite' : 'Favorite', action: () => toggleFavorite(id) },
+      { icon: l.readLater ? 'ti-bookmark-off' : 'ti-bookmark', label: l.readLater ? 'Remove from read later' : 'Read later', action: () => toggleReadLater(id) },
       { sep: true },
       { icon: 'ti-archive', label: 'Archive', action: () => archiveLink(id) },
       { icon: 'ti-trash', label: 'Delete', danger: true, action: () => deleteLink(id) },
@@ -2766,6 +2784,12 @@ function toggleFavorite(id) {
   const l = links.find(x => x.id === id);
   if (!l) return;
   l.favorite = !l.favorite;
+  save(); render();
+}
+function toggleReadLater(id) {
+  const l = links.find(x => x.id === id);
+  if (!l) return;
+  l.readLater = !l.readLater;
   save(); render();
 }
 
