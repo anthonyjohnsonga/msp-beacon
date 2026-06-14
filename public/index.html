@@ -1161,9 +1161,9 @@ function homeTileHtml(l, draggable) {
     : `<i class="ti ti-world"></i>`;
   return `<div class="home-tile"${draggable ? ' draggable="true"' : ''} data-id="${esc(l.id)}" data-url="${esc(l.url)}" title="${esc(l.title)}"><div class="home-tile-icon">${fi}<span class="home-tile-dot ${statusDotClass(l.id)}"></span></div><div class="home-tile-label">${esc(l.title)}</div></div>`;
 }
-function homeFolderTileHtml(f) {
+function homeFolderTileHtml(f, draggable = true) {
   const fc = getFolderColor(f);
-  return `<div class="home-tile home-folder-tile" draggable="true" data-folder="${esc(f)}" title="${esc(f)}"><div class="home-tile-icon" style="background:rgba(${hexToRgb(fc)},.15)"><i class="ti ${getFolderIcon(f)}" style="color:${fc}"></i></div><div class="home-tile-label">${esc(f)}</div></div>`;
+  return `<div class="home-tile home-folder-tile"${draggable ? ' draggable="true"' : ''} data-folder="${esc(f)}" title="${esc(f)}"><div class="home-tile-icon" style="background:rgba(${hexToRgb(fc)},.15)"><i class="ti ${getFolderIcon(f)}" style="color:${fc}"></i></div><div class="home-tile-label">${esc(f)}</div></div>`;
 }
 function homeSection(title, icon, tilesHtml, count, key) {
   if (!count) return '';
@@ -1238,9 +1238,13 @@ function widgetInner(w, data) {
       return homeSection('Most visited', 'ti-flame', data['most-visited'].map(l => homeTileHtml(l, false)).join(''), 1, 'most-visited');
     case 'folders':
       if (!data.folders.length) return edit ? sectionShell('Folders', 'ti-folders', placeholder) : '';
-      return homeSection('Folders', 'ti-folders', data.folders.map(homeFolderTileHtml).join(''), 1, 'folders');
+      return homeSection('Folders', 'ti-folders', data.folders.map(f => homeFolderTileHtml(f, !edit)).join(''), 1, 'folders');
     case 'latest':
       if (!rssFeeds.length) return edit ? sectionShell('Latest', 'ti-rss', '<div class="home-widget-empty">No feeds configured</div>') : '';
+      // A disabled latest widget (only reachable in edit mode) shows a static
+      // preview — never the live #homeFeed container, which would spin forever
+      // since loadHomeFeeds() only runs for an enabled latest widget.
+      if (!w.enabled) return sectionShell('Latest', 'ti-rss', '<div class="home-widget-empty">Latest headlines</div>');
       return `<div class="home-section"><div class="home-section-head"><i class="ti ti-rss" style="font-size:14px;color:var(--g3)"></i><span class="home-section-title">Latest</span><button class="home-section-all" onclick="closeSettings();openFeedManager()">manage <i class="ti ti-settings"></i></button></div><div class="home-feed" id="homeFeed"><div class="home-feed-msg"><i class="ti ti-loader" style="animation:spin 1s linear infinite"></i> Loading feeds…</div></div></div>`;
     case 'linkgroup': {
       const items = w.items || [];
