@@ -3328,6 +3328,10 @@ function renderStats() {
   const topMax = sorted[0] ? (sorted[0].visits || 0) : 1;
   const top10 = sorted.filter(l => (l.visits || 0) > 0).slice(0, 10);
   const never = active.filter(l => !(l.visits || 0));
+  const avgVisits = totalLinks ? (totalVisits / totalLinks) : 0;
+  const pctNever = totalLinks ? Math.round((never.length / totalLinks) * 100) : 0;
+  const readLaterCount = active.filter(l => l.readLater).length;
+  const archivedCount = links.filter(l => l.archived).length;
 
   const folders = allFolders();
   const noFolderCount = active.filter(l => !l.folder).length;
@@ -3387,9 +3391,13 @@ function renderStats() {
   document.getElementById('statsContent').innerHTML = `
     <div class="stat-section">
       <div class="stat-section-title">Summary</div>
-      <div class="stat-summary">
+      <div class="stat-summary" style="grid-template-columns:1fr 1fr 1fr">
         <div class="stat-summary-card"><div class="stat-summary-value">${totalLinks}</div><div class="stat-summary-label">Total links</div></div>
         <div class="stat-summary-card"><div class="stat-summary-value">${totalVisits}</div><div class="stat-summary-label">Total visits</div></div>
+        <div class="stat-summary-card"><div class="stat-summary-value">${avgVisits.toFixed(1)}</div><div class="stat-summary-label">Avg visits/link</div></div>
+        <div class="stat-summary-card"><div class="stat-summary-value">${pctNever}%</div><div class="stat-summary-label">Never visited</div></div>
+        <div class="stat-summary-card"><div class="stat-summary-value">${readLaterCount}</div><div class="stat-summary-label">Read later</div></div>
+        <div class="stat-summary-card"><div class="stat-summary-value">${archivedCount}</div><div class="stat-summary-label">Archived</div></div>
       </div>
     </div>
     <div class="stat-section">
