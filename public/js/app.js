@@ -2453,7 +2453,7 @@ async function scanLinksForStats() {
   const ids = links.filter(l => !l.archived && /^https?:\/\//i.test(l.url)).map(l => l.id);
   if (!ids.length) { showToast('No web links to check'); return; }
   statsScanning = true; statsScanDone = 0; statsScanTotal = ids.length;
-  renderStats();
+  if (statsOpen()) updateHealthSection();
   const CHUNK = 25;
   try {
     for (let i = 0; i < ids.length; i += CHUNK) {
@@ -2461,12 +2461,54 @@ async function scanLinksForStats() {
       const res = await fetch('/api/check-links?ids=' + chunk.map(encodeURIComponent).join(','));
       if (res.ok) Object.assign(linkStatus, await res.json());
       statsScanDone = Math.min(i + CHUNK, ids.length);
-      if (statsOpen()) renderStats();
+      if (statsOpen()) updateHealthSection();
     }
     lastHomeStatusAt = Date.now();
   } catch { showToast('Link check failed', true); }
   statsScanning = false;
-  if (statsOpen()) renderStats();
+  if (statsOpen()) updateHealthSection();
+}
+// Builds just the Link Health section body so a scan can refresh it in place
+// without re-rendering (and re-sorting/re-filtering) the entire Stats panel.
+function renderHealthSection() {
+  const webLinks = links.filter(l => !l.archived && /^https?:\/\//i.test(l.url));
+  const downLinks = webLinks.filter(l => { const s = linkStatus[l.id]; return s === 'broken' || s === 'timeout'; });
+  const checkedCount = webLinks.filter(l => linkStatus[l.id] !== undefined).length;
+  const onlineCount = checkedCount - downLinks.length;
+  const uncheckedCount = webLinks.length - checkedCount;
+  const healthBtn = statsScanning
+    ? `<button class="stat-toggle" disabled style="opacity:.7"><i class="ti ti-loader" style="animation:spin 1s linear infinite"></i> Checking… ${statsScanDone}/${statsScanTotal}</button>`
+    : `<button class="stat-toggle" onclick="scanLinksForStats()"><i class="ti ti-wifi"></i> ${checkedCount ? 'Re-check' : 'Check all'}</button>`;
+  let healthBody;
+  if (!checkedCount && !statsScanning) {
+    healthBody = `<div style="font-size:13px;color:var(--text2)">Run a check to see which links are reachable.</div>`;
+  } else {
+    const downList = downLinks.length
+      ? `<div class="stat-never-list" style="margin-top:6px">${downLinks.map(l => `
+          <div class="stat-never-item" style="display:flex;align-items:center;gap:8px;cursor:pointer" onclick="openStatLink('${esc(l.id)}')" title="${esc(l.url)}">
+            <i class="ti ti-alert-triangle" style="font-size:13px;color:#E24B4A;flex-shrink:0"></i>
+            <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">${esc(l.title)}</span>
+            <span class="stat-row-sub">${linkStatus[l.id] === 'timeout' ? 'Timed out' : 'Broken'}</span>
+          </div>`).join('')}</div>`
+      : `<div style="font-size:13px;color:var(--g3);margin-top:4px">All checked links are online.</div>`;
+    healthBody = `
+      <div class="stat-summary" style="grid-template-columns:1fr 1fr 1fr">
+        <div class="stat-summary-card"><div class="stat-summary-value" style="color:var(--g2)">${onlineCount}</div><div class="stat-summary-label">Online</div></div>
+        <div class="stat-summary-card"><div class="stat-summary-value" style="color:#E24B4A">${downLinks.length}</div><div class="stat-summary-label">Issues</div></div>
+        <div class="stat-summary-card"><div class="stat-summary-value" style="color:var(--text2)">${uncheckedCount}</div><div class="stat-summary-label">Unchecked</div></div>
+      </div>
+      ${downList}`;
+  }
+  return `
+    <div class="stat-section-title" style="display:flex;align-items:center;justify-content:space-between">
+      <span>Link Health</span>
+      ${healthBtn}
+    </div>
+    ${healthBody}`;
+}
+function updateHealthSection() {
+  const el = document.getElementById('statHealth');
+  if (el) el.innerHTML = renderHealthSection();
 }
 function openFolderManager() {
   renderFolderManager();
@@ -2752,36 +2794,6 @@ function renderStats() {
 
   const neverList = statsNeverExpanded ? `<div class="stat-never-list">${never.map(l => `<div class="stat-never-item">${esc(l.title)}</div>`).join('')}</div>` : '';
 
-  // Link health — reachability from the link checker (linkStatus map).
-  const webLinks = active.filter(l => /^https?:\/\//i.test(l.url));
-  const downLinks = webLinks.filter(l => { const s = linkStatus[l.id]; return s === 'broken' || s === 'timeout'; });
-  const checkedCount = webLinks.filter(l => linkStatus[l.id] !== undefined).length;
-  const onlineCount = checkedCount - downLinks.length;
-  const uncheckedCount = webLinks.length - checkedCount;
-  const healthBtn = statsScanning
-    ? `<button class="stat-toggle" disabled style="opacity:.7"><i class="ti ti-loader" style="animation:spin 1s linear infinite"></i> Checking… ${statsScanDone}/${statsScanTotal}</button>`
-    : `<button class="stat-toggle" onclick="scanLinksForStats()"><i class="ti ti-wifi"></i> ${checkedCount ? 'Re-check' : 'Check all'}</button>`;
-  let healthBody;
-  if (!checkedCount && !statsScanning) {
-    healthBody = `<div style="font-size:13px;color:var(--text2)">Run a check to see which links are reachable.</div>`;
-  } else {
-    const downList = downLinks.length
-      ? `<div class="stat-never-list" style="margin-top:6px">${downLinks.map(l => `
-          <div class="stat-never-item" style="display:flex;align-items:center;gap:8px;cursor:pointer" onclick="openStatLink('${esc(l.id)}')" title="${esc(l.url)}">
-            <i class="ti ti-alert-triangle" style="font-size:13px;color:#E24B4A;flex-shrink:0"></i>
-            <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">${esc(l.title)}</span>
-            <span class="stat-row-sub">${linkStatus[l.id] === 'timeout' ? 'Timed out' : 'Broken'}</span>
-          </div>`).join('')}</div>`
-      : `<div style="font-size:13px;color:var(--g3);margin-top:4px">All checked links are online.</div>`;
-    healthBody = `
-      <div class="stat-summary" style="grid-template-columns:1fr 1fr 1fr">
-        <div class="stat-summary-card"><div class="stat-summary-value" style="color:var(--g2)">${onlineCount}</div><div class="stat-summary-label">Online</div></div>
-        <div class="stat-summary-card"><div class="stat-summary-value" style="color:#E24B4A">${downLinks.length}</div><div class="stat-summary-label">Issues</div></div>
-        <div class="stat-summary-card"><div class="stat-summary-value" style="color:var(--text2)">${uncheckedCount}</div><div class="stat-summary-label">Unchecked</div></div>
-      </div>
-      ${downList}`;
-  }
-
   document.getElementById('statsContent').innerHTML = `
     <div class="stat-section">
       <div class="stat-section-title">Summary</div>
@@ -2794,13 +2806,7 @@ function renderStats() {
         <div class="stat-summary-card"><div class="stat-summary-value">${archivedCount}</div><div class="stat-summary-label">Archived</div></div>
       </div>
     </div>
-    <div class="stat-section">
-      <div class="stat-section-title" style="display:flex;align-items:center;justify-content:space-between">
-        <span>Link Health</span>
-        ${healthBtn}
-      </div>
-      ${healthBody}
-    </div>
+    <div class="stat-section" id="statHealth">${renderHealthSection()}</div>
     <div class="stat-section">
       <div class="stat-section-title">By Folder</div>
       ${folderRows}${noFolderRow}
