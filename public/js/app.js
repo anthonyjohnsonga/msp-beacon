@@ -2480,11 +2480,16 @@ function renderHealthSection() {
   const checkedCount = webLinks.filter(l => linkStatus[l.id] !== undefined).length;
   const onlineCount = checkedCount - downLinks.length;
   const uncheckedCount = webLinks.length - checkedCount;
-  const healthBtn = statsScanning
+  // No web links → nothing to check, so don't offer the button or invite a scan.
+  const healthBtn = webLinks.length === 0
+    ? ''
+    : statsScanning
     ? `<button class="stat-toggle" disabled style="opacity:.7"><i class="ti ti-loader" style="animation:spin 1s linear infinite"></i> Checking… ${statsScanDone}/${statsScanTotal}</button>`
     : `<button class="stat-toggle" onclick="scanLinksForStats()"><i class="ti ti-wifi"></i> ${checkedCount ? 'Re-check' : 'Check all'}</button>`;
   let healthBody;
-  if (!checkedCount && !statsScanning) {
+  if (webLinks.length === 0) {
+    healthBody = `<div style="font-size:13px;color:var(--text2)">No web links to check.</div>`;
+  } else if (!checkedCount && !statsScanning) {
     healthBody = `<div style="font-size:13px;color:var(--text2)">Run a check to see which links are reachable.</div>`;
   } else {
     const downList = downLinks.length
