@@ -2453,9 +2453,11 @@ async function scanLinksForStats() {
   const ids = links.filter(l => !l.archived && /^https?:\/\//i.test(l.url)).map(l => l.id);
   if (!ids.length) { showToast('No web links to check'); return; }
   statsScanning = true; statsScanDone = 0; statsScanTotal = ids.length;
-  if (statsOpen()) updateHealthSection();
   const CHUNK = 25;
+  // try/finally so statsScanning always resets — otherwise an unexpected throw
+  // would leave the button stuck disabled until a reload.
   try {
+    if (statsOpen()) updateHealthSection();
     for (let i = 0; i < ids.length; i += CHUNK) {
       const chunk = ids.slice(i, i + CHUNK);
       const res = await fetch('/api/check-links?ids=' + chunk.map(encodeURIComponent).join(','));
@@ -2465,8 +2467,10 @@ async function scanLinksForStats() {
     }
     lastHomeStatusAt = Date.now();
   } catch { showToast('Link check failed', true); }
-  statsScanning = false;
-  if (statsOpen()) updateHealthSection();
+  finally {
+    statsScanning = false;
+    if (statsOpen()) updateHealthSection();
+  }
 }
 // Builds just the Link Health section body so a scan can refresh it in place
 // without re-rendering (and re-sorting/re-filtering) the entire Stats panel.
