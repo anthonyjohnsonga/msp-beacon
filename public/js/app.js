@@ -2794,6 +2794,30 @@ function renderStats() {
     <span class="stat-row-sub">${noFolderCount} link${noFolderCount !== 1 ? 's' : ''}</span>
   </div>` : '';
 
+  // By Tag — single pass tallying each tag (a link can have several) plus untagged.
+  const tagCounts = {};
+  let untaggedCount = 0;
+  active.forEach(l => {
+    const ts = l.tags || [];
+    if (!ts.length) { untaggedCount++; return; }
+    ts.forEach(t => { tagCounts[t] = (tagCounts[t] || 0) + 1; });
+  });
+  const tagRows = Object.entries(tagCounts)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([t, count]) => `<div class="stat-row">
+      <i class="ti ti-tag" style="font-size:13px;color:${getTagColor(t) || 'var(--g4)'};flex-shrink:0"></i>
+      <span class="stat-row-label">${esc(t)}</span>
+      <span class="stat-row-sub">${count} link${count !== 1 ? 's' : ''}</span>
+    </div>`).join('');
+  const untaggedRow = untaggedCount > 0 ? `<div class="stat-row">
+    <i class="ti ti-minus" style="font-size:13px;color:var(--text2);flex-shrink:0"></i>
+    <span class="stat-row-label" style="color:var(--text2)">Untagged</span>
+    <span class="stat-row-sub">${untaggedCount} link${untaggedCount !== 1 ? 's' : ''}</span>
+  </div>` : '';
+  const tagSection = (tagRows || untaggedRow)
+    ? `${tagRows}${untaggedRow}`
+    : `<div style="font-size:13px;color:var(--text2)">No tags yet.</div>`;
+
   const topRows = top10.length ? top10.map(l => `
     <div class="stat-row">
       <span class="stat-row-label">${esc(l.title)}</span>
@@ -2819,6 +2843,10 @@ function renderStats() {
     <div class="stat-section">
       <div class="stat-section-title">By Folder</div>
       ${folderRows}${noFolderRow}
+    </div>
+    <div class="stat-section">
+      <div class="stat-section-title">By Tag</div>
+      ${tagSection}
     </div>
     <div class="stat-section">
       <div class="stat-section-title">Top 10 Most Visited</div>
