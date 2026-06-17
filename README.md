@@ -1,5 +1,11 @@
 # MSP Beacon — Portable Link Organizer
 
+[![Latest release](https://img.shields.io/github/v/release/anthonyjohnsonga/msp-beacon?color=2e7d32&label=release)](https://github.com/anthonyjohnsonga/msp-beacon/releases/latest)
+[![Build](https://img.shields.io/github/actions/workflow/status/anthonyjohnsonga/msp-beacon/docker.yml?color=2e7d32&label=build)](https://github.com/anthonyjohnsonga/msp-beacon/actions/workflows/docker.yml)
+[![Docker image](https://img.shields.io/badge/ghcr.io-msp--beacon-2e7d32?logo=docker&logoColor=white)](https://github.com/anthonyjohnsonga/msp-beacon/pkgs/container/msp-beacon)
+[![License: MIT](https://img.shields.io/github/license/anthonyjohnsonga/msp-beacon?color=2e7d32)](LICENSE)
+[![Last commit](https://img.shields.io/github/last-commit/anthonyjohnsonga/msp-beacon?color=2e7d32)](https://github.com/anthonyjohnsonga/msp-beacon/commits/main)
+
 A self-hosted, Docker-based personal link organizer with a dark green UI.
 Links are saved to a `links.json` file in a mounted folder — easy to back up,
 move between machines, or host on a file share.
