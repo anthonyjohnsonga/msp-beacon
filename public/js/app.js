@@ -119,11 +119,47 @@ let contentMatchQuery = '';        // query that contentMatchIds corresponds to
 let contentOnlyIds = new Set();    // matched via page text only (no title/url/tag hit) — for the badge
 let contentSearchTimer = null;
 let contentSearchToken = 0;        // guards against out-of-order /api/search-content responses
+// Search operators: tag:, folder:, is:<flag>. Quoted values supported (folder:"My Stuff").
+// Anything not matching an operator stays free text (title/url/desc/tag + page-content search).
+const SEARCH_FLAG_ALIASES = {
+  favorite: 'favorite', fav: 'favorite', star: 'favorite', starred: 'favorite',
+  readlater: 'readlater', unread: 'readlater', rl: 'readlater',
+  broken: 'broken', down: 'broken', dead: 'broken',
+  online: 'online', ok: 'online', up: 'online', healthy: 'online',
+  untagged: 'untagged', notags: 'untagged',
+  archived: 'archived', archive: 'archived',
+};
+function parseSearch(raw) {
+  const tags = [], folders = [], flags = [], terms = [];
+  const tokens = (raw || '').match(/(?:[^\s"]+|"[^"]*")+/g) || [];
+  for (const tok of tokens) {
+    const m = tok.match(/^([a-z]+):(.*)$/i);
+    if (m) {
+      const key = m[1].toLowerCase();
+      const val = m[2].replace(/"/g, '').trim().toLowerCase();
+      if (key === 'tag' && val) { tags.push(val); continue; }
+      if (key === 'folder' && val) { folders.push(val); continue; }
+      if (key === 'is' && SEARCH_FLAG_ALIASES[val]) { flags.push(SEARCH_FLAG_ALIASES[val]); continue; }
+    }
+    terms.push(tok.replace(/"/g, '').toLowerCase());
+  }
+  return { tags, folders, flags, text: terms.join(' ').trim() };
+}
+function linkMatchesFlag(l, flag) {
+  switch (flag) {
+    case 'favorite': return !!l.favorite;
+    case 'readlater': return !!l.readLater;
+    case 'broken': return linkStatus[l.id] === 'broken' || linkStatus[l.id] === 'timeout';
+    case 'online': return linkStatus[l.id] === 'ok';
+    case 'untagged': return !((l.tags || []).length);
+    default: return true; // 'archived' handled separately in render()
+  }
+}
 function onSearchInput(v) {
   debouncedRender();
   hideSearchHistory();
   clearTimeout(contentSearchTimer);
-  contentSearchTimer = setTimeout(() => updateContentMatches(v), 300);
+  contentSearchTimer = setTimeout(() => updateContentMatches(parseSearch(v).text), 300);
 }
 async function updateContentMatches(q) {
   const token = ++contentSearchToken; // any newer call (incl. a clear) supersedes us
@@ -905,15 +941,27 @@ function render() {
   const sortEl = document.getElementById('sortSelect');
   if (sortEl) sortEl.value = currentSort;
   updateFilterBadge();
-  const contentActive = q && contentMatchQuery === q;
+  const parsed = parseSearch(q);
+  const wantArchived = parsed.flags.includes('archived');
+  const contentActive = parsed.text && contentMatchQuery === parsed.text;
   contentOnlyIds = new Set();
   let fil = links.filter(l => {
-    if (l.archived) return false;
+    if (wantArchived) { if (!l.archived) return false; }
+    else if (l.archived) return false;
     if (ff && l.folder !== ff) return false;
     if (tf && !(l.tags || []).some(t => t.toLowerCase() === tf.toLowerCase())) return false;
     if (stf === 'readlater' && !l.readLater) return false;
-    if (q) {
-      const textMatch = (l.title+l.url+l.desc+(l.folder||'')+(l.subfolder||'')+(l.tags||[]).join(' ')).toLowerCase().includes(q);
+    for (const flag of parsed.flags) { if (flag !== 'archived' && !linkMatchesFlag(l, flag)) return false; }
+    if (parsed.tags.length) {
+      const lt = (l.tags || []).map(t => t.toLowerCase());
+      if (!parsed.tags.every(tg => lt.some(t => t.includes(tg)))) return false;
+    }
+    if (parsed.folders.length) {
+      const lf = (l.folder || '').toLowerCase(), lsf = (l.subfolder || '').toLowerCase();
+      if (!parsed.folders.some(fd => lf.includes(fd) || lsf.includes(fd))) return false;
+    }
+    if (parsed.text) {
+      const textMatch = (l.title+l.url+l.desc+(l.folder||'')+(l.subfolder||'')+(l.tags||[]).join(' ')).toLowerCase().includes(parsed.text);
       const contentMatch = contentActive && contentMatchIds.has(l.id);
       if (!textMatch && !contentMatch) return false;
       if (!textMatch && contentMatch) contentOnlyIds.add(l.id);

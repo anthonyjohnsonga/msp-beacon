@@ -38,6 +38,7 @@ move between machines, or host on a file share.
 
 ### Search & Filter
 - **Search** — real-time search across title, URL, description, folder, and tags (press `/` or `Ctrl+K`)
+- **Search operators** — narrow results with `tag:`, `folder:`, and `is:` filters right in the search box: `is:favorite`, `is:readlater`, `is:broken`, `is:online`, `is:untagged`, `is:archived`. Combine them with free text (`tag:dev grafana`) and quote multi-word values (`folder:"My Stuff"`)
 - **Full-text content search** — optionally index the page text behind your links (Settings → Index page content); search then matches words found *on the page*, not just the title and URL
 - **Search history** — recent searches drop down under the search box for quick re-use
 - **Filter button** — folder filter, tag filter, and sort consolidated into a single toolbar button with an active-count badge
