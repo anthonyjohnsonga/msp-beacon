@@ -58,7 +58,7 @@ move between machines, or host on a file share.
 - **List view toggle** — switch between card grid and compact row layout; preference saved
 - **Card density toggle** — cycle through compact, comfortable, and spacious grid layouts
 - **Folder color accent on cards** — cards show a colored left border matching their folder
-- **Themes & accent color** — 6 built-in color themes (Green, Blue, Purple, Teal, Orange, Red) plus a custom accent color
+- **Themes & accent color** — 12 built-in accent themes (Green, Blue, Purple, Teal, Orange, Red, Rose, Amber, Cyan, Indigo, Fuchsia, Slate) plus a custom accent color picker
 - **Light & dark mode** — toggle between light and dark appearance
 
 ### Stats & Health

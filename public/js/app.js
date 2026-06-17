@@ -1370,6 +1370,12 @@ const THEMES = {
   Teal:   { g1:'#CCFBF1', g2:'#5EEAD4', g3:'#2DD4BF', g4:'#0D9488', g5:'#0F766E', g6:'#115E59', glow:'rgba(13,148,136,.15)' },
   Orange: { g1:'#FEF3C7', g2:'#FCD34D', g3:'#F59E0B', g4:'#D97706', g5:'#B45309', g6:'#92400E', glow:'rgba(217,119,6,.15)' },
   Red:    { g1:'#FEE2E2', g2:'#FCA5A5', g3:'#F87171', g4:'#DC2626', g5:'#B91C1C', g6:'#7F1D1D', glow:'rgba(220,38,38,.15)' },
+  Rose:   { g1:'#FFE4E6', g2:'#FDA4AF', g3:'#FB7185', g4:'#E11D48', g5:'#9F1239', g6:'#881337', glow:'rgba(225,29,72,.15)' },
+  Amber:  { g1:'#FEF9C3', g2:'#FDE047', g3:'#FACC15', g4:'#CA8A04', g5:'#854D0E', g6:'#713F12', glow:'rgba(202,138,4,.15)' },
+  Cyan:   { g1:'#CFFAFE', g2:'#67E8F9', g3:'#22D3EE', g4:'#0891B2', g5:'#155E75', g6:'#164E63', glow:'rgba(8,145,178,.15)' },
+  Indigo: { g1:'#E0E7FF', g2:'#A5B4FC', g3:'#818CF8', g4:'#4F46E5', g5:'#3730A3', g6:'#312E81', glow:'rgba(79,70,229,.15)' },
+  Fuchsia:{ g1:'#FAE8FF', g2:'#F0ABFC', g3:'#E879F9', g4:'#C026D3', g5:'#86198F', g6:'#701A75', glow:'rgba(192,38,211,.15)' },
+  Slate:  { g1:'#E2E8F0', g2:'#CBD5E1', g3:'#94A3B8', g4:'#64748B', g5:'#334155', g6:'#1E293B', glow:'rgba(100,116,139,.15)' },
 };
 
 const MODES = {
@@ -1422,7 +1428,7 @@ function openTheme() {
   const grid = document.getElementById('themeGrid');
   const presets = Object.entries(THEMES).map(([name, t]) => `
     <div class="theme-swatch${name===currentTheme?' active':''}" data-theme="${name}" onclick="applyTheme('${name}')">
-      <div class="swatch-dot" style="background:linear-gradient(135deg,${t.g3},${t.g5})"></div>
+      <div class="swatch-dot" style="background:linear-gradient(135deg,${t.g2},${t.g3} 40%,${t.g4} 70%,${t.g6})"></div>
       <span class="swatch-label">${name}</span>
     </div>`).join('');
   const custom = `
