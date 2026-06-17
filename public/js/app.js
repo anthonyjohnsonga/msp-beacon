@@ -971,13 +971,26 @@ function render() {
   fil = sortLinks(fil);
   visibleIds = fil.map(l => l.id);
   const c = document.getElementById('content');
+  // When filtering by health status, warn if some links haven't been checked yet — their
+  // status is unknown so is:broken/is:online results may be incomplete. Offer a one-click scan.
+  let healthHint = '';
+  if (!wantArchived && (parsed.flags.includes('broken') || parsed.flags.includes('online'))) {
+    const webLinks = links.filter(l => !l.archived && /^https?:\/\//i.test(l.url));
+    const unchecked = webLinks.filter(l => linkStatus[l.id] === undefined).length;
+    if (unchecked > 0) {
+      healthHint = `<div class="health-hint">
+        <span class="health-hint-msg"><i class="ti ti-alert-circle health-hint-icon"></i>${unchecked} of ${webLinks.length} links not yet checked — results may be incomplete.</span>
+        <button class="health-hint-btn" id="healthHintBtn" onclick="checkUncheckedLinks()"><i class="ti ti-wifi"></i> Check links now</button>
+      </div>`;
+    }
+  }
   if (!fil.length) {
-    c.innerHTML = `<div class="empty"><i class="ti ti-bookmarks"></i>${links.length ? 'No results match your filters.' : 'No links yet — click <strong>Add link</strong> or <strong>Import</strong> to get started.'}</div>`;
+    c.innerHTML = healthHint + `<div class="empty"><i class="ti ti-bookmarks"></i>${links.length ? 'No results match your filters.' : 'No links yet — click <strong>Add link</strong> or <strong>Import</strong> to get started.'}</div>`;
     return;
   }
   const cardFn = currentView === 'list' ? cardListHtml : cardHtml;
   const wrap = items => currentView === 'list' ? `<div class="link-list">${items.map(cardFn).join('')}</div>` : `<div class="grid">${items.map(cardFn).join('')}</div>`;
-  if (ff || q || tf || stf) { c.innerHTML = wrap(fil); return; }
+  if (ff || q || tf || stf) { c.innerHTML = healthHint + wrap(fil); return; }
   const byF = {}, noF = [];
   fil.forEach(l => { l.folder ? (byF[l.folder] = byF[l.folder] || [], byF[l.folder].push(l)) : noF.push(l); });
   let html = '';
@@ -2472,6 +2485,24 @@ async function checkLinks() {
   }
   btn.disabled = false;
   btn.innerHTML = '<i class="ti ti-wifi"></i> Check links';
+}
+
+// Health-hint action: check only the web links whose status is still unknown, then re-render.
+async function checkUncheckedLinks() {
+  const ids = links
+    .filter(l => !l.archived && /^https?:\/\//i.test(l.url) && linkStatus[l.id] === undefined)
+    .map(l => l.id);
+  if (!ids.length) { render(); return; }
+  const btn = document.getElementById('healthHintBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader" style="animation:spin 1s linear infinite"></i> Checking…'; }
+  try {
+    const res = await fetch('/api/check-links?ids=' + ids.map(encodeURIComponent).join(','));
+    if (!res.ok) throw new Error('Server error ' + res.status);
+    Object.assign(linkStatus, await res.json());
+  } catch (e) {
+    showToast('Link check failed', true);
+  }
+  render();
 }
 
 function openLink(id, url) {
