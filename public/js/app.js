@@ -2849,7 +2849,8 @@ function renderStats() {
   </div>` : '';
 
   // By Tag — single pass tallying each tag (a link can have several) plus untagged.
-  const tagCounts = {};
+  // Object.create(null) so tag names like "constructor" or "__proto__" can't collide with Object.prototype.
+  const tagCounts = Object.create(null);
   let untaggedCount = 0;
   active.forEach(l => {
     const ts = l.tags || [];
