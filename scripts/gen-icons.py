@@ -69,13 +69,9 @@ def _tile(size, rounded):
 
 def render(size, rounded):
     s = size * SS
-    img = _tile(s, rounded)
-    img.alpha_composite(_gradient(s), (0, 0))  # tint full canvas...
-    # ...then keep gradient only inside the bookmark mask.
-    grad = Image.new("RGBA", (s, s))
-    grad.alpha_composite(_gradient(s), (0, 0))
     base = _tile(s, rounded)
-    base.paste(grad, (0, 0), _bookmark_mask(s))
+    # Keep the gradient only inside the bookmark mask.
+    base.paste(_gradient(s), (0, 0), _bookmark_mask(s))
     return base.resize((size, size), Image.LANCZOS)
 
 
