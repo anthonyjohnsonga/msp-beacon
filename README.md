@@ -12,6 +12,26 @@ move between machines, or host on a file share.
 
 ---
 
+## Table of Contents
+
+- [Features](#features)
+  - [Links](#links)
+  - [Organization](#organization)
+  - [Search & Filter](#search--filter)
+  - [Homepage / Dashboard](#homepage--dashboard)
+  - [Views & Appearance](#views--appearance)
+  - [Stats & Health](#stats--health)
+  - [Import & Export](#import--export)
+  - [General](#general)
+- [Getting Started](#getting-started)
+- [Updating](#updating)
+- [Changing the Port](#changing-the-port)
+- [Accessing Over Tailscale](#accessing-over-tailscale)
+- [Backing Up](#backing-up)
+- [Moving to a New Machine](#moving-to-a-new-machine)
+
+---
+
 ## Features
 
 > [!NOTE]
@@ -47,6 +67,9 @@ move between machines, or host on a file share.
 - **Filter button** — folder filter, tag filter, and sort consolidated into a single toolbar button with an active-count badge
 - **Click a tag to filter** — click any tag chip on a card to instantly filter to that tag (or right-click for more options)
 - **Sort options** — sort by manual order, A→Z, Z→A, newest, oldest, or most visited
+
+> [!TIP]
+> Combine search operators to slice your links fast. For example, `tag:dev folder:"Home Lab" is:online grafana` matches online links tagged `dev`, in the `Home Lab` folder, whose text contains `grafana`. Quote multi-word values, and stack `is:` filters like `is:favorite`, `is:readlater`, `is:broken`, `is:untagged`, or `is:archived`.
 
 ### Homepage / Dashboard
 - **Home dashboard** — a start page with a live clock, time-of-day greeting, a prominent search box, and quick-access tiles for your links and folders
