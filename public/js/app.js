@@ -234,6 +234,10 @@ const DEFAULT_DASHBOARD = SECTION_WIDGETS.map(type => ({ id: type, type, enabled
 const LINKGROUP_MAX_ITEMS = 50;
 let dashboard = JSON.parse(localStorage.getItem('msp-dashboard') || 'null');
 let dashboardEditMode = false;
+// One-time dashboard migrations already applied for this user (synced via
+// config.json so each migration runs once per user, not once per device, and
+// so a widget a user later removes is never silently re-added).
+let dashboardMigrations = JSON.parse(localStorage.getItem('msp-dashboard-migrations') || '[]');
 
 function getDashboard() {
   return Array.isArray(dashboard) && dashboard.length ? dashboard : DEFAULT_DASHBOARD.map(w => ({ ...w }));
@@ -241,6 +245,26 @@ function getDashboard() {
 function persistDashboard() {
   localStorage.setItem('msp-dashboard', JSON.stringify(dashboard));
   saveConfig();
+}
+// Run pending one-time dashboard migrations. New installs already get every
+// widget from DEFAULT_DASHBOARD; these only patch the saved layouts of existing
+// users. Each id runs exactly once (tracked in dashboardMigrations).
+function migrateDashboard() {
+  if (!dashboardMigrations.includes('recently-added-v1')) {
+    dashboardMigrations.push('recently-added-v1');
+    localStorage.setItem('msp-dashboard-migrations', JSON.stringify(dashboardMigrations));
+    // Only existing, customized layouts need patching; null falls back to the
+    // default, which already includes the widget.
+    if (Array.isArray(dashboard) && dashboard.length && !dashboard.some(w => w.type === 'recently-added')) {
+      const widget = { id: 'recently-added', type: 'recently-added', enabled: true };
+      const mv = dashboard.findIndex(w => w.type === 'most-visited');
+      const fo = dashboard.findIndex(w => w.type === 'folders');
+      if (mv !== -1) dashboard.splice(mv + 1, 0, widget);
+      else if (fo !== -1) dashboard.splice(fo, 0, widget);
+      else dashboard.push(widget);
+    }
+    persistDashboard(); // writes the dashboard + the migration flag to config
+  }
 }
 // Accept only known widget shapes — a restored/hand-edited config must not be
 // able to inject unknown types or non-http link URLs into the homepage.
@@ -320,7 +344,7 @@ function sortLinks(arr) {
 }
 
 function saveConfig() {
-  const cfg = { folderColors, subfolderColors, tagColors, folderIcons, folderOrder, rssFeeds, theme: currentTheme, accent: customAccent, mode: themeMode, defaultView, homeBg, dashboard };
+  const cfg = { folderColors, subfolderColors, tagColors, folderIcons, folderOrder, rssFeeds, theme: currentTheme, accent: customAccent, mode: themeMode, defaultView, homeBg, dashboard, dashboardMigrations };
   fetch('/api/config', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -354,6 +378,10 @@ function applyServerConfig(cfg) {
   if ('dashboard' in cfg) {
     dashboard = sanitizeDashboard(cfg.dashboard);
     localStorage.setItem('msp-dashboard', JSON.stringify(dashboard));
+  }
+  if (Array.isArray(cfg.dashboardMigrations)) {
+    dashboardMigrations = cfg.dashboardMigrations.filter(x => typeof x === 'string');
+    localStorage.setItem('msp-dashboard-migrations', JSON.stringify(dashboardMigrations));
   }
   if (cfg.folderIcons && typeof cfg.folderIcons === 'object') {
     folderIcons = cfg.folderIcons;
@@ -396,6 +424,7 @@ async function loadLinks() {
     const data = await linksRes.json();
     links = Array.isArray(data) ? data : [];
     if (cfgRes && cfgRes.ok) applyServerConfig(await cfgRes.json());
+    migrateDashboard();
     render();
   } catch(e) {
     console.error('Failed to load links', e);
