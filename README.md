@@ -38,6 +38,10 @@ move between machines, or host on a file share.
 > MSP Beacon packs a lot into a single self-hosted container. Here's everything it can do, grouped by area.
 
 ### Links
+
+<details>
+<summary>Show 7 features</summary>
+
 - **Add, edit, delete links** — save any URL with a title, description, folder, sub-folder, and tags
 - **Auto-fetch page title** — blurring the URL field fetches the page title automatically; falls back to `og:title` and `meta[name=title]` if `<title>` is missing
 - **Copy URL** — one-click copy button on every card
@@ -46,7 +50,13 @@ move between machines, or host on a file share.
 - **Archive** — archive links to tuck them out of the main view without deleting; browse and restore them from Settings → Archive
 - **Favorites** — star any link to pin it to a collapsible Favorites section at the top
 
+</details>
+
 ### Organization
+
+<details>
+<summary>Show 11 features</summary>
+
 - **Folders & sub-folders** — group links into collapsible folders with one level of sub-folder nesting; smooth slide/fade animation on expand/collapse
 - **Folder color coding** — assign a custom color to each folder; color cascades to sub-folders and card accents
 - **Folder icons** — click the folder icon to pick from 24 presets; persists across rename
@@ -59,7 +69,13 @@ move between machines, or host on a file share.
 - **Bulk actions** — checkbox select mode to delete, move, or tag multiple links at once
 - **Collapse all / Expand all** — Settings menu buttons to collapse or expand every folder at once
 
+</details>
+
 ### Search & Filter
+
+<details>
+<summary>Show 7 features</summary>
+
 - **Search** — real-time search across title, URL, description, folder, and tags (press `/` or `Ctrl+K`)
 - **Search operators** — narrow results with `tag:`, `folder:`, and `is:` filters right in the search box: `is:favorite`, `is:readlater`, `is:broken`, `is:online`, `is:untagged`, `is:archived`. Combine them with free text (`tag:dev grafana`) and quote multi-word values (`folder:"My Stuff"`)
 - **Full-text content search** — optionally index the page text behind your links (Settings → Index page content); search then matches words found *on the page*, not just the title and URL
@@ -68,10 +84,16 @@ move between machines, or host on a file share.
 - **Click a tag to filter** — click any tag chip on a card to instantly filter to that tag (or right-click for more options)
 - **Sort options** — sort by manual order, A→Z, Z→A, newest, oldest, or most visited
 
+</details>
+
 > [!TIP]
 > Combine search operators to slice your links fast. For example, `tag:dev folder:"Home Lab" is:online grafana` matches online links tagged `dev`, in the `Home Lab` folder, whose text contains `grafana`. Quote multi-word values, and stack `is:` filters like `is:favorite`, `is:readlater`, `is:broken`, `is:untagged`, or `is:archived`.
 
 ### Homepage / Dashboard
+
+<details>
+<summary>Show 7 features</summary>
+
 - **Home dashboard** — a start page with a live clock, time-of-day greeting, a prominent search box, and quick-access tiles for your links and folders
 - **Customizable widget layout** — click **Edit dashboard** (header button or Settings → View) to drag the widgets (Clock, Search, Favorites, Recent, Most visited, Folders, Latest) into any order and show/hide each one. Your layout saves to your config and syncs across devices
 - **Link group widgets** — add your own widgets that hold a titled set of hand-picked app/link tiles, separate from your saved bookmarks — an app-launcher feel for your homelab services
@@ -80,29 +102,55 @@ move between machines, or host on a file share.
 - **Custom homepage background** — set a backdrop from a built-in gradient, an image URL, or your own uploaded image (stored locally on your server, no third-party calls), with dim and blur sliders to keep everything readable
 - **Default view** — choose whether the app opens on the Home dashboard or the link Manager
 
+</details>
+
 ### Views & Appearance
+
+<details>
+<summary>Show 5 features</summary>
+
 - **List view toggle** — switch between card grid and compact row layout; preference saved
 - **Card density toggle** — cycle through compact, comfortable, and spacious grid layouts
 - **Folder color accent on cards** — cards show a colored left border matching their folder
 - **Themes & accent color** — 12 built-in accent themes (Green, Blue, Purple, Teal, Orange, Red, Rose, Amber, Cyan, Indigo, Fuchsia, Slate) plus a custom accent color picker
 - **Light & dark mode** — toggle between light and dark appearance
 
+</details>
+
 ### Stats & Health
+
+<details>
+<summary>Show 4 features</summary>
+
 - **Visit counter** — tracks how many times each link has been opened
 - **Last visited timestamp** — shows "2h ago", "3d ago" etc. on each card
 - **Stats report** — Settings → Stats shows total links, total visits, links per folder, top 10 most visited, and never-visited links
 - **Link health check** — Settings → Check links runs HEAD requests against all visible links and badges broken ones
 
+</details>
+
 ### Import & Export
+
+<details>
+<summary>Show 3 features</summary>
+
 - **Import bookmarks** — drop a browser-exported HTML file to import from Chrome, Edge, or Firefox; preview and select before importing
 - **Export bookmarks** — export all links as a browser-compatible HTML bookmark file
 - **Full backup & restore** — export everything (all links plus your settings) to a single JSON file, and restore it later in one step
 
+</details>
+
 ### General
+
+<details>
+<summary>Show 4 features</summary>
+
 - **Auto-save** — changes save automatically with a debounced write queue and atomic file writes
 - **Favicon display** — fetches and caches each site's favicon locally (no third-party calls; works for internal/homelab hosts)
 - **Persistent state** — collapsed folders, folder order, theme, accent, mode, view, density, and sort are saved to `localStorage` and synced via `config.json`
 - **Self-hosted & portable** — all data lives in a single `links.json` file; easy to back up or move
+
+</details>
 
 ---
 
