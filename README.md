@@ -14,6 +14,9 @@ move between machines, or host on a file share.
 
 ## Features
 
+> [!NOTE]
+> MSP Beacon packs a lot into a single self-hosted container. Here's everything it can do, grouped by area.
+
 ### Links
 - **Add, edit, delete links** — save any URL with a title, description, folder, sub-folder, and tags
 - **Auto-fetch page title** — blurring the URL field fetches the page title automatically; falls back to `og:title` and `meta[name=title]` if `<title>` is missing
