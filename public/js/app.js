@@ -219,16 +219,16 @@ let lastHomeStatusAt = 0;
 // tiles. The layout persists in config.json (key: dashboard) + localStorage, so
 // it backs up and syncs like every other setting. Existing users with no saved
 // layout fall back to DEFAULT_DASHBOARD — i.e. today's exact section order.
-const SECTION_WIDGETS = ['clock', 'search', 'favorites', 'readlater', 'recent', 'most-visited', 'folders', 'latest'];
+const SECTION_WIDGETS = ['clock', 'search', 'favorites', 'readlater', 'recent', 'most-visited', 'recently-added', 'folders', 'latest'];
 const WIDGET_LABELS = {
   clock: 'Clock & greeting', search: 'Search box', favorites: 'Favorites',
   readlater: 'Read later', recent: 'Recent', 'most-visited': 'Most visited',
-  folders: 'Folders', latest: 'Latest (RSS)', linkgroup: 'Link group'
+  'recently-added': 'Recently added', folders: 'Folders', latest: 'Latest (RSS)', linkgroup: 'Link group'
 };
 const WIDGET_ICONS = {
   clock: 'ti-clock', search: 'ti-search', favorites: 'ti-star-filled',
   readlater: 'ti-bookmark', recent: 'ti-history', 'most-visited': 'ti-flame',
-  folders: 'ti-folders', latest: 'ti-rss', linkgroup: 'ti-apps'
+  'recently-added': 'ti-clock-plus', folders: 'ti-folders', latest: 'ti-rss', linkgroup: 'ti-apps'
 };
 const DEFAULT_DASHBOARD = SECTION_WIDGETS.map(type => ({ id: type, type, enabled: true }));
 const LINKGROUP_MAX_ITEMS = 50;
@@ -610,6 +610,7 @@ function homeSection(title, icon, tilesHtml, count, key) {
 }
 function homeShowAll(key) {
   if (key === 'most-visited') { currentSort = 'most-visited'; localStorage.setItem('msp-sort', currentSort); }
+  else if (key === 'recently-added') { currentSort = 'newest'; localStorage.setItem('msp-sort', currentSort); }
   else if (key === 'recent') { currentSort = 'recent'; localStorage.setItem('msp-sort', currentSort); }
   else if (key === 'readlater') { const el = document.getElementById('statusFilter'); if (el) el.value = 'readlater'; }
   goManager();
@@ -679,6 +680,9 @@ function widgetInner(w, data) {
     case 'most-visited':
       if (!data['most-visited'].length) return edit ? sectionShell('Most visited', 'ti-flame', placeholder) : '';
       return homeSection('Most visited', 'ti-flame', data['most-visited'].map(l => homeTileHtml(l, false)).join(''), 1, 'most-visited');
+    case 'recently-added':
+      if (!data['recently-added'].length) return edit ? sectionShell('Recently added', 'ti-clock-plus', placeholder) : '';
+      return homeSection('Recently added', 'ti-clock-plus', data['recently-added'].map(l => homeTileHtml(l, false)).join(''), 1, 'recently-added');
     case 'folders':
       if (!data.folders.length) return edit ? sectionShell('Folders', 'ti-folders', placeholder) : '';
       return homeSection('Folders', 'ti-folders', data.folders.map(f => homeFolderTileHtml(f, !edit)).join(''), 1, 'folders');
@@ -739,6 +743,7 @@ function renderHome() {
     readlater: active.filter(l => l.readLater).slice(0, 8),
     recent: active.filter(l => l.lastVisited).sort((a, b) => (b.lastVisited || 0) - (a.lastVisited || 0)).slice(0, 8),
     'most-visited': active.filter(l => (l.visits || 0) > 0).sort((a, b) => (b.visits || 0) - (a.visits || 0)).slice(0, 8),
+    'recently-added': active.slice().sort((a, b) => parseInt(b.id, 36) - parseInt(a.id, 36)).slice(0, 8),
     folders: getOrderedFolders(allFolders()).slice(0, 8),
   };
   const list = getDashboard();
