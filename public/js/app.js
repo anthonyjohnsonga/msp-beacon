@@ -331,13 +331,18 @@ function onSortChange() {
   updateFilterBadge();
   render();
 }
+// Numeric creation-order key from a link id. Ids are `Date.now().toString(36)`
+// plus a random base36 suffix, so a base36 parse orders them by creation time.
+// Falls back to 0 for any non-conforming (e.g. hand-edited) id so the sort stays
+// stable instead of going NaN.
+function idOrder(id) { const n = parseInt(id, 36); return Number.isNaN(n) ? 0 : n; }
 function sortLinks(arr) {
   if (currentSort === 'manual') return arr;
   const copy = arr.slice();
   if (currentSort === 'az') copy.sort((a, b) => (a.title || '').toLowerCase().localeCompare((b.title || '').toLowerCase()));
   else if (currentSort === 'za') copy.sort((a, b) => (b.title || '').toLowerCase().localeCompare((a.title || '').toLowerCase()));
-  else if (currentSort === 'newest') copy.sort((a, b) => parseInt(b.id, 36) - parseInt(a.id, 36));
-  else if (currentSort === 'oldest') copy.sort((a, b) => parseInt(a.id, 36) - parseInt(b.id, 36));
+  else if (currentSort === 'newest') copy.sort((a, b) => idOrder(b.id) - idOrder(a.id));
+  else if (currentSort === 'oldest') copy.sort((a, b) => idOrder(a.id) - idOrder(b.id));
   else if (currentSort === 'most-visited') copy.sort((a, b) => (b.visits || 0) - (a.visits || 0));
   else if (currentSort === 'recent') copy.sort((a, b) => (b.lastVisited || 0) - (a.lastVisited || 0));
   return copy;
@@ -772,7 +777,7 @@ function renderHome() {
     readlater: active.filter(l => l.readLater).slice(0, 8),
     recent: active.filter(l => l.lastVisited).sort((a, b) => (b.lastVisited || 0) - (a.lastVisited || 0)).slice(0, 8),
     'most-visited': active.filter(l => (l.visits || 0) > 0).sort((a, b) => (b.visits || 0) - (a.visits || 0)).slice(0, 8),
-    'recently-added': active.slice().sort((a, b) => parseInt(b.id, 36) - parseInt(a.id, 36)).slice(0, 8),
+    'recently-added': active.slice().sort((a, b) => idOrder(b.id) - idOrder(a.id)).slice(0, 8),
     folders: getOrderedFolders(allFolders()).slice(0, 8),
   };
   const list = getDashboard();
