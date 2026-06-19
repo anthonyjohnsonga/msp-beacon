@@ -39,7 +39,7 @@ move between machines, or host on a file share.
 
 ### Links
 
-<details>
+<details open>
 <summary>Show 7 features</summary>
 
 - **Add, edit, delete links** — save any URL with a title, description, folder, sub-folder, and tags
