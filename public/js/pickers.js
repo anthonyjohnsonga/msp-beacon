@@ -10,8 +10,9 @@ import { esc, subKey, isHexColor } from './utils.js';
 import {
   folderColors, subfolderColors, folderIcons, tagColors,
   getFolderColor, getSubfolderColor, getFolderIcon,
-  refreshOpenManagers, render, saveConfig,
+  render, saveConfig,
 } from './app.js';
+import { refreshOpenManagers } from './managers.js';
 
 const COLOR_PRESETS = ['#1D9E75','#2563EB','#7C3AED','#0D9488','#D97706','#DC2626','#DB2777','#0891B2','#65A30D','#6B7280'];
 let colorPickerTarget = null; // { type: 'folder'|'subfolder'|'tag', folder?, sf?, tag? }
