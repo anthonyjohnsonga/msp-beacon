@@ -2,13 +2,14 @@
 // ============================================================================
 // check-bridge.js — guard the window bridge in public/js/app.js.
 //
-// app.js loads as <script type="module">, so its top-level functions are NOT
-// global. Inline on*="fn()" handlers (in app.js template strings and
-// index.html) call functions by NAME against window, so each such function
-// must be re-exposed via the Object.assign(window, {...}) bridge near the end
-// of app.js. This script fails (exit 1) if:
-//   1. an inline-handler function is missing from the bridge (dead button), or
-//   2. a bridged name resolves to nothing (would throw at module load).
+// app.js loads as <script type="module">, so top-level functions are NOT
+// global. Inline on*="fn()" handlers (in index.html and the template strings of
+// app.js AND every extracted module) call functions by NAME against window, so
+// each such function must be re-exposed via the Object.assign(window, {...})
+// bridge near the end of app.js. This script fails (exit 1) if:
+//   1. an inline-handler function (defined in any module) is missing from the
+//      bridge (dead button), or
+//   2. a bridged name resolves to nothing in app.js scope (throws at load).
 //
 // Run: `node scripts/check-bridge.js`  (also wired as `npm run check`).
 // ============================================================================
@@ -27,13 +28,23 @@ const moduleSrcs = fs.readdirSync(jsDir)
   .filter(f => f.endsWith('.js'))
   .map(f => fs.readFileSync(path.join(jsDir, f), 'utf8'));
 
-// Names defined in app.js: declared functions + imported bindings.
+// Names bound in app.js scope: declared functions + imported bindings. The
+// Object.assign(window, {...}) block lives in app.js, so every bridged name
+// must resolve to one of these or it's a ReferenceError at module load.
 const declared = new Set();
 for (const m of app.matchAll(/^(?:export )?(?:async )?function ([A-Za-z0-9_]+)/gm)) declared.add(m[1]);
 const imported = new Set();
 for (const m of app.matchAll(/^import\s*\{([^}]*)\}/gm))
   m[1].split(',').forEach(n => { n = n.trim().split(/\s+as\s+/).pop().trim(); if (n) imported.add(n); });
-const bound = new Set([...declared, ...imported]);
+const boundInApp = new Set([...declared, ...imported]);
+
+// Every function WE define across all modules. Inline handlers run in global
+// scope, so any of our functions used in an on*= handler must be on the window
+// bridge — even if it lives in a module and isn't imported into app.js. (Names
+// not in this set are DOM/global builtins, which need no bridging.)
+const ourFns = new Set();
+for (const src of moduleSrcs)
+  for (const m of src.matchAll(/^(?:export )?(?:async )?function ([A-Za-z0-9_]+)/gm)) ourFns.add(m[1]);
 
 // The bridge name list.
 const blockMatch = app.match(/Object\.assign\(window,\s*\{([\s\S]*?)\}\);/);
@@ -50,10 +61,11 @@ for (const src of [html, ...moduleSrcs]) {
   }
 }
 
-// 1. Every inline-handler call that names one of our functions must be bridged.
-const missing = [...calledInHandlers].filter(n => bound.has(n) && !bridged.has(n)).sort();
-// 2. Every bridged name must resolve to a real binding.
-const unbound = [...bridged].filter(n => !bound.has(n)).sort();
+// 1. Every inline-handler call that names one of our functions (defined in ANY
+//    module, not just app.js) must be bridged.
+const missing = [...calledInHandlers].filter(n => ourFns.has(n) && !bridged.has(n)).sort();
+// 2. Every bridged name must resolve to a binding in app.js scope.
+const unbound = [...bridged].filter(n => !boundInApp.has(n)).sort();
 
 let ok = true;
 if (missing.length) {

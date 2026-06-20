@@ -7,6 +7,8 @@ export function getFavicon(u) { try { new URL(u); return '/api/favicon?url=' + e
 export function getDomain(u) { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return u; } }
 export function esc(s) { if (!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 export function isHexColor(c) { return typeof c === 'string' && /^#[0-9A-Fa-f]{6}$/.test(c); }
+// A link whose URL is http(s) — i.e. reachable/checkable on the web.
+export function isWebUrl(u) { return /^https?:\/\//i.test(u); }
 export function subKey(folder, sf) { return JSON.stringify([folder, sf]); }
 
 export function hexToRgb(hex) {

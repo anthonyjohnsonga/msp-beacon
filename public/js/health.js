@@ -1,11 +1,12 @@
 // ============================================================================
 // health.js — link reachability checking via /api/check-links. Merges results
 // into the shared linkStatus map (in-place, no reassignment) and re-renders.
-// The Stats "Link Health" scan stays in app.js; this is the toolbar "Check
+// The Stats "Link Health" scan lives in stats.js; this is the toolbar "Check
 // links" action + the health-hint "check unchecked only" follow-up.
 // ============================================================================
 
 import { links, visibleIds, linkStatus, render, closeSettings } from './app.js';
+import { isWebUrl } from './utils.js';
 import { showToast } from './toast.js';
 
 export async function checkLinks() {
@@ -36,7 +37,7 @@ export async function checkLinks() {
 // Health-hint action: check only the web links whose status is still unknown, then re-render.
 export async function checkUncheckedLinks() {
   const ids = links
-    .filter(l => !l.archived && /^https?:\/\//i.test(l.url) && linkStatus[l.id] === undefined)
+    .filter(l => !l.archived && isWebUrl(l.url) && linkStatus[l.id] === undefined)
     .map(l => l.id);
   if (!ids.length) { render(); return; }
   const btn = document.getElementById('healthHintBtn');

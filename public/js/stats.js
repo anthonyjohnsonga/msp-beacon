@@ -6,7 +6,7 @@
 // through the app.js setter after a scan so the homepage status dots stay fresh.
 // ============================================================================
 
-import { esc } from './utils.js';
+import { esc, isWebUrl } from './utils.js';
 import { showToast } from './toast.js';
 import { links, linkStatus, openLink, allFolders, getTagColor, save, setLastHomeStatusAt } from './app.js';
 
@@ -27,7 +27,7 @@ export function toggleStatsNever() { statsNeverExpanded = !statsNeverExpanded; r
 // so the panel can show live progress instead of one long hanging request.
 export async function scanLinksForStats() {
   if (statsScanning) return;
-  const ids = links.filter(l => !l.archived && /^https?:\/\//i.test(l.url)).map(l => l.id);
+  const ids = links.filter(l => !l.archived && isWebUrl(l.url)).map(l => l.id);
   if (!ids.length) { showToast('No web links to check'); return; }
   statsScanning = true; statsScanDone = 0; statsScanTotal = ids.length;
   const CHUNK = 25;
@@ -52,7 +52,7 @@ export async function scanLinksForStats() {
 // Builds just the Link Health section body so a scan can refresh it in place
 // without re-rendering (and re-sorting/re-filtering) the entire Stats panel.
 function renderHealthSection() {
-  const webLinks = links.filter(l => !l.archived && /^https?:\/\//i.test(l.url));
+  const webLinks = links.filter(l => !l.archived && isWebUrl(l.url));
   const downLinks = webLinks.filter(l => { const s = linkStatus[l.id]; return s === 'broken' || s === 'timeout'; });
   const checkedCount = webLinks.filter(l => linkStatus[l.id] !== undefined).length;
   const onlineCount = checkedCount - downLinks.length;

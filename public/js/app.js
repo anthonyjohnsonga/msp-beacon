@@ -1,4 +1,4 @@
-import { getFavicon, getDomain, esc, isHexColor, hexToRgb, hexToHsl, hslToHex, deriveAccent, subKey, timeAgo } from './utils.js';
+import { getFavicon, getDomain, esc, isHexColor, isWebUrl, hexToRgb, hexToHsl, hslToHex, deriveAccent, subKey, timeAgo } from './utils.js';
 import { ui } from './state.js';
 import { applyDensity, cycleDensity, idOrder, sortLinks } from './view.js';
 import { applyMode, applyTheme, previewCustomAccent, setCustomAccent, THEMES } from './theme.js';
@@ -209,7 +209,7 @@ async function indexAllContent() {
     const res = await fetch('/api/content-status');
     if (res.ok) indexed = new Set((await res.json()).indexed || []);
   } catch {}
-  const targets = links.filter(l => !l.archived && /^https?:\/\//i.test(l.url) && !indexed.has(l.id));
+  const targets = links.filter(l => !l.archived && isWebUrl(l.url) && !indexed.has(l.id));
   if (!targets.length) { showToast('All links already indexed'); return; }
   if (btn) btn.disabled = true;
   let done = 0;
@@ -967,7 +967,7 @@ export function render() {
   // status is unknown so is:broken/is:online results may be incomplete. Offer a one-click scan.
   let healthHint = '';
   if (!wantArchived && (parsed.flags.includes('broken') || parsed.flags.includes('online'))) {
-    const webLinks = links.filter(l => !l.archived && /^https?:\/\//i.test(l.url));
+    const webLinks = links.filter(l => !l.archived && isWebUrl(l.url));
     const unchecked = webLinks.filter(l => linkStatus[l.id] === undefined).length;
     if (unchecked > 0) {
       healthHint = `<div class="health-hint">
