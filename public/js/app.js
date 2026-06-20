@@ -8,6 +8,7 @@ import { toggleFolder, collapseAll, expandAll, renameFolder, deleteFolder, delet
 import { openFolderColorPicker, openSubfolderColorPicker, openTagColorPicker, selectPickerColor, resetPickerColor, closeFolderColorPicker, openFolderIconPicker, selectFolderIcon, closeFolderIconPicker } from './pickers.js';
 import { openFolderManager, closeFolderManager, openTagManager, closeTagManager, openFeedManager, closeFeedManager, addFeed } from './managers.js';
 import { onContextMenu, hideContextMenu } from './contextmenu.js';
+import { selectMode, selectedIds, toggleSelectMode, exitSelectMode, toggleSelect, selectAllVisible, clearSelection, onBulkFolderChange, confirmBulkMove, bulkDelete, bulkAddTag, bulkArchive } from './selection.js';
 
 // ============================================================================
 // STATE & GLOBALS
@@ -119,11 +120,9 @@ let dragId = null;
 let dragFolder = null;
 let dragOverEl = null;
 let homeDrag = null;
-let selectMode = false;
 let activeCardId = null;
 let searchHistory = JSON.parse(localStorage.getItem('msp-search-history') || '[]');
-let selectedIds = new Set();
-let visibleIds = [];
+export let visibleIds = [];
 let favoritesCollapsed = JSON.parse(localStorage.getItem('msp-fav-collapsed') || 'false');
 let searchDebounceTimer = null;
 
@@ -444,8 +443,16 @@ export async function save() {
   }, 400);
 }
 
-let pendingDelete = null;
-let pendingMove = null;
+export let pendingDelete = null;
+export let pendingMove = null;
+
+// State-mutation layer: app.js owns the `links` array and the pending undo
+// timers, but other modules can't reassign an imported `let` binding — so they
+// go through these setters. (In-place mutation, e.g. links.push, needs no
+// setter; only whole-value reassignment does.)
+export function setLinks(arr) { links = arr; }
+export function setPendingDelete(v) { pendingDelete = v; }
+export function setPendingMove(v) { pendingMove = v; }
 
 
 // ============================================================================
@@ -475,7 +482,7 @@ function undoMove() {
   showToast('Move undone');
 }
 
-function commitPendingMove() {
+export function commitPendingMove() {
   if (!pendingMove) return;
   clearTimeout(pendingMove.timer);
   pendingMove = null;
@@ -1838,132 +1845,10 @@ function toggleFavorites() {
   render();
 }
 
-function toggleSelectMode() {
-  selectMode = !selectMode;
-  selectedIds.clear();
-  document.getElementById('selectBtn').classList.toggle('active', selectMode);
-  document.getElementById('bulkBar').classList.toggle('hidden', !selectMode);
-  render();
-  if (selectMode) updateBulkBar();
-}
-
-function exitSelectMode() {
-  selectMode = false;
-  selectedIds.clear();
-  document.getElementById('selectBtn').classList.remove('active');
-  document.getElementById('bulkBar').classList.add('hidden');
-  render();
-}
-
-function toggleSelect(id) {
-  if (selectedIds.has(id)) selectedIds.delete(id);
-  else selectedIds.add(id);
-  const card = document.querySelector(`.card[data-id="${id}"], .card-row[data-id="${id}"]`);
-  if (card) {
-    const sel = selectedIds.has(id);
-    card.classList.toggle('selected', sel);
-    const chk = card.querySelector('.card-check');
-    if (chk) chk.classList.toggle('checked', sel);
-  }
-  updateBulkBar();
-}
-
-function selectAllVisible() {
-  visibleIds.forEach(id => selectedIds.add(id));
-  render(); updateBulkBar();
-}
-
-function clearSelection() {
-  selectedIds.clear();
-  render(); updateBulkBar();
-}
-
-function updateBulkBar() {
-  const n = selectedIds.size;
-  document.getElementById('bulkCount').textContent = n + ' selected';
-  const mf = document.getElementById('bulkMoveFolder');
-  mf.innerHTML = '<option value="">Move to folder…</option>'
-    + allFolders().map(f => `<option value="${esc(f)}">${esc(f)}</option>`).join('')
-    + '<option value="__none__">— Remove from folder</option>';
-  document.getElementById('bulkMoveSubfolder').style.display = 'none';
-  document.getElementById('bulkMoveConfirm').style.display = 'none';
-  document.getElementById('bulkMoveSubfolder').value = '';
-}
-
-function onBulkFolderChange(sel) {
-  if (!sel.value || sel.value === '__none__') {
-    if (sel.value === '__none__' && selectedIds.size) {
-      const n = selectedIds.size;
-      links.forEach(l => { if (selectedIds.has(l.id)) { l.folder = ''; l.subfolder = null; } });
-      sel.value = '';
-      document.getElementById('bulkMoveSubfolder').style.display = 'none';
-      document.getElementById('bulkMoveConfirm').style.display = 'none';
-      save(); render(); updateBulkBar();
-      showToast(`${n} link${n > 1 ? 's' : ''} moved`);
-    } else {
-      document.getElementById('bulkMoveSubfolder').style.display = 'none';
-      document.getElementById('bulkMoveConfirm').style.display = 'none';
-    }
-    return;
-  }
-  const folder = sel.value;
-  const subs = subfoldersByFolder(folder);
-  const dl = document.getElementById('bulkSubfolderList');
-  dl.innerHTML = subs.map(s => `<option value="${esc(s)}">`).join('');
-  document.getElementById('bulkMoveSubfolder').style.display = '';
-  document.getElementById('bulkMoveSubfolder').value = '';
-  document.getElementById('bulkMoveConfirm').style.display = 'flex';
-}
-
-function confirmBulkMove() {
-  const sel = document.getElementById('bulkMoveFolder');
-  if (!sel.value || !selectedIds.size) { sel.value = ''; return; }
-  if (pendingDelete) { clearTimeout(pendingDelete.timer); save(); pendingDelete = null; }
-  commitPendingMove();
-  const saved = links.slice();
-  const n = selectedIds.size;
-  const folder = sel.value;
-  const subfolder = document.getElementById('bulkMoveSubfolder').value.trim() || null;
-  links.forEach(l => { if (selectedIds.has(l.id)) { l.folder = folder; l.subfolder = subfolder; } });
-  sel.value = '';
-  document.getElementById('bulkMoveSubfolder').style.display = 'none';
-  document.getElementById('bulkMoveConfirm').style.display = 'none';
-  render(); updateBulkBar();
-  const label = subfolder ? `${folder} / ${subfolder}` : folder;
-  pendingMove = { saved, timer: setTimeout(() => { pendingMove = null; save(); }, 5000) };
-  showUndoToast(`${n} link${n > 1 ? 's' : ''} moved to "${label}" — Undo?`, 'ti-arrows-move');
-}
-
-function bulkDelete() {
-  if (!selectedIds.size) return;
-  commitPendingMove();
-  const n = selectedIds.size;
-  if (pendingDelete) { clearTimeout(pendingDelete.timer); save(); }
-  const saved = links.slice();
-  links = links.filter(l => !selectedIds.has(l.id));
-  selectedIds.clear();
-  render(); updateBulkBar();
-  pendingDelete = {
-    saved,
-    timer: setTimeout(() => { pendingDelete = null; save(); }, 5000)
-  };
-  showUndoToast(`${n} link${n > 1 ? 's' : ''} deleted — Undo?`);
-}
-
-
-function bulkAddTag() {
-  const input = document.getElementById('bulkTagInput');
-  const tag = input.value.trim();
-  if (!tag || !selectedIds.size) return;
-  const n = selectedIds.size;
-  links.forEach(l => {
-    if (selectedIds.has(l.id) && !(l.tags || []).includes(tag))
-      l.tags = [...(l.tags || []), tag];
-  });
-  input.value = '';
-  save(); render(); updateBulkBar();
-  showToast(`Tag "${tag}" added to ${n} link${n > 1 ? 's' : ''}`);
-}
+// Multi-select + bulk action bar live in selection.js (toggleSelectMode/
+// exitSelectMode/toggleSelect/selectAllVisible/clearSelection/onBulkFolderChange/
+// confirmBulkMove/bulkDelete/bulkAddTag/bulkArchive). selectMode + selectedIds
+// are owned there; bulk delete/move use the setLinks/setPending* mutation layer.
 
 
 // ============================================================================
@@ -1994,17 +1879,6 @@ function permanentDeleteLink(id) {
   save(); renderArchive();
   updateArchiveBadge();
   showToast('Link permanently deleted');
-}
-
-function bulkArchive() {
-  if (!selectedIds.size) return;
-  commitPendingMove();
-  if (pendingDelete) { clearTimeout(pendingDelete.timer); save(); pendingDelete = null; }
-  const n = selectedIds.size;
-  links.forEach(l => { if (selectedIds.has(l.id)) l.archived = true; });
-  selectedIds.clear();
-  save(); render(); updateBulkBar();
-  showToast(`${n} link${n > 1 ? 's' : ''} archived`);
 }
 
 function updateArchiveBadge() {
