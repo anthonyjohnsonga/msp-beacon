@@ -3,15 +3,15 @@ import { ui } from './state.js';
 import { applyDensity, cycleDensity, idOrder, sortLinks } from './view.js';
 import { applyMode, applyTheme, previewCustomAccent, setCustomAccent, THEMES } from './theme.js';
 import { showToast, showUndoToast } from './toast.js';
+import { openImport, closeImport, handleDrop, handleFile, toggleAll, doImport } from './import.js';
 
 // ============================================================================
 // STATE & GLOBALS
 // ============================================================================
 
-let links = [];
+export let links = [];
 let linkStatus = {};
 let editId = null;
-let parsedBookmarks = [];
 let saveTimer = null;
 let collapsedFolders = new Set(JSON.parse(localStorage.getItem('msp-collapsed') || '[]'));
 let collapsedSubfolders = JSON.parse(localStorage.getItem('msp-subfolder-collapsed') || '{}');
@@ -419,7 +419,7 @@ async function loadLinks() {
   }
 }
 
-async function save() {
+export async function save() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(async () => {
     const status = document.getElementById('saveStatus');
@@ -494,7 +494,7 @@ function tagHtml(t) {
   return `<span class="tag" data-tag="${esc(t)}" title="Filter by &quot;${esc(t)}&quot;"${style}>${esc(t)}</span>`;
 }
 function getFolderIcon(f) { return folderIcons[f] || 'ti-folder'; }
-function allFolders() { return [...new Set(links.filter(l => !l.archived).map(l => l.folder).filter(Boolean))].sort(); }
+export function allFolders() { return [...new Set(links.filter(l => !l.archived).map(l => l.folder).filter(Boolean))].sort(); }
 function getOrderedFolders(names) {
   if (!folderOrder) return names.slice().sort();
   const known = new Set(folderOrder);
@@ -904,7 +904,7 @@ async function loadHomeStatus() {
 // ============================================================================
 // MAIN RENDER — GRID / LIST / FOLDERS
 // ============================================================================
-function render() {
+export function render() {
   applyHomeBg();
   if (currentMode === 'home') { renderHome(); return; }
   const q = document.getElementById('search').value.toLowerCase();
@@ -1306,67 +1306,8 @@ function deleteLink(id) {
 }
 
 
-// ============================================================================
-// IMPORT
-// ============================================================================
-function openImport() {
-  parsedBookmarks = [];
-  document.getElementById('importPreviewWrap').style.display = 'none';
-  document.getElementById('importBtn').style.display = 'none';
-  document.getElementById('dropZone').style.display = '';
-  document.getElementById('fileIn').value = '';
-  document.getElementById('impTags').value = '';
-  document.getElementById('impNewFolder').value = '';
-  const fs = document.getElementById('impFolder');
-  fs.innerHTML = '<option value="">No folder</option>' + allFolders().map(f => `<option value="${esc(f)}">${esc(f)}</option>`).join('');
-  document.getElementById('importBg').style.display = 'flex';
-}
-function closeImport() { document.getElementById('importBg').style.display = 'none'; }
-function handleDrop(e) { e.preventDefault(); document.getElementById('dropZone').classList.remove('drag'); const f = e.dataTransfer.files[0]; if (f) handleFile(f); }
-function handleFile(file) { if (!file) return; const r = new FileReader(); r.onload = e => parseBookmarks(e.target.result); r.readAsText(file); }
-function parseBookmarks(html) {
-  const doc = new DOMParser().parseFromString(html, 'text/html');
-  const res = [];
-  function walk(dl, path) {
-    for (const ch of (dl ? dl.children : [])) {
-      if (ch.tagName !== 'DT') continue;
-      const a = ch.querySelector(':scope > A'), h3 = ch.querySelector(':scope > H3'), dl2 = ch.querySelector(':scope > DL');
-      if (a) { const u = a.getAttribute('HREF') || '', t = a.textContent.trim() || getDomain(u); if (u && !u.startsWith('javascript:') && !u.startsWith('place:') && !u.startsWith('data:')) res.push({ url: u, title: t, folder: path }); }
-      else if (h3 && dl2) { const n = h3.textContent.trim(); const skip = ['Bookmarks bar','Bookmarks Bar','Bookmarks toolbar','Bookmarks Toolbar','Other bookmarks','Other Bookmarks','Mobile bookmarks','Mobile Bookmarks']; walk(dl2, skip.includes(n) ? path : (path ? path + ' / ' + n : n)); }
-    }
-  }
-  walk(doc.querySelector('DL'), '');
-  if (!res.length) { alert('No bookmarks found. Make sure this is a valid browser bookmark export.'); return; }
-  parsedBookmarks = res; showPreview();
-}
-function showPreview() {
-  document.getElementById('dropZone').style.display = 'none';
-  document.getElementById('importPreviewWrap').style.display = 'flex';
-  document.getElementById('importBtn').style.display = 'flex';
-  document.getElementById('importCount').textContent = parsedBookmarks.length + ' bookmarks found';
-  document.getElementById('importPreview').innerHTML = parsedBookmarks.map((b, i) => `
-    <div class="import-row"><input type="checkbox" id="imp_${i}" checked>
-      <div class="import-row-info"><div class="import-row-title">${esc(b.title)}</div><div class="import-row-url">${esc(b.url)}</div></div>
-      ${b.folder ? `<span class="import-row-folder">${esc(b.folder)}</span>` : ''}
-    </div>`).join('');
-}
-function toggleAll(v) { parsedBookmarks.forEach((_, i) => { const c = document.getElementById('imp_' + i); if (c) c.checked = v; }); }
-function doImport() {
-  const of2 = document.getElementById('impNewFolder').value.trim() || document.getElementById('impFolder').value || '';
-  const et = document.getElementById('impTags').value.split(',').map(t => t.trim()).filter(Boolean);
-  const eu = new Set(links.map(l => l.url.toLowerCase()));
-  let added = 0, skipped = 0;
-  parsedBookmarks.forEach((b, i) => {
-    const cb = document.getElementById('imp_' + i);
-    if (!cb || !cb.checked) return;
-    if (eu.has(b.url.toLowerCase())) { skipped++; return; }
-    links.unshift({ id: Date.now().toString(36) + Math.random().toString(36).slice(2) + i, url: b.url, title: b.title, desc: '', folder: of2 || b.folder || '', tags: [...et] });
-    eu.add(b.url.toLowerCase()); added++;
-  });
-  save(); closeImport(); render();
-  showToast(`${added} links imported${skipped ? ', ' + skipped + ' duplicates skipped' : ''}`);
-}
-
+// IMPORT lives in import.js (openImport/closeImport/handleDrop/handleFile/
+// parseBookmarks/showPreview/toggleAll/doImport).
 
 
 // ============================================================================
