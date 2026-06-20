@@ -4,7 +4,8 @@
   "description": "MSP Beacon — Portable Link Organizer",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "check": "node scripts/check-bridge.js"
   },
   "dependencies": {
     "express": "^4.18.2"

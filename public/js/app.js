@@ -385,7 +385,7 @@ function applyServerConfig(cfg) {
   if (cfg.mode === 'dark' || cfg.mode === 'light' || cfg.mode === 'auto') {
     applyMode(cfg.mode, false);
   }
-  if (typeof cfg.accent === 'string' && /^#[0-9A-Fa-f]{6}$/.test(cfg.accent)) {
+  if (isHexColor(cfg.accent)) {
     ui.accent = cfg.accent;
     localStorage.setItem('msp-accent', ui.accent);
   }
@@ -486,7 +486,7 @@ function getSubfolderColor(folder, sf) { const c = subfolderColors[subKey(folder
 function getTagColor(t) { return isHexColor(tagColors[t]) ? tagColors[t] : null; }
 function accentColor() {
   const c = getComputedStyle(document.documentElement).getPropertyValue('--g4').trim();
-  return /^#[0-9A-Fa-f]{6}$/.test(c) ? c : '#1D9E75';
+  return isHexColor(c) ? c : '#1D9E75';
 }
 function tagHtml(t) {
   const tc = getTagColor(t);

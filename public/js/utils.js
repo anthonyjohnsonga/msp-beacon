@@ -10,7 +10,7 @@ export function isHexColor(c) { return typeof c === 'string' && /^#[0-9A-Fa-f]{6
 export function subKey(folder, sf) { return JSON.stringify([folder, sf]); }
 
 export function hexToRgb(hex) {
-  if (!hex || !/^#[0-9A-Fa-f]{6}$/.test(hex)) return '29,158,117';
+  if (!isHexColor(hex)) return '29,158,117';
   const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
   return `${r},${g},${b}`;
 }
