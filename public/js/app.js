@@ -300,9 +300,9 @@ function sanitizeDashboard(arr) {
 let currentDensity = localStorage.getItem('msp-density') || 'comfortable';
 const DENSITY_CYCLE = ['compact', 'comfortable', 'spacious'];
 const DENSITY_SETTINGS = {
-  compact:     { minWidth: '160px', padding: '8px',  gap: '8px',  icon: 'ti ti-layout-grid',        label: 'Compact'     },
-  comfortable: { minWidth: '220px', padding: '14px', gap: '12px', icon: 'ti ti-layout-grid-2',       label: 'Comfortable' },
-  spacious:    { minWidth: '300px', padding: '20px', gap: '16px', icon: 'ti ti-layout-grid-3',       label: 'Spacious'    },
+  compact:     { minWidth: '160px', padding: '8px',  gap: '8px',  rowPadding: '4px 10px',  rowGap: '1px', icon: 'ti ti-layout-grid',        label: 'Compact'     },
+  comfortable: { minWidth: '220px', padding: '14px', gap: '12px', rowPadding: '8px 12px',  rowGap: '2px', icon: 'ti ti-layout-grid-2',       label: 'Comfortable' },
+  spacious:    { minWidth: '300px', padding: '20px', gap: '16px', rowPadding: '12px 14px', rowGap: '6px', icon: 'ti ti-layout-grid-3',       label: 'Spacious'    },
 };
 function applyDensity(d) {
   const s = DENSITY_SETTINGS[d] || DENSITY_SETTINGS.comfortable;
@@ -310,6 +310,8 @@ function applyDensity(d) {
   r.setProperty('--card-min-width', s.minWidth);
   r.setProperty('--card-padding', s.padding);
   r.setProperty('--card-gap', s.gap);
+  r.setProperty('--row-padding', s.rowPadding);
+  r.setProperty('--row-gap', s.rowGap);
   currentDensity = d;
   localStorage.setItem('msp-density', d);
   const btn = document.getElementById('densityBtn');

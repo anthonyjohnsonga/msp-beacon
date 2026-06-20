@@ -51,8 +51,8 @@ select:focus { outline: none; border-color: var(--g4); }
 .btn-primary { background: var(--g5); color: #fff; border-color: var(--g6); }
 .btn-primary:hover { background: var(--g6); }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--card-min-width, 220px), 1fr)); gap: var(--card-gap, 12px); padding-bottom: 1.5rem; }
-.link-list { display: flex; flex-direction: column; gap: 2px; padding-bottom: 1.5rem; }
-.card-row { background: var(--bg1); border: 0.5px solid var(--border0); border-radius: 8px; padding: 8px 12px; cursor: pointer; transition: border-color .15s; display: flex; align-items: center; gap: 10px; position: relative; min-width: 0; }
+.link-list { display: flex; flex-direction: column; gap: var(--row-gap, 2px); padding-bottom: 1.5rem; }
+.card-row { background: var(--bg1); border: 0.5px solid var(--border0); border-radius: 8px; padding: var(--row-padding, 8px 12px); cursor: pointer; transition: border-color .15s; display: flex; align-items: center; gap: 10px; position: relative; min-width: 0; }
 .card-row:hover { border-color: var(--g4); box-shadow: 0 0 0 2px var(--g4-glow); }
 .card-row .favicon { width: 22px; height: 22px; border-radius: 4px; flex-shrink: 0; }
 .card-row-title { font-size: 14px; font-weight: 500; color: var(--text0); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1 1 180px; }
