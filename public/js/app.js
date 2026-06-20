@@ -1,4 +1,8 @@
 
+// ============================================================================
+// STATE & GLOBALS
+// ============================================================================
+
 let links = [];
 let linkStatus = {};
 let editId = null;
@@ -24,6 +28,10 @@ const BG_PRESETS = {
   ocean:  'linear-gradient(135deg,#0f2027,#203a43,#2c5364)',
 };
 const clampNum = (n, lo, hi) => Math.max(lo, Math.min(hi, Number(n) || 0));
+
+// ============================================================================
+// HOME BACKGROUND & WALLPAPER
+// ============================================================================
 function normalizeHomeBg(v) {
   v = v && typeof v === 'object' ? v : {};
   const type = ['none', 'preset', 'url', 'upload'].includes(v.type) ? v.type : 'none';
@@ -111,6 +119,10 @@ let selectedIds = new Set();
 let visibleIds = [];
 let favoritesCollapsed = JSON.parse(localStorage.getItem('msp-fav-collapsed') || 'false');
 let searchDebounceTimer = null;
+
+// ============================================================================
+// SEARCH & CONTENT INDEXING
+// ============================================================================
 function debouncedRender() { clearTimeout(searchDebounceTimer); searchDebounceTimer = setTimeout(render, 150); }
 // Full-text content search: server holds per-link page-text snapshots; we merge
 // content matches into the normal search results.
@@ -304,6 +316,10 @@ const DENSITY_SETTINGS = {
   comfortable: { minWidth: '220px', padding: '14px', gap: '12px', rowPadding: '8px 12px',  rowGap: '2px', icon: 'ti ti-layout-grid-2',       label: 'Comfortable' },
   spacious:    { minWidth: '300px', padding: '20px', gap: '16px', rowPadding: '12px 14px', rowGap: '6px', icon: 'ti ti-layout-grid-3',       label: 'Spacious'    },
 };
+
+// ============================================================================
+// DENSITY, VIEW MODE & SORTING
+// ============================================================================
 function applyDensity(d) {
   const s = DENSITY_SETTINGS[d] || DENSITY_SETTINGS.comfortable;
   const r = document.documentElement.style;
@@ -350,6 +366,10 @@ function sortLinks(arr) {
   return copy;
 }
 
+
+// ============================================================================
+// CONFIG, PERSISTENCE & DATA LOADING
+// ============================================================================
 function saveConfig() {
   const cfg = { folderColors, subfolderColors, tagColors, folderIcons, folderOrder, rssFeeds, theme: currentTheme, accent: customAccent, mode: themeMode, defaultView, homeBg, dashboard, dashboardMigrations };
   fetch('/api/config', {
@@ -463,6 +483,10 @@ let toastTimer = null;
 let pendingDelete = null;
 let pendingMove = null;
 
+
+// ============================================================================
+// TOASTS & UNDO
+// ============================================================================
 function showToast(msg, isError) {
   const t = document.getElementById('toast');
   document.getElementById('toastMsg').textContent = msg;
@@ -517,6 +541,10 @@ function commitPendingMove() {
   save();
 }
 
+
+// ============================================================================
+// UTILITIES & HELPERS
+// ============================================================================
 function getFavicon(u) { try { new URL(u); return '/api/favicon?url=' + encodeURIComponent(u); } catch { return null; } }
 function getDomain(u) { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return u; } }
 function esc(s) { if (!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -581,6 +609,10 @@ function subfoldersByFolder(folderName) {
   return [...new Set(links.filter(l => !l.archived && l.folder === folderName && l.subfolder).map(l => l.subfolder))].sort();
 }
 
+
+// ============================================================================
+// NAVIGATION & VIEW SWITCHING
+// ============================================================================
 function setMode(mode, navigated = true) {
   currentMode = mode;
   if (navigated) userNavigated = true;
@@ -610,6 +642,10 @@ function updateDefaultViewLabel() {
   if (el) el.textContent = defaultView === 'home' ? 'Home' : 'Manager';
 }
 
+
+// ============================================================================
+// HOME / DASHBOARD RENDERING
+// ============================================================================
 function greeting() {
   const h = new Date().getHours();
   if (h < 12) return 'Good morning';
@@ -966,6 +1002,10 @@ async function loadHomeStatus() {
   paintHomeDots();
 }
 
+
+// ============================================================================
+// MAIN RENDER — GRID / LIST / FOLDERS
+// ============================================================================
 function render() {
   applyHomeBg();
   if (currentMode === 'home') { renderHome(); return; }
@@ -1176,6 +1216,10 @@ function cardListHtml(l) {
   </div>`;
 }
 
+
+// ============================================================================
+// ADD / EDIT LINK MODAL
+// ============================================================================
 function openModal(id) {
   editId = id || null;
   const l = id ? links.find(x => x.id === id) : null;
@@ -1289,6 +1333,10 @@ function hideTagSuggest() {
   tagSuggestIndex = -1;
 }
 
+
+// ============================================================================
+// SAVE / EDIT / DELETE LINK
+// ============================================================================
 function saveLink() {
   const url = document.getElementById('mUrl').value.trim();
   const title = document.getElementById('mTitle').value.trim();
@@ -1359,6 +1407,10 @@ function deleteLink(id) {
   showUndoToast('Link deleted — Undo?');
 }
 
+
+// ============================================================================
+// IMPORT
+// ============================================================================
 function openImport() {
   parsedBookmarks = [];
   document.getElementById('importPreviewWrap').style.display = 'none';
@@ -1436,6 +1488,10 @@ const MODES = {
   dark:  { bg0:'#0d1117', bg1:'#161b22', bg2:'#1c2128', bg3:'#21262d', text0:'#e6edf3', text1:'#8b949e', text2:'#6e7681', border0:'#30363d', overlay:'rgba(255,255,255,.07)', stripe:'rgba(255,255,255,.02)', ring:'rgba(255,255,255,.2)' },
   light: { bg0:'#f6f8fa', bg1:'#ffffff', bg2:'#eef1f4', bg3:'#e3e7ec', text0:'#1f2328', text1:'#57606a', text2:'#7a828c', border0:'#d0d7de', overlay:'rgba(0,0,0,.06)', stripe:'rgba(0,0,0,.025)', ring:'rgba(0,0,0,.15)' },
 };
+
+// ============================================================================
+// APPEARANCE — MODE / THEME / ACCENT
+// ============================================================================
 function resolveMode(m) {
   return m === 'auto'
     ? (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
@@ -1478,6 +1534,10 @@ function setCustomAccent(hex) {
   applyTheme('Custom', true);
 }
 
+
+// ============================================================================
+// UI MODALS — THEME / SETTINGS / FILTER
+// ============================================================================
 function openTheme() {
   const grid = document.getElementById('themeGrid');
   const presets = Object.entries(THEMES).map(([name, t]) => `
@@ -1536,6 +1596,10 @@ document.addEventListener('click', e => {
   }
 });
 
+
+// ============================================================================
+// SEARCH HISTORY & SHORTCUTS
+// ============================================================================
 function clearSearch() {
   const s = document.getElementById('search');
   s.value = '';
@@ -1647,6 +1711,10 @@ document.addEventListener('keydown', e => {
   }
 });
 
+
+// ============================================================================
+// FOLDERS & SUBFOLDERS
+// ============================================================================
 function toggleFolder(name) {
   const contentEl = Array.from(document.querySelectorAll('.folder-content')).find(el => el.dataset.folder === name);
   const isCollapsed = collapsedFolders.has(name);
@@ -1883,6 +1951,10 @@ function toggleSubfolder(folderName, subfolder) {
   render();
 }
 
+
+// ============================================================================
+// CARD INTERACTIONS — LISTENERS / CONTEXT MENU / DRAG
+// ============================================================================
 function setupCardListeners() {
   const content = document.getElementById('content');
   content.addEventListener('mouseover', e => {
@@ -2251,6 +2323,10 @@ function setupDragListeners() {
   });
 }
 
+
+// ============================================================================
+// EXPORT
+// ============================================================================
 function exportLinks() {
   const rows = links.map(l => {
     const folder = l.folder || '';
@@ -2282,6 +2358,10 @@ const style = document.createElement('style');
 style.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
 document.head.appendChild(style);
 
+
+// ============================================================================
+// SELECTION & BULK ACTIONS
+// ============================================================================
 function toggleFavorite(id) {
   const l = links.find(x => x.id === id);
   if (!l) return;
@@ -2428,6 +2508,10 @@ function bulkAddTag() {
   showToast(`Tag "${tag}" added to ${n} link${n > 1 ? 's' : ''}`);
 }
 
+
+// ============================================================================
+// ARCHIVE
+// ============================================================================
 function archiveLink(id) {
   const l = links.find(x => x.id === id);
   if (!l) return;
@@ -2503,6 +2587,10 @@ function renderArchive() {
   });
 }
 
+
+// ============================================================================
+// LINK HEALTH CHECKING
+// ============================================================================
 async function checkLinks() {
   const btn = document.getElementById('checkLinksBtn');
   if (!btn || btn.disabled) return;
@@ -2563,6 +2651,10 @@ function timeAgo(ts) {
 
 let statsNeverExpanded = false;
 let statsScanning = false, statsScanDone = 0, statsScanTotal = 0;
+
+// ============================================================================
+// STATS
+// ============================================================================
 function openStats() {
   statsNeverExpanded = false;
   renderStats();
@@ -2645,6 +2737,10 @@ function updateHealthSection() {
   const el = document.getElementById('statHealth');
   if (el) el.innerHTML = renderHealthSection();
 }
+
+// ============================================================================
+// MANAGERS — FOLDER / TAG / FEED
+// ============================================================================
 function openFolderManager() {
   renderFolderManager();
   document.getElementById('folderMgrBg').style.display = 'flex';
@@ -2992,6 +3088,10 @@ function renderStats() {
 const COLOR_PRESETS = ['#1D9E75','#2563EB','#7C3AED','#0D9488','#D97706','#DC2626','#DB2777','#0891B2','#65A30D','#6B7280'];
 let colorPickerTarget = null; // { type: 'folder'|'subfolder', folder, sf? }
 
+
+// ============================================================================
+// COLOR & ICON PICKERS
+// ============================================================================
 function renderColorPicker(anchorEl) {
   const picker = document.getElementById('folderColorPicker');
   const t = colorPickerTarget;
@@ -3112,6 +3212,10 @@ function closeFolderIconPicker() {
   const picker = document.getElementById('folderIconPicker');
   if (picker) picker.style.display = 'none';
   iconPickerFolder = null;
+
+// ============================================================================
+// BOOTSTRAP / INIT
+// ============================================================================
 }
 
 applyMode(themeMode, false);
