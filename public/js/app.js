@@ -1,4 +1,6 @@
 import { getFavicon, getDomain, esc, isHexColor, hexToRgb, hexToHsl, hslToHex, deriveAccent, subKey, timeAgo } from './utils.js';
+import { ui } from './state.js';
+import { applyDensity, cycleDensity, idOrder, sortLinks } from './view.js';
 
 // ============================================================================
 // STATE & GLOBALS
@@ -216,8 +218,6 @@ async function indexAllContent() {
   if (btn) btn.disabled = false;
   showToast(`Indexed ${targets.length} link${targets.length > 1 ? 's' : ''} for content search`);
 }
-let currentSort = localStorage.getItem('msp-sort') || 'manual';
-let currentView = localStorage.getItem('msp-view') || 'grid';
 let defaultView = localStorage.getItem('msp-default-view') || 'home';
 let currentMode = defaultView;
 let userNavigated = false;
@@ -310,61 +310,21 @@ function sanitizeDashboard(arr) {
   }
   return out.length ? out : null;
 }
-let currentDensity = localStorage.getItem('msp-density') || 'comfortable';
-const DENSITY_CYCLE = ['compact', 'comfortable', 'spacious'];
-const DENSITY_SETTINGS = {
-  compact:     { minWidth: '160px', padding: '8px',  gap: '8px',  rowPadding: '4px 10px',  rowGap: '1px', icon: 'ti ti-layout-grid',        label: 'Compact'     },
-  comfortable: { minWidth: '220px', padding: '14px', gap: '12px', rowPadding: '8px 12px',  rowGap: '2px', icon: 'ti ti-layout-grid-2',       label: 'Comfortable' },
-  spacious:    { minWidth: '300px', padding: '20px', gap: '16px', rowPadding: '12px 14px', rowGap: '6px', icon: 'ti ti-layout-grid-3',       label: 'Spacious'    },
-};
 
 // ============================================================================
 // DENSITY, VIEW MODE & SORTING
 // ============================================================================
-function applyDensity(d) {
-  const s = DENSITY_SETTINGS[d] || DENSITY_SETTINGS.comfortable;
-  const r = document.documentElement.style;
-  r.setProperty('--card-min-width', s.minWidth);
-  r.setProperty('--card-padding', s.padding);
-  r.setProperty('--card-gap', s.gap);
-  r.setProperty('--row-padding', s.rowPadding);
-  r.setProperty('--row-gap', s.rowGap);
-  currentDensity = d;
-  localStorage.setItem('msp-density', d);
-  const btn = document.getElementById('densityBtn');
-  if (btn) btn.innerHTML = `<i class="${s.icon}"></i>`;
-}
-function cycleDensity() {
-  const next = DENSITY_CYCLE[(DENSITY_CYCLE.indexOf(currentDensity) + 1) % DENSITY_CYCLE.length];
-  applyDensity(next);
-}
 function toggleView() {
-  currentView = currentView === 'grid' ? 'list' : 'grid';
-  localStorage.setItem('msp-view', currentView);
-  document.getElementById('viewToggleIcon').className = currentView === 'grid' ? 'ti ti-layout-list' : 'ti ti-layout-grid';
+  ui.view = ui.view === 'grid' ? 'list' : 'grid';
+  localStorage.setItem('msp-view', ui.view);
+  document.getElementById('viewToggleIcon').className = ui.view === 'grid' ? 'ti ti-layout-list' : 'ti ti-layout-grid';
   render();
 }
 function onSortChange() {
-  currentSort = document.getElementById('sortSelect').value;
-  localStorage.setItem('msp-sort', currentSort);
+  ui.sort = document.getElementById('sortSelect').value;
+  localStorage.setItem('msp-sort', ui.sort);
   updateFilterBadge();
   render();
-}
-// Numeric creation-order key from a link id. Ids are `Date.now().toString(36)`
-// plus a random base36 suffix, so a base36 parse orders them by creation time.
-// Falls back to 0 for any non-conforming (e.g. hand-edited) id so the sort stays
-// stable instead of going NaN.
-function idOrder(id) { const n = parseInt(id, 36); return Number.isNaN(n) ? 0 : n; }
-function sortLinks(arr) {
-  if (currentSort === 'manual') return arr;
-  const copy = arr.slice();
-  if (currentSort === 'az') copy.sort((a, b) => (a.title || '').toLowerCase().localeCompare((b.title || '').toLowerCase()));
-  else if (currentSort === 'za') copy.sort((a, b) => (b.title || '').toLowerCase().localeCompare((a.title || '').toLowerCase()));
-  else if (currentSort === 'newest') copy.sort((a, b) => idOrder(b.id) - idOrder(a.id));
-  else if (currentSort === 'oldest') copy.sort((a, b) => idOrder(a.id) - idOrder(b.id));
-  else if (currentSort === 'most-visited') copy.sort((a, b) => (b.visits || 0) - (a.visits || 0));
-  else if (currentSort === 'recent') copy.sort((a, b) => (b.lastVisited || 0) - (a.lastVisited || 0));
-  return copy;
 }
 
 
@@ -644,9 +604,9 @@ function homeSection(title, icon, tilesHtml, count, key) {
   return `<div class="home-section"><div class="home-section-head"><i class="ti ${icon}" style="font-size:14px;color:var(--g3)"></i><span class="home-section-title">${title}</span><button class="home-section-all" onclick="homeShowAll('${key}')">show all <i class="ti ti-arrow-right"></i></button></div><div class="home-tiles"${secAttr}>${tilesHtml}</div></div>`;
 }
 function homeShowAll(key) {
-  if (key === 'most-visited') { currentSort = 'most-visited'; localStorage.setItem('msp-sort', currentSort); }
-  else if (key === 'recently-added') { currentSort = 'newest'; localStorage.setItem('msp-sort', currentSort); }
-  else if (key === 'recent') { currentSort = 'recent'; localStorage.setItem('msp-sort', currentSort); }
+  if (key === 'most-visited') { ui.sort = 'most-visited'; localStorage.setItem('msp-sort', ui.sort); }
+  else if (key === 'recently-added') { ui.sort = 'newest'; localStorage.setItem('msp-sort', ui.sort); }
+  else if (key === 'recent') { ui.sort = 'recent'; localStorage.setItem('msp-sort', ui.sort); }
   else if (key === 'readlater') { const el = document.getElementById('statusFilter'); if (el) el.value = 'readlater'; }
   goManager();
 }
@@ -983,7 +943,7 @@ function render() {
   fs.innerHTML = '<option value="">All folders</option>' + allFolders().map(f => `<option value="${esc(f)}"${f===ff?' selected':''}>${esc(f)}</option>`).join('');
   ts.innerHTML = '<option value="">All tags</option>' + allTags().map(t => `<option value="${esc(t)}"${t===tf?' selected':''}>${esc(t)}</option>`).join('');
   const sortEl = document.getElementById('sortSelect');
-  if (sortEl) sortEl.value = currentSort;
+  if (sortEl) sortEl.value = ui.sort;
   updateFilterBadge();
   const parsed = parseSearch(q);
   const wantArchived = parsed.flags.includes('archived');
@@ -1032,8 +992,8 @@ function render() {
     c.innerHTML = healthHint + `<div class="empty"><i class="ti ti-bookmarks"></i>${links.length ? 'No results match your filters.' : 'No links yet — click <strong>Add link</strong> or <strong>Import</strong> to get started.'}</div>`;
     return;
   }
-  const cardFn = currentView === 'list' ? cardListHtml : cardHtml;
-  const wrap = items => currentView === 'list' ? `<div class="link-list">${items.map(cardFn).join('')}</div>` : `<div class="grid">${items.map(cardFn).join('')}</div>`;
+  const cardFn = ui.view === 'list' ? cardListHtml : cardHtml;
+  const wrap = items => ui.view === 'list' ? `<div class="link-list">${items.map(cardFn).join('')}</div>` : `<div class="grid">${items.map(cardFn).join('')}</div>`;
   if (ff || q || tf || stf) { c.innerHTML = healthHint + wrap(fil); return; }
   const byF = {}, noF = [];
   fil.forEach(l => { l.folder ? (byF[l.folder] = byF[l.folder] || [], byF[l.folder].push(l)) : noF.push(l); });
@@ -1065,8 +1025,8 @@ function renderFolderContents(folderName, folderLinks) {
     bySubfolder[l.subfolder].push(l);
   });
 
-  const cardFn = currentView === 'list' ? cardListHtml : cardHtml;
-  const wrap = items => currentView === 'list' ? `<div class="link-list">${items.map(cardFn).join('')}</div>` : `<div class="grid">${items.map(cardFn).join('')}</div>`;
+  const cardFn = ui.view === 'list' ? cardListHtml : cardHtml;
+  const wrap = items => ui.view === 'list' ? `<div class="link-list">${items.map(cardFn).join('')}</div>` : `<div class="grid">${items.map(cardFn).join('')}</div>`;
 
   let html = '';
   if (rootLinks.length) {
@@ -1540,7 +1500,7 @@ function updateFilterBadge() {
   const ff = document.getElementById('folderFilter')?.value || '';
   const tf = document.getElementById('tagFilter')?.value || '';
   const stf = document.getElementById('statusFilter')?.value || '';
-  const active = (ff ? 1 : 0) + (tf ? 1 : 0) + (stf ? 1 : 0) + (currentSort !== 'manual' ? 1 : 0);
+  const active = (ff ? 1 : 0) + (tf ? 1 : 0) + (stf ? 1 : 0) + (ui.sort !== 'manual' ? 1 : 0);
   const badge = document.getElementById('filterBadge');
   if (!badge) return;
   badge.textContent = active;
@@ -3203,8 +3163,8 @@ applyTheme(currentTheme, false);
 if (window.matchMedia) {
   window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => { if (themeMode === 'auto') applyMode('auto', false); });
 }
-applyDensity(currentDensity);
-document.getElementById('viewToggleIcon').className = currentView === 'grid' ? 'ti ti-layout-list' : 'ti ti-layout-grid';
+applyDensity(ui.density);
+document.getElementById('viewToggleIcon').className = ui.view === 'grid' ? 'ti ti-layout-list' : 'ti ti-layout-grid';
 updateDefaultViewLabel();
 setupCardListeners();
 setupDragListeners();
