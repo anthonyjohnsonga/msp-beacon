@@ -11,8 +11,9 @@ import { esc } from './utils.js';
 import { showToast } from './toast.js';
 import {
   links, filterByTag, openLink, editLink, toggleFavorite, toggleReadLater,
-  archiveLink, deleteLink, openFolderFromHome,
+  deleteLink, openFolderFromHome,
 } from './app.js';
+import { archiveLink } from './archive.js';
 import { deleteFolder, startFolderRename, startSubfolderRename } from './folders.js';
 import { openFolderColorPicker, openSubfolderColorPicker, openFolderIconPicker, openTagColorPicker } from './pickers.js';
 
