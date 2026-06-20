@@ -7,6 +7,7 @@ import { openImport, closeImport, handleDrop, handleFile, toggleAll, doImport } 
 import { toggleFolder, collapseAll, expandAll, renameFolder, deleteFolder, deleteSubfolder, startFolderRename, renameSubfolder, startSubfolderRename, toggleSubfolder } from './folders.js';
 import { openFolderColorPicker, openSubfolderColorPicker, openTagColorPicker, selectPickerColor, resetPickerColor, closeFolderColorPicker, openFolderIconPicker, selectFolderIcon, closeFolderIconPicker } from './pickers.js';
 import { openFolderManager, closeFolderManager, openTagManager, closeTagManager, openFeedManager, closeFeedManager, addFeed } from './managers.js';
+import { onContextMenu, hideContextMenu } from './contextmenu.js';
 
 // ============================================================================
 // STATE & GLOBALS
@@ -599,7 +600,7 @@ function homeSearchInput(v) {
     s.setSelectionRange(len, len);
   }
 }
-function openFolderFromHome(folder) {
+export function openFolderFromHome(folder) {
   homeFolderFilter = folder;
   setMode('manager');
 }
@@ -1291,8 +1292,8 @@ function copyUrl(url, btn) {
     setTimeout(() => { icon.className = 'ti ti-copy'; btn.style.color = ''; }, 1500);
   });
 }
-function editLink(id) { openModal(id); }
-function deleteLink(id) {
+export function editLink(id) { openModal(id); }
+export function deleteLink(id) {
   commitPendingMove();
   if (pendingDelete) { clearTimeout(pendingDelete.timer); save(); }
   const saved = links.slice();
@@ -1537,14 +1538,7 @@ function setupCardListeners() {
   content.addEventListener('contextmenu', onContextMenu);
 }
 
-// Returns a fake anchor element positioned at the cursor, for the color/icon pickers.
-function cursorAnchor(x, y) {
-  return { getBoundingClientRect: () => ({ top: y, bottom: y, left: x, right: x, width: 0, height: 0 }) };
-}
-function copyLinkUrl(url) {
-  navigator.clipboard.writeText(url).then(() => showToast('URL copied')).catch(() => showToast('Copy failed', true));
-}
-function filterByTag(tag) {
+export function filterByTag(tag) {
   if (currentMode !== 'manager') setMode('manager');
   const tf = document.getElementById('tagFilter');
   if (tf) tf.value = tag;
@@ -1552,89 +1546,8 @@ function filterByTag(tag) {
   render();
 }
 
-function onContextMenu(e) {
-  const tagEl = e.target.closest('.tag[data-tag]');
-  if (tagEl) {
-    const tag = tagEl.dataset.tag;
-    e.preventDefault();
-    showContextMenu(e.clientX, e.clientY, [
-      { icon: 'ti-palette', label: 'Change color', action: () => openTagColorPicker(tag, cursorAnchor(e.clientX, e.clientY)) },
-      { icon: 'ti-filter', label: 'Filter by this tag', action: () => filterByTag(tag) },
-    ]);
-    return;
-  }
-  const linkEl = e.target.closest('.card[data-id], .card-row[data-id], .home-tile[data-id]');
-  const folderTile = e.target.closest('.home-folder-tile[data-folder]');
-  const subHeader = e.target.closest('.subfolder-header[data-subfolder]');
-  const folderHeader = e.target.closest('.folder-header[data-folder]');
-  const anchor = cursorAnchor(e.clientX, e.clientY);
-  let items = null;
-
-  if (linkEl && linkEl.dataset.id) {
-    const id = linkEl.dataset.id;
-    const l = links.find(x => x.id === id);
-    if (!l) return;
-    items = [
-      { icon: 'ti-external-link', label: 'Open', action: () => openLink(id, l.url) },
-      { icon: 'ti-copy', label: 'Copy URL', action: () => copyLinkUrl(l.url) },
-      { icon: 'ti-edit', label: 'Edit', action: () => editLink(id) },
-      { icon: l.favorite ? 'ti-star-off' : 'ti-star', label: l.favorite ? 'Unfavorite' : 'Favorite', action: () => toggleFavorite(id) },
-      { icon: l.readLater ? 'ti-bookmark-off' : 'ti-bookmark', label: l.readLater ? 'Remove from read later' : 'Read later', action: () => toggleReadLater(id) },
-      { sep: true },
-      { icon: 'ti-archive', label: 'Archive', action: () => archiveLink(id) },
-      { icon: 'ti-trash', label: 'Delete', danger: true, action: () => deleteLink(id) },
-    ];
-  } else if (folderTile) {
-    const f = folderTile.dataset.folder;
-    items = [
-      { icon: 'ti-folder-open', label: 'Open folder', action: () => openFolderFromHome(f) },
-      { icon: 'ti-palette', label: 'Change color', action: () => openFolderColorPicker(f, anchor) },
-      { icon: 'ti-photo', label: 'Change icon', action: () => openFolderIconPicker(f, anchor) },
-      { sep: true },
-      { icon: 'ti-trash', label: 'Delete folder', danger: true, action: () => deleteFolder(f) },
-    ];
-  } else if (subHeader) {
-    const f = subHeader.dataset.folder, sf = subHeader.dataset.subfolder;
-    items = [
-      { icon: 'ti-pencil', label: 'Rename', action: () => startSubfolderRename(subHeader.querySelector('.folder-rename-btn')) },
-      { icon: 'ti-palette', label: 'Change color', action: () => openSubfolderColorPicker(f, sf, anchor) },
-    ];
-  } else if (folderHeader) {
-    const f = folderHeader.dataset.folder;
-    items = [
-      { icon: 'ti-pencil', label: 'Rename', action: () => startFolderRename(folderHeader.querySelector('.folder-rename-btn')) },
-      { icon: 'ti-palette', label: 'Change color', action: () => openFolderColorPicker(f, anchor) },
-      { icon: 'ti-photo', label: 'Change icon', action: () => openFolderIconPicker(f, anchor) },
-      { sep: true },
-      { icon: 'ti-trash', label: 'Delete folder', danger: true, action: () => deleteFolder(f) },
-    ];
-  }
-
-  if (!items) return;
-  e.preventDefault();
-  showContextMenu(e.clientX, e.clientY, items);
-}
-
-function showContextMenu(x, y, items) {
-  const menu = document.getElementById('ctxMenu');
-  menu.innerHTML = items.map((it, i) => it.sep
-    ? '<div class="ctx-sep"></div>'
-    : `<button class="ctx-item${it.danger ? ' danger' : ''}" data-ctx="${i}"><i class="ti ${it.icon}"></i>${esc(it.label)}</button>`).join('');
-  menu.querySelectorAll('[data-ctx]').forEach(btn => {
-    btn.addEventListener('click', ev => { ev.stopPropagation(); hideContextMenu(); items[+btn.dataset.ctx].action(); });
-  });
-  menu.style.display = 'flex';
-  menu.style.left = x + 'px';
-  menu.style.top = y + 'px';
-  const rect = menu.getBoundingClientRect();
-  if (rect.right > window.innerWidth - 8) menu.style.left = Math.max(8, x - rect.width) + 'px';
-  if (rect.bottom > window.innerHeight - 8) menu.style.top = Math.max(8, y - rect.height) + 'px';
-  menu.classList.add('open');
-}
-function hideContextMenu() {
-  const menu = document.getElementById('ctxMenu');
-  if (menu) { menu.classList.remove('open'); menu.style.display = 'none'; }
-}
+// The right-click context menu lives in contextmenu.js (onContextMenu +
+// hideContextMenu + internal showContextMenu/cursorAnchor/copyLinkUrl).
 
 function setupDragListeners() {
   const content = document.getElementById('content');
@@ -1906,13 +1819,13 @@ document.head.appendChild(style);
 // ============================================================================
 // SELECTION & BULK ACTIONS
 // ============================================================================
-function toggleFavorite(id) {
+export function toggleFavorite(id) {
   const l = links.find(x => x.id === id);
   if (!l) return;
   l.favorite = !l.favorite;
   save(); render();
 }
-function toggleReadLater(id) {
+export function toggleReadLater(id) {
   const l = links.find(x => x.id === id);
   if (!l) return;
   l.readLater = !l.readLater;
@@ -2056,7 +1969,7 @@ function bulkAddTag() {
 // ============================================================================
 // ARCHIVE
 // ============================================================================
-function archiveLink(id) {
+export function archiveLink(id) {
   const l = links.find(x => x.id === id);
   if (!l) return;
   commitPendingMove();
@@ -2178,7 +2091,7 @@ async function checkUncheckedLinks() {
   render();
 }
 
-function openLink(id, url) {
+export function openLink(id, url) {
   const l = links.find(x => x.id === id);
   if (l) { l.visits = (l.visits || 0) + 1; l.lastVisited = Date.now(); save(); }
   window.open(url, '_blank');
