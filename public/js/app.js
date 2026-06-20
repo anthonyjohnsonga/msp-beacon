@@ -3037,6 +3037,7 @@ function closeFolderIconPicker() {
   const picker = document.getElementById('folderIconPicker');
   if (picker) picker.style.display = 'none';
   iconPickerFolder = null;
+}
 
 
 // ============================================================================
@@ -3067,8 +3068,6 @@ Object.assign(window, {
 // ============================================================================
 // BOOTSTRAP / INIT
 // ============================================================================
-}
-
 applyMode(ui.mode, false);
 applyTheme(ui.theme, false);
 if (window.matchMedia) {
@@ -3083,3 +3082,10 @@ window.addEventListener('scroll', hideContextMenu, true);
 window.addEventListener('resize', hideContextMenu);
 setMode(defaultView, false);
 loadLinks();
+
+// Guard: the window bridge above must run at module load (not be trapped inside
+// a function), or every inline on*= handler is a dead button. Sentinel-check a
+// core handler so a future regression surfaces loudly instead of silently.
+if (typeof window.render !== 'function') {
+  console.error('MSP Beacon: window bridge did not initialize — inline handlers will not work.');
+}
