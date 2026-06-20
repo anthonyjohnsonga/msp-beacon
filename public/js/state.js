@@ -8,4 +8,7 @@ export const ui = {
   sort:    localStorage.getItem('msp-sort')    || 'manual',
   view:    localStorage.getItem('msp-view')    || 'grid',
   density: localStorage.getItem('msp-density') || 'comfortable',
+  mode:    localStorage.getItem('msp-mode')    || 'dark',
+  theme:   localStorage.getItem('msp-theme')   || 'Green',
+  accent:  localStorage.getItem('msp-accent')  || '#1D9E75',
 };
