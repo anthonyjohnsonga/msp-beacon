@@ -2,6 +2,7 @@ import { getFavicon, getDomain, esc, isHexColor, hexToRgb, hexToHsl, hslToHex, d
 import { ui } from './state.js';
 import { applyDensity, cycleDensity, idOrder, sortLinks } from './view.js';
 import { applyMode, applyTheme, previewCustomAccent, setCustomAccent, THEMES } from './theme.js';
+import { showToast, showUndoToast } from './toast.js';
 
 // ============================================================================
 // STATE & GLOBALS
@@ -438,7 +439,6 @@ async function save() {
   }, 400);
 }
 
-let toastTimer = null;
 let pendingDelete = null;
 let pendingMove = null;
 
@@ -446,29 +446,6 @@ let pendingMove = null;
 // ============================================================================
 // TOASTS & UNDO
 // ============================================================================
-function showToast(msg, isError) {
-  const t = document.getElementById('toast');
-  document.getElementById('toastMsg').textContent = msg;
-  document.getElementById('toastUndo').style.display = 'none';
-  document.getElementById('toastIcon').className = isError ? 'ti ti-alert-circle' : 'ti ti-check';
-  t.style.borderColor = isError ? '#E24B4A' : '';
-  t.style.color = isError ? '#E24B4A' : '';
-  t.classList.add('show');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
-}
-
-function showUndoToast(msg, icon = 'ti-trash') {
-  const t = document.getElementById('toast');
-  document.getElementById('toastMsg').textContent = msg;
-  document.getElementById('toastUndo').style.display = '';
-  document.getElementById('toastIcon').className = `ti ${icon}`;
-  t.style.borderColor = '';
-  t.style.color = '';
-  t.classList.add('show');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove('show'), 5500);
-}
 
 function undoAction() {
   if (pendingDelete) undoDelete();
