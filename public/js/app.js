@@ -5,6 +5,7 @@ import { applyMode, applyTheme, previewCustomAccent, setCustomAccent, THEMES } f
 import { showToast, showUndoToast } from './toast.js';
 import { openImport, closeImport, handleDrop, handleFile, toggleAll, doImport } from './import.js';
 import { toggleFolder, collapseAll, expandAll, renameFolder, deleteFolder, deleteSubfolder, startFolderRename, renameSubfolder, startSubfolderRename, toggleSubfolder } from './folders.js';
+import { openFolderColorPicker, openSubfolderColorPicker, openTagColorPicker, selectPickerColor, resetPickerColor, closeFolderColorPicker, openFolderIconPicker, selectFolderIcon, closeFolderIconPicker } from './pickers.js';
 
 // ============================================================================
 // STATE & GLOBALS
@@ -19,7 +20,7 @@ export let collapsedSubfolders = JSON.parse(localStorage.getItem('msp-subfolder-
 export let folderOrder = JSON.parse(localStorage.getItem('msp-folder-order') || 'null');
 export let folderColors = JSON.parse(localStorage.getItem('msp-folder-colors') || '{}');
 export let subfolderColors = JSON.parse(localStorage.getItem('msp-subfolder-colors') || '{}');
-let tagColors = JSON.parse(localStorage.getItem('msp-tag-colors') || '{}');
+export let tagColors = JSON.parse(localStorage.getItem('msp-tag-colors') || '{}');
 export let folderIcons = JSON.parse(localStorage.getItem('msp-folder-icons') || '{}');
 let rssFeeds = JSON.parse(localStorage.getItem('msp-rss-feeds') || '[]'); // [{url, name}]
 
@@ -482,8 +483,8 @@ function commitPendingMove() {
 // ============================================================================
 // UTILITIES & HELPERS
 // ============================================================================
-function getFolderColor(f) { return isHexColor(folderColors[f]) ? folderColors[f] : '#1D9E75'; }
-function getSubfolderColor(folder, sf) { const c = subfolderColors[subKey(folder, sf)]; return isHexColor(c) ? c : getFolderColor(folder); }
+export function getFolderColor(f) { return isHexColor(folderColors[f]) ? folderColors[f] : '#1D9E75'; }
+export function getSubfolderColor(folder, sf) { const c = subfolderColors[subKey(folder, sf)]; return isHexColor(c) ? c : getFolderColor(folder); }
 function getTagColor(t) { return isHexColor(tagColors[t]) ? tagColors[t] : null; }
 function accentColor() {
   const c = getComputedStyle(document.documentElement).getPropertyValue('--g4').trim();
@@ -494,7 +495,7 @@ function tagHtml(t) {
   const style = tc ? ` style="background:rgba(${hexToRgb(tc)},.2);color:${tc};border-color:${tc}"` : '';
   return `<span class="tag" data-tag="${esc(t)}" title="Filter by &quot;${esc(t)}&quot;"${style}>${esc(t)}</span>`;
 }
-function getFolderIcon(f) { return folderIcons[f] || 'ti-folder'; }
+export function getFolderIcon(f) { return folderIcons[f] || 'ti-folder'; }
 export function allFolders() { return [...new Set(links.filter(l => !l.archived).map(l => l.folder).filter(Boolean))].sort(); }
 function getOrderedFolders(names) {
   if (!folderOrder) return names.slice().sort();
@@ -2621,133 +2622,15 @@ function renderStats() {
     </div>`;
 }
 
-const COLOR_PRESETS = ['#1D9E75','#2563EB','#7C3AED','#0D9488','#D97706','#DC2626','#DB2777','#0891B2','#65A30D','#6B7280'];
-let colorPickerTarget = null; // { type: 'folder'|'subfolder', folder, sf? }
-
-
-// ============================================================================
-// COLOR & ICON PICKERS
-// ============================================================================
-function renderColorPicker(anchorEl) {
-  const picker = document.getElementById('folderColorPicker');
-  const t = colorPickerTarget;
-  const isSub = t.type === 'subfolder';
-  const isTag = t.type === 'tag';
-  const isDefault = (isSub && subfolderColors[subKey(t.folder, t.sf)] == null) || (isTag && tagColors[t.tag] == null);
-  const current = isSub ? getSubfolderColor(t.folder, t.sf)
-    : isTag ? (tagColors[t.tag] || accentColor())
-    : getFolderColor(t.folder);
-  const cur = String(current).toLowerCase();
-  const presetMatch = COLOR_PRESETS.some(c => c.toLowerCase() === cur);
-  let chips = COLOR_PRESETS.map(c =>
-    `<div onclick="selectPickerColor('${c}')" style="width:24px;height:24px;border-radius:50%;background:${c};cursor:pointer;outline:${(!isDefault && c.toLowerCase() === cur) ? '2px solid #fff' : 'none'};outline-offset:2px"></div>`
-  ).join('');
-  // Custom color — opens the native color wheel; click anywhere on the rainbow chip
-  chips += `<label title="Custom color…" style="width:24px;height:24px;border-radius:50%;cursor:pointer;position:relative;overflow:hidden;display:inline-block;background:conic-gradient(from 90deg,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00);outline:${(!isDefault && !presetMatch) ? '2px solid #fff' : 'none'};outline-offset:2px"><input type="color" value="${esc(current)}" onchange="selectPickerColor(this.value)" style="position:absolute;left:-5px;top:-5px;width:34px;height:34px;opacity:0;cursor:pointer;border:none;padding:0;background:none"></label>`;
-  if (isSub || isTag) {
-    chips += `<div onclick="resetPickerColor()" title="${isTag ? 'Default color' : 'Inherit folder color'}" style="width:24px;height:24px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;cursor:pointer;border:1px solid var(--border0);outline:${isDefault ? '2px solid #fff' : 'none'};outline-offset:2px"><i class="ti ti-rotate-2" style="font-size:13px;color:var(--text1)"></i></div>`;
-  }
-  picker.innerHTML = chips;
-  picker.style.display = 'flex';
-  const rect = anchorEl.getBoundingClientRect();
-  picker.style.top = (rect.bottom + 6) + 'px';
-  picker.style.left = Math.min(rect.right - 168, window.innerWidth - 180) + 'px';
-}
-
-function openFolderColorPicker(folderName, anchorEl) {
-  colorPickerTarget = { type: 'folder', folder: folderName };
-  renderColorPicker(anchorEl);
-}
-
-function openSubfolderColorPicker(folder, sf, anchorEl) {
-  colorPickerTarget = { type: 'subfolder', folder, sf };
-  renderColorPicker(anchorEl);
-}
-
-function openTagColorPicker(tag, anchorEl) {
-  colorPickerTarget = { type: 'tag', tag };
-  renderColorPicker(anchorEl);
-}
-
-function refreshOpenManagers() {
+// Color & icon pickers live in pickers.js (renderColorPicker/
+// openFolderColorPicker/openSubfolderColorPicker/openTagColorPicker/
+// selectPickerColor/resetPickerColor/closeFolderColorPicker/
+// openFolderIconPicker/selectFolderIcon/closeFolderIconPicker). They read the
+// color/icon stores + helpers exported from this file; refreshOpenManagers
+// stays here (it re-renders the tag/folder managers).
+export function refreshOpenManagers() {
   if (document.getElementById('tagMgrBg').style.display === 'flex') renderTagManager();
   if (document.getElementById('folderMgrBg').style.display === 'flex') renderFolderManager();
-}
-
-function selectPickerColor(color) {
-  if (!colorPickerTarget) return;
-  const t = colorPickerTarget;
-  if (t.type === 'subfolder') {
-    subfolderColors[subKey(t.folder, t.sf)] = color;
-    localStorage.setItem('msp-subfolder-colors', JSON.stringify(subfolderColors));
-  } else if (t.type === 'tag') {
-    tagColors[t.tag] = color;
-    localStorage.setItem('msp-tag-colors', JSON.stringify(tagColors));
-  } else {
-    folderColors[t.folder] = color;
-    localStorage.setItem('msp-folder-colors', JSON.stringify(folderColors));
-  }
-  closeFolderColorPicker();
-  render();
-  refreshOpenManagers();
-  saveConfig();
-}
-
-function resetPickerColor() {
-  if (!colorPickerTarget) return;
-  const t = colorPickerTarget;
-  if (t.type === 'subfolder') {
-    delete subfolderColors[subKey(t.folder, t.sf)];
-    localStorage.setItem('msp-subfolder-colors', JSON.stringify(subfolderColors));
-  } else if (t.type === 'tag') {
-    delete tagColors[t.tag];
-    localStorage.setItem('msp-tag-colors', JSON.stringify(tagColors));
-  } else return;
-  closeFolderColorPicker();
-  render();
-  refreshOpenManagers();
-  saveConfig();
-}
-
-function closeFolderColorPicker() {
-  const picker = document.getElementById('folderColorPicker');
-  if (picker) picker.style.display = 'none';
-  colorPickerTarget = null;
-}
-
-const ICON_PRESETS = [
-  'ti-folder','ti-server','ti-cloud','ti-code','ti-database','ti-shield',
-  'ti-home','ti-tool','ti-star','ti-bookmark','ti-heart','ti-bolt',
-  'ti-world','ti-mail','ti-chart-bar','ti-settings','ti-users','ti-file',
-  'ti-camera','ti-music','ti-gamepad','ti-school','ti-briefcase','ti-rocket'
-];
-let iconPickerFolder = null;
-function openFolderIconPicker(folderName, anchorEl) {
-  iconPickerFolder = folderName;
-  closeFolderColorPicker();
-  const picker = document.getElementById('folderIconPicker');
-  const current = getFolderIcon(folderName);
-  const fc = getFolderColor(folderName);
-  picker.innerHTML = ICON_PRESETS.map(ic =>
-    `<div onclick="selectFolderIcon('${ic}')" title="${ic.replace('ti-','')}" style="width:32px;height:32px;border-radius:6px;background:${ic===current?'var(--g5)':'var(--bg3)'};display:flex;align-items:center;justify-content:center;cursor:pointer;border:1px solid ${ic===current?fc:'transparent'}"><i class="ti ${ic}" style="font-size:16px;color:${ic===current?'#fff':'var(--text1)'}"></i></div>`
-  ).join('');
-  picker.style.display = 'flex';
-  const rect = anchorEl.getBoundingClientRect();
-  picker.style.top = (rect.bottom + 6) + 'px';
-  picker.style.left = Math.min(rect.left, window.innerWidth - 232) + 'px';
-}
-function selectFolderIcon(icon) {
-  if (!iconPickerFolder) return;
-  folderIcons[iconPickerFolder] = icon;
-  localStorage.setItem('msp-folder-icons', JSON.stringify(folderIcons));
-  closeFolderIconPicker();
-  render();
-  saveConfig();
-}
-function closeFolderIconPicker() {
-  const picker = document.getElementById('folderIconPicker');
-  if (picker) picker.style.display = 'none';
-  iconPickerFolder = null;
 }
 
 

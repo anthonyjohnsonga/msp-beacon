@@ -16,10 +16,16 @@ const fs = require('fs');
 const path = require('path');
 
 const root = path.join(__dirname, '..', 'public');
-const appPath = path.join(root, 'js', 'app.js');
+const jsDir = path.join(root, 'js');
+const appPath = path.join(jsDir, 'app.js');
 const htmlPath = path.join(root, 'index.html');
 const app = fs.readFileSync(appPath, 'utf8');
 const html = fs.readFileSync(htmlPath, 'utf8');
+// All ES modules — inline on*= handlers live in template strings across every
+// extracted module, not just app.js, so scan them all for handler calls.
+const moduleSrcs = fs.readdirSync(jsDir)
+  .filter(f => f.endsWith('.js'))
+  .map(f => fs.readFileSync(path.join(jsDir, f), 'utf8'));
 
 // Names defined in app.js: declared functions + imported bindings.
 const declared = new Set();
@@ -34,9 +40,10 @@ const blockMatch = app.match(/Object\.assign\(window,\s*\{([\s\S]*?)\}\);/);
 if (!blockMatch) { console.error('check-bridge: could not find Object.assign(window, {...}) block in app.js'); process.exit(1); }
 const bridged = new Set(blockMatch[1].split(',').map(s => s.trim()).filter(Boolean));
 
-// Function names called from inline on*="..." / on*='...' handlers in both files.
+// Function names called from inline on*="..." / on*='...' handlers across
+// index.html and every JS module.
 const calledInHandlers = new Set();
-for (const src of [app, html]) {
+for (const src of [html, ...moduleSrcs]) {
   for (const re of [/\son[a-z]+\s*=\s*"([^"]*)"/g, /\son[a-z]+\s*=\s*'([^']*)'/g]) {
     for (const m of src.matchAll(re))
       for (const c of m[1].matchAll(/([A-Za-z_][A-Za-z0-9_]*)\s*\(/g)) calledInHandlers.add(c[1]);
