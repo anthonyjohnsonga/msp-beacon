@@ -33,10 +33,15 @@ export function cycleDensity() {
 }
 
 // Numeric creation-order key from a link id. Ids are `Date.now().toString(36)`
-// plus a random base36 suffix, so a base36 parse orders them by creation time.
+// plus a random base36 suffix. We parse ONLY the leading timestamp portion: the
+// random suffix has a variable length (trailing base36 zeros get dropped), so
+// parsing the whole id would let a newer link with a shorter suffix sort as
+// older. Date.now() is a stable 8 base36 chars from 2004 to ~2058, and 36^8 fits
+// safely under Number.MAX_SAFE_INTEGER so the parse is exact (no float rounding).
 // Falls back to 0 for any non-conforming (e.g. hand-edited) id so the sort stays
 // stable instead of going NaN.
-export function idOrder(id) { const n = parseInt(id, 36); return Number.isNaN(n) ? 0 : n; }
+const TS_LEN = 8;
+export function idOrder(id) { const n = parseInt(String(id).slice(0, TS_LEN), 36); return Number.isNaN(n) ? 0 : n; }
 
 export function sortLinks(arr) {
   if (ui.sort === 'manual') return arr;
