@@ -204,6 +204,10 @@ select:focus { outline: none; border-color: var(--g4); }
 .subfolder-header { display: flex; align-items: center; gap: 6px; padding: 4px 8px; margin: 8px 0 4px 8px; border-left: 2px solid rgba(100,200,100,.4); cursor: pointer; user-select: none; }
 .subfolder-header:hover { background: rgba(var(--g5-rgb),.12); border-radius: 0 6px 6px 0; }
 .subfolder-header.drag-over { background: rgba(var(--g5-rgb),.3) !important; border-left-color: var(--g3) !important; border-radius: 0 6px 6px 0; }
+.subfolder-header.dragging { opacity: 0.5; }
+.subfolder-drag-handle { display: flex; align-items: center; justify-content: center; width: 16px; cursor: grab; color: var(--text2); font-size: 12px; flex-shrink: 0; }
+.subfolder-drag-handle:hover { color: var(--g3); }
+.subfolder-drag-handle:active { cursor: grabbing; }
 .subfolder-title { font-size: 12px; font-weight: 500; color: var(--text2); }
 .subfolder-grid { padding-left: 12px; }
 .title-wrap { position: relative; display: flex; align-items: center; }

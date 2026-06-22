@@ -163,6 +163,30 @@ export function deleteSubfolder(folderName, subName) {
   showToast(`Sub-folder "${subName}" deleted`);
 }
 
+export function moveSubfolder(srcFolder, subName, destFolder) {
+  if (!destFolder || destFolder === srcFolder) return;
+  // Re-parent every link in this sub-folder; the sub-folder name is preserved,
+  // so if destFolder already has a sub-folder of the same name the two merge.
+  let moved = 0;
+  links.forEach(l => {
+    if (l.folder === srcFolder && l.subfolder === subName) { l.folder = destFolder; moved++; }
+  });
+  if (!moved) return;
+  // Migrate per-sub-folder UI state (collapsed + color), which is keyed on the
+  // parent folder name — without clobbering state the destination already has.
+  const oldKey = JSON.stringify([srcFolder, subName]);
+  const newKey = JSON.stringify([destFolder, subName]);
+  [['msp-subfolder-collapsed', collapsedSubfolders], ['msp-subfolder-colors', subfolderColors]].forEach(([lsKey, store]) => {
+    if (store[oldKey] !== undefined) {
+      if (store[newKey] === undefined) store[newKey] = store[oldKey];
+      delete store[oldKey];
+      localStorage.setItem(lsKey, JSON.stringify(store));
+    }
+  });
+  save(); render(); saveConfig();
+  showToast(`Moved "${subName}" to "${destFolder}"`);
+}
+
 export function startFolderRename(btn) {
   const header = btn.closest('.folder-header[data-folder]');
   if (!header) return;

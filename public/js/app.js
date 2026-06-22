@@ -4,7 +4,7 @@ import { applyDensity, cycleDensity, idOrder, sortLinks } from './view.js';
 import { applyMode, applyTheme, previewCustomAccent, setCustomAccent, THEMES } from './theme.js';
 import { showToast, showUndoToast } from './toast.js';
 import { openImport, closeImport, handleDrop, handleFile, toggleAll, doImport } from './import.js';
-import { toggleFolder, collapseAll, expandAll, renameFolder, deleteFolder, deleteSubfolder, startFolderRename, renameSubfolder, startSubfolderRename, toggleSubfolder } from './folders.js';
+import { toggleFolder, collapseAll, expandAll, renameFolder, deleteFolder, deleteSubfolder, startFolderRename, renameSubfolder, startSubfolderRename, toggleSubfolder, moveSubfolder } from './folders.js';
 import { openFolderColorPicker, openSubfolderColorPicker, openTagColorPicker, selectPickerColor, resetPickerColor, closeFolderColorPicker, openFolderIconPicker, selectFolderIcon, closeFolderIconPicker } from './pickers.js';
 import { openFolderManager, closeFolderManager, openTagManager, closeTagManager, openFeedManager, closeFeedManager, addFeed } from './managers.js';
 import { onContextMenu, hideContextMenu } from './contextmenu.js';
@@ -121,6 +121,7 @@ function renderBgControls() {
 }
 let dragId = null;
 let dragFolder = null;
+let dragSubfolder = null;
 let dragOverEl = null;
 let homeDrag = null;
 let activeCardId = null;
@@ -1028,6 +1029,7 @@ function renderFolderContents(folderName, folderLinks) {
     const sfc = getSubfolderColor(folderName, sf);
     const sfcRgb = hexToRgb(sfc);
     html += `<div class="subfolder-header" onclick="toggleSubfolder(this.dataset.folder,this.dataset.subfolder)" data-folder="${esc(folderName)}" data-subfolder="${esc(sf)}" style="border-left-color:rgba(${sfcRgb},.5)">`;
+    html += `<div class="subfolder-drag-handle" draggable="true" title="Drag to move sub-folder to another folder" onclick="event.stopPropagation()"><i class="ti ti-grip-vertical"></i></div>`;
     html += `<i class="ti ti-chevron-right folder-chevron${sfCollapsed ? '' : ' open'}" style="font-size:12px;color:${sfc}"></i>`;
     html += `<i class="ti ti-folder" style="font-size:12px;color:${sfc};opacity:.7"></i>`;
     html += `<span class="subfolder-title">${esc(sf)}</span>`;
@@ -1570,7 +1572,7 @@ function setupDragListeners() {
       const wrap = wHandle.closest('[data-widget-id]');
       if (!wrap) return;
       homeDrag = { type: 'widget', key: wrap.dataset.widgetId };
-      dragId = null; dragFolder = null;
+      dragId = null; dragFolder = null; dragSubfolder = null;
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', homeDrag.key);
       setTimeout(() => wrap.classList.add('dragging'), 0);
@@ -1584,7 +1586,7 @@ function setupDragListeners() {
       } else if (homeTile.dataset.id && homeTile.closest('[data-home-section="favorites"]')) {
         homeDrag = { type: 'fav', key: homeTile.dataset.id };
       } else { return; }
-      dragId = null; dragFolder = null;
+      dragId = null; dragFolder = null; dragSubfolder = null;
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', homeDrag.key);
       setTimeout(() => homeTile.classList.add('dragging'), 0);
@@ -1592,11 +1594,12 @@ function setupDragListeners() {
     }
     const handle = e.target.closest('.drag-handle');
     const folderHandle = e.target.closest('.folder-drag-handle');
+    const subfolderHandle = e.target.closest('.subfolder-drag-handle');
     if (handle) {
       const card = handle.closest('.card[data-id]');
       if (!card) return;
       dragId = card.dataset.id;
-      dragFolder = null;
+      dragFolder = null; dragSubfolder = null;
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', dragId);
       e.dataTransfer.setDragImage(card, 20, 20);
@@ -1605,9 +1608,18 @@ function setupDragListeners() {
       const header = folderHandle.closest('.folder-header[data-folder]');
       if (!header) return;
       dragFolder = header.dataset.folder;
-      dragId = null;
+      dragId = null; dragSubfolder = null;
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', dragFolder);
+      e.dataTransfer.setDragImage(header, 20, 10);
+      setTimeout(() => header.classList.add('dragging'), 0);
+    } else if (subfolderHandle) {
+      const header = subfolderHandle.closest('.subfolder-header[data-subfolder]');
+      if (!header) return;
+      dragSubfolder = { folder: header.dataset.folder, subfolder: header.dataset.subfolder };
+      dragId = null; dragFolder = null;
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', header.dataset.subfolder);
       e.dataTransfer.setDragImage(header, 20, 10);
       setTimeout(() => header.classList.add('dragging'), 0);
     }
@@ -1644,7 +1656,7 @@ function setupDragListeners() {
       }
       return;
     }
-    if (!dragId && !dragFolder) return;
+    if (!dragId && !dragFolder && !dragSubfolder) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     let newTarget = null;
@@ -1664,6 +1676,9 @@ function setupDragListeners() {
     } else if (dragFolder) {
       const header = e.target.closest('.folder-header[data-folder]');
       if (header && header.dataset.folder !== dragFolder) newTarget = header;
+    } else if (dragSubfolder) {
+      const header = e.target.closest('.folder-header[data-folder]');
+      if (header && header.dataset.folder !== dragSubfolder.folder) newTarget = header;
     }
     if (newTarget !== dragOverEl) {
       if (dragOverEl) dragOverEl.classList.remove('drag-over');
@@ -1780,12 +1795,17 @@ function setupDragListeners() {
           saveConfig();
         }
       }
+    } else if (dragSubfolder) {
+      const header = e.target.closest('.folder-header[data-folder]');
+      if (header && header.dataset.folder !== dragSubfolder.folder) {
+        moveSubfolder(dragSubfolder.folder, dragSubfolder.subfolder, header.dataset.folder);
+      }
     }
-    dragId = null; dragFolder = null; dragOverEl = null;
+    dragId = null; dragFolder = null; dragSubfolder = null; dragOverEl = null;
   });
 
   content.addEventListener('dragend', () => {
-    dragId = null; dragFolder = null; homeDrag = null;
+    dragId = null; dragFolder = null; dragSubfolder = null; homeDrag = null;
     if (dragOverEl) dragOverEl.classList.remove('drag-over');
     dragOverEl = null;
     document.querySelectorAll('.dragging').forEach(el => el.classList.remove('dragging'));
