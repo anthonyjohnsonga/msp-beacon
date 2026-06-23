@@ -12,6 +12,7 @@ import { selectMode, selectedIds, toggleSelectMode, exitSelectMode, toggleSelect
 import { archiveLink, openArchive, closeArchive, updateArchiveBadge } from './archive.js';
 import { checkLinks, checkUncheckedLinks } from './health.js';
 import { openStats, closeStats, openStatLink, scanLinksForStats, renderStats, resetStats, toggleStatsNever } from './stats.js';
+import { setupDragListeners } from './drag.js';
 
 // ============================================================================
 // STATE & GLOBALS
@@ -119,11 +120,6 @@ function renderBgControls() {
   document.getElementById('bgBlur').value = homeBg.blur;
   document.getElementById('bgBlurVal').textContent = homeBg.blur + 'px';
 }
-let dragId = null;
-let dragFolder = null;
-let dragSubfolder = null;
-let dragOverEl = null;
-let homeDrag = null;
 let activeCardId = null;
 let searchHistory = JSON.parse(localStorage.getItem('msp-search-history') || '[]');
 export let visibleIds = [];
@@ -255,7 +251,7 @@ const WIDGET_ICONS = {
 const DEFAULT_DASHBOARD = SECTION_WIDGETS.map(type => ({ id: type, type, enabled: true }));
 const LINKGROUP_MAX_ITEMS = 50;
 let dashboard = JSON.parse(localStorage.getItem('msp-dashboard') || 'null');
-let dashboardEditMode = false;
+export let dashboardEditMode = false;
 // One-time dashboard migrations already applied for this user (synced via
 // config.json so each migration runs once per user, not once per device, and
 // so a widget a user later removes is never silently re-added).
@@ -264,7 +260,7 @@ let dashboardMigrations = JSON.parse(localStorage.getItem('msp-dashboard-migrati
 function getDashboard() {
   return Array.isArray(dashboard) && dashboard.length ? dashboard : DEFAULT_DASHBOARD.map(w => ({ ...w }));
 }
-function persistDashboard() {
+export function persistDashboard() {
   localStorage.setItem('msp-dashboard', JSON.stringify(dashboard));
   saveConfig();
 }
@@ -459,6 +455,7 @@ export let pendingMove = null;
 export function setLinks(arr) { links = arr; }
 export function setPendingDelete(v) { pendingDelete = v; }
 export function setPendingMove(v) { pendingMove = v; }
+export function setFolderOrder(arr) { folderOrder = arr; localStorage.setItem('msp-folder-order', JSON.stringify(folderOrder)); }
 
 
 // ============================================================================
@@ -620,7 +617,7 @@ export function openFolderFromHome(folder) {
 
 // Reorder a favorite by moving its record just before the target's in `links`
 // (same model as manager card reorder — favorites render in links-array order).
-function reorderFavorite(srcId, tgtId) {
+export function reorderFavorite(srcId, tgtId) {
   const si = links.findIndex(l => l.id === srcId);
   if (si < 0) return;
   const [moved] = links.splice(si, 1);
@@ -758,7 +755,7 @@ export function renderHome() {
 // --- Dashboard edit actions -------------------------------------------------
 // Materialize the default layout into a concrete array before mutating, so the
 // first edit of an unconfigured dashboard starts from today's section order.
-function ensureDashboard() {
+export function ensureDashboard() {
   if (!Array.isArray(dashboard) || !dashboard.length) dashboard = DEFAULT_DASHBOARD.map(w => ({ ...w }));
   return dashboard;
 }
@@ -1562,255 +1559,7 @@ export function filterByTag(tag) {
 
 // The right-click context menu lives in contextmenu.js (onContextMenu +
 // hideContextMenu + internal showContextMenu/cursorAnchor/copyLinkUrl).
-
-function setupDragListeners() {
-  const content = document.getElementById('content');
-
-  content.addEventListener('dragstart', e => {
-    const wHandle = e.target.closest('.widget-drag-handle');
-    if (wHandle) {
-      const wrap = wHandle.closest('[data-widget-id]');
-      if (!wrap) return;
-      homeDrag = { type: 'widget', key: wrap.dataset.widgetId };
-      dragId = null; dragFolder = null; dragSubfolder = null;
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', homeDrag.key);
-      setTimeout(() => wrap.classList.add('dragging'), 0);
-      return;
-    }
-    const homeTile = e.target.closest('.home-tile[draggable="true"]');
-    if (homeTile) {
-      if (dashboardEditMode) return; // tile reorder is disabled while editing widgets
-      if (homeTile.classList.contains('home-folder-tile')) {
-        homeDrag = { type: 'folder', key: homeTile.dataset.folder };
-      } else if (homeTile.dataset.id && homeTile.closest('[data-home-section="favorites"]')) {
-        homeDrag = { type: 'fav', key: homeTile.dataset.id };
-      } else { return; }
-      dragId = null; dragFolder = null; dragSubfolder = null;
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', homeDrag.key);
-      setTimeout(() => homeTile.classList.add('dragging'), 0);
-      return;
-    }
-    const handle = e.target.closest('.drag-handle');
-    const folderHandle = e.target.closest('.folder-drag-handle');
-    const subfolderHandle = e.target.closest('.subfolder-drag-handle');
-    if (handle) {
-      const card = handle.closest('.card[data-id]');
-      if (!card) return;
-      dragId = card.dataset.id;
-      dragFolder = null; dragSubfolder = null;
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', dragId);
-      e.dataTransfer.setDragImage(card, 20, 20);
-      setTimeout(() => card.classList.add('dragging'), 0);
-    } else if (folderHandle) {
-      const header = folderHandle.closest('.folder-header[data-folder]');
-      if (!header) return;
-      dragFolder = header.dataset.folder;
-      dragId = null; dragSubfolder = null;
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', dragFolder);
-      e.dataTransfer.setDragImage(header, 20, 10);
-      setTimeout(() => header.classList.add('dragging'), 0);
-    } else if (subfolderHandle) {
-      const header = subfolderHandle.closest('.subfolder-header[data-subfolder]');
-      if (!header) return;
-      dragSubfolder = { folder: header.dataset.folder, subfolder: header.dataset.subfolder };
-      dragId = null; dragFolder = null;
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', header.dataset.subfolder);
-      e.dataTransfer.setDragImage(header, 20, 10);
-      setTimeout(() => header.classList.add('dragging'), 0);
-    }
-  });
-
-  content.addEventListener('dragover', e => {
-    if (homeDrag && homeDrag.type === 'widget') {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-      const t = e.target.closest('.home-widget[data-widget-id]');
-      const target = (t && t.dataset.widgetId !== homeDrag.key) ? t : null;
-      if (target !== dragOverEl) {
-        if (dragOverEl) dragOverEl.classList.remove('drag-over');
-        dragOverEl = target;
-        if (dragOverEl) dragOverEl.classList.add('drag-over');
-      }
-      return;
-    }
-    if (homeDrag) {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-      let target = null;
-      if (homeDrag.type === 'folder') {
-        const t = e.target.closest('.home-folder-tile');
-        if (t && t.dataset.folder !== homeDrag.key) target = t;
-      } else {
-        const t = e.target.closest('.home-tile[data-id]');
-        if (t && t.dataset.id !== homeDrag.key && t.closest('[data-home-section="favorites"]')) target = t;
-      }
-      if (target !== dragOverEl) {
-        if (dragOverEl) dragOverEl.classList.remove('drag-over');
-        dragOverEl = target;
-        if (dragOverEl) dragOverEl.classList.add('drag-over');
-      }
-      return;
-    }
-    if (!dragId && !dragFolder && !dragSubfolder) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    let newTarget = null;
-    if (dragId) {
-      const card = e.target.closest('.card[data-id], .card-row[data-id]');
-      if (card && card.dataset.id !== dragId) {
-        newTarget = card;
-      } else if (!card) {
-        const sfHeader = e.target.closest('.subfolder-header[data-subfolder]');
-        if (sfHeader) {
-          newTarget = sfHeader;
-        } else {
-          const header = e.target.closest('.folder-header[data-folder]');
-          if (header) newTarget = header;
-        }
-      }
-    } else if (dragFolder) {
-      const header = e.target.closest('.folder-header[data-folder]');
-      if (header && header.dataset.folder !== dragFolder) newTarget = header;
-    } else if (dragSubfolder) {
-      const header = e.target.closest('.folder-header[data-folder]');
-      if (header && header.dataset.folder !== dragSubfolder.folder) newTarget = header;
-    }
-    if (newTarget !== dragOverEl) {
-      if (dragOverEl) dragOverEl.classList.remove('drag-over');
-      dragOverEl = newTarget;
-      if (dragOverEl) dragOverEl.classList.add('drag-over');
-    }
-  });
-
-  content.addEventListener('dragleave', e => {
-    if (!content.contains(e.relatedTarget)) {
-      if (dragOverEl) dragOverEl.classList.remove('drag-over');
-      dragOverEl = null;
-    }
-  });
-
-  content.addEventListener('drop', e => {
-    e.preventDefault();
-    if (dragOverEl) dragOverEl.classList.remove('drag-over');
-    document.querySelectorAll('.dragging').forEach(el => el.classList.remove('dragging'));
-    if (homeDrag && homeDrag.type === 'widget') {
-      const t = e.target.closest('.home-widget[data-widget-id]');
-      if (t && t.dataset.widgetId !== homeDrag.key) {
-        const d = ensureDashboard();
-        const si = d.findIndex(w => w.id === homeDrag.key);
-        const ti = d.findIndex(w => w.id === t.dataset.widgetId);
-        if (si > -1 && ti > -1) {
-          const [m] = d.splice(si, 1);
-          d.splice(ti, 0, m);
-          persistDashboard(); render();
-        }
-      }
-      homeDrag = null; dragOverEl = null;
-      return;
-    }
-    if (homeDrag) {
-      if (homeDrag.type === 'folder') {
-        const t = e.target.closest('.home-folder-tile');
-        if (t && t.dataset.folder !== homeDrag.key) {
-          const names = getOrderedFolders(allFolders());
-          const si = names.indexOf(homeDrag.key), ti = names.indexOf(t.dataset.folder);
-          if (si > -1 && ti > -1) {
-            names.splice(si, 1);
-            names.splice(ti, 0, homeDrag.key);
-            folderOrder = names;
-            localStorage.setItem('msp-folder-order', JSON.stringify(folderOrder));
-            render();
-            saveConfig();
-          }
-        }
-      } else {
-        const t = e.target.closest('.home-tile[data-id]');
-        if (t && t.dataset.id !== homeDrag.key && t.closest('[data-home-section="favorites"]')) {
-          reorderFavorite(homeDrag.key, t.dataset.id);
-        }
-      }
-      homeDrag = null; dragOverEl = null;
-      return;
-    }
-    if (dragId) {
-      const card = e.target.closest('.card[data-id], .card-row[data-id]');
-      const sfHeader = e.target.closest('.subfolder-header[data-subfolder]');
-      const header = !sfHeader ? e.target.closest('.folder-header[data-folder]') : null;
-      if (card && card.dataset.id !== dragId) {
-        if (pendingDelete) { clearTimeout(pendingDelete.timer); save(); pendingDelete = null; }
-        commitPendingMove();
-        const saved = links.slice();
-        const srcIdx = links.findIndex(l => l.id === dragId);
-        const tgtLink = links.find(l => l.id === card.dataset.id);
-        const [moved] = links.splice(srcIdx, 1);
-        const destFolder = tgtLink.folder || '';
-        moved.folder = destFolder;
-        moved.subfolder = tgtLink.subfolder || null;
-        const newTgt = links.findIndex(l => l.id === card.dataset.id);
-        links.splice(newTgt, 0, moved);
-        render();
-        pendingMove = { saved, timer: setTimeout(() => { pendingMove = null; save(); }, 5000) };
-        showUndoToast(`Moved to "${destFolder || 'no folder'}" — Undo?`, 'ti-arrows-move');
-      } else if (sfHeader) {
-        const srcIdx = links.findIndex(l => l.id === dragId);
-        if (srcIdx > -1) {
-          if (pendingDelete) { clearTimeout(pendingDelete.timer); save(); pendingDelete = null; }
-          commitPendingMove();
-          const saved = links.slice();
-          links[srcIdx].folder = sfHeader.dataset.folder;
-          links[srcIdx].subfolder = sfHeader.dataset.subfolder;
-          render();
-          pendingMove = { saved, timer: setTimeout(() => { pendingMove = null; save(); }, 5000) };
-          showUndoToast(`Moved to ${sfHeader.dataset.folder} / ${sfHeader.dataset.subfolder} — Undo?`, 'ti-arrows-move');
-        }
-      } else if (header) {
-        const srcIdx = links.findIndex(l => l.id === dragId);
-        if (srcIdx > -1) {
-          if (pendingDelete) { clearTimeout(pendingDelete.timer); save(); pendingDelete = null; }
-          commitPendingMove();
-          const saved = links.slice();
-          links[srcIdx].folder = header.dataset.folder;
-          links[srcIdx].subfolder = null;
-          render();
-          pendingMove = { saved, timer: setTimeout(() => { pendingMove = null; save(); }, 5000) };
-          showUndoToast(`Moved to "${header.dataset.folder}" — Undo?`, 'ti-arrows-move');
-        }
-      }
-    } else if (dragFolder) {
-      const header = e.target.closest('.folder-header[data-folder]');
-      if (header && header.dataset.folder !== dragFolder) {
-        const names = getOrderedFolders(allFolders());
-        const si = names.indexOf(dragFolder), ti = names.indexOf(header.dataset.folder);
-        if (si > -1 && ti > -1) {
-          names.splice(si, 1);
-          names.splice(ti, 0, dragFolder);
-          folderOrder = names;
-          localStorage.setItem('msp-folder-order', JSON.stringify(folderOrder));
-          render();
-          saveConfig();
-        }
-      }
-    } else if (dragSubfolder) {
-      const header = e.target.closest('.folder-header[data-folder]');
-      if (header && header.dataset.folder !== dragSubfolder.folder) {
-        moveSubfolder(dragSubfolder.folder, dragSubfolder.subfolder, header.dataset.folder);
-      }
-    }
-    dragId = null; dragFolder = null; dragSubfolder = null; dragOverEl = null;
-  });
-
-  content.addEventListener('dragend', () => {
-    dragId = null; dragFolder = null; dragSubfolder = null; homeDrag = null;
-    if (dragOverEl) dragOverEl.classList.remove('drag-over');
-    dragOverEl = null;
-    document.querySelectorAll('.dragging').forEach(el => el.classList.remove('dragging'));
-  });
-}
+// Drag-and-drop reorder/move lives in drag.js (setupDragListeners).
 
 
 // ============================================================================
