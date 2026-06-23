@@ -51,19 +51,25 @@ const blockMatch = app.match(/Object\.assign\(window,\s*\{([\s\S]*?)\}\);/);
 if (!blockMatch) { console.error('check-bridge: could not find Object.assign(window, {...}) block in app.js'); process.exit(1); }
 const bridged = new Set(blockMatch[1].split(',').map(s => s.trim()).filter(Boolean));
 
-// Function names called from inline on*="..." / on*='...' handlers across
-// index.html and every JS module.
-const calledInHandlers = new Set();
+// Function names referenced from inline on*="..." / on*='...' handlers across
+// index.html and every JS module. We collect two ways: direct calls (`fn(`) and
+// bare references (`setTimeout(fn, 150)` — a function passed without calling it).
+// Both forms resolve `fn` in global scope, so either way it must be on the
+// bridge. (The bare-reference scan skips property accesses like `this.value`.)
+const calledInHandlers = new Set();      // `fn(` — also drives the summary count
+const referencedInHandlers = new Set();  // bare identifiers (not property accesses)
 for (const src of [html, ...moduleSrcs]) {
   for (const re of [/\son[a-z]+\s*=\s*"([^"]*)"/g, /\son[a-z]+\s*=\s*'([^']*)'/g]) {
-    for (const m of src.matchAll(re))
+    for (const m of src.matchAll(re)) {
       for (const c of m[1].matchAll(/([A-Za-z_][A-Za-z0-9_]*)\s*\(/g)) calledInHandlers.add(c[1]);
+      for (const c of m[1].matchAll(/(?<![.\w])([A-Za-z_][A-Za-z0-9_]*)/g)) referencedInHandlers.add(c[1]);
+    }
   }
 }
 
-// 1. Every inline-handler call that names one of our functions (defined in ANY
-//    module, not just app.js) must be bridged.
-const missing = [...calledInHandlers].filter(n => ourFns.has(n) && !bridged.has(n)).sort();
+// 1. Every inline-handler reference (a call OR a bare function-pass) that names
+//    one of our functions (defined in ANY module, not just app.js) must be bridged.
+const missing = [...new Set([...calledInHandlers, ...referencedInHandlers])].filter(n => ourFns.has(n) && !bridged.has(n)).sort();
 // 2. Every bridged name must resolve to a binding in app.js scope.
 const unbound = [...bridged].filter(n => !boundInApp.has(n)).sort();
 

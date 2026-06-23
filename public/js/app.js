@@ -1582,7 +1582,7 @@ Object.assign(window, {
   closeImport, closeModal, closeSettings, closeShortcuts, closeStats, closeTagManager,
   closeTheme, collapseAll, confirmBulkMove, cycleDensity, deleteFolder, doImport,
   esc, exitSelectMode, expandAll, exportLinks, fetchPageTitle, goHome,
-  goManager, handleDrop, handleFile, handleRestoreFile, homeSearchInput, homeShowAll,
+  goManager, handleDrop, handleFile, handleRestoreFile, hideSearchHistory, hideTagSuggest, homeSearchInput, homeShowAll,
   indexAllContent, lgAddSubmit, lgStartRename, linkgroupRemoveItem, onBulkFolderChange, onSearchInput,
   onSortChange, onTagInput, onTagKeydown, openArchive, openFeedItem, openFeedManager,
   openFolderColorPicker, openFolderIconPicker, openFolderManager, openImport, openModal, openRestore,
