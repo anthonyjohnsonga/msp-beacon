@@ -224,6 +224,23 @@ function migrateDashboard() {
     persistDashboard(); // writes the dashboard + the migration flag to config
   }
 }
+// One-time: give every link a nested-folder `path` array. Legacy links only
+// carry the flat folder/subfolder pair, so derive path from them; folder/
+// subfolder stay as mirrors of the first two segments during the transition to
+// the path model so not-yet-converted folder code keeps working. Tracked in
+// dashboardMigrations (runs once per user, synced via config) like the dashboard
+// migration above.
+function migrateFolders() {
+  if (dashboardMigrations.includes('folders-path-v1')) return;
+  dashboardMigrations.push('folders-path-v1');
+  localStorage.setItem('msp-dashboard-migrations', JSON.stringify(dashboardMigrations));
+  let changed = false;
+  links.forEach(l => {
+    if (!Array.isArray(l.path)) { l.path = [l.folder, l.subfolder].filter(Boolean); changed = true; }
+  });
+  if (changed) save();
+  persistDashboard(); // persists the migration flag (+ dashboard) to config
+}
 // Accept only known widget shapes — a restored/hand-edited config must not be
 // able to inject unknown types or non-http link URLs into the homepage.
 function sanitizeDashboard(arr) {
@@ -358,6 +375,7 @@ async function loadLinks() {
     links = Array.isArray(data) ? data : [];
     if (cfgRes && cfgRes.ok) applyServerConfig(await cfgRes.json());
     migrateDashboard();
+    migrateFolders();
     render();
   } catch(e) {
     console.error('Failed to load links', e);
@@ -1209,12 +1227,12 @@ function saveLink() {
     const i = links.findIndex(l => l.id === editId);
     if (i > -1) {
       const urlChanged = links[i].url !== url;
-      links[i] = { ...links[i], url, title, desc, folder, subfolder, tags };
+      links[i] = { ...links[i], url, title, desc, folder, subfolder, path: [folder, subfolder].filter(Boolean), tags };
       if (urlChanged) captureSnapshot(editId, url);
     }
   } else {
     const newId = Date.now().toString(36) + Math.random().toString(36).slice(2);
-    links.unshift({ id: newId, url, title, desc, folder, subfolder, tags });
+    links.unshift({ id: newId, url, title, desc, folder, subfolder, path: [folder, subfolder].filter(Boolean), tags });
     captureSnapshot(newId, url);
   }
   const wasEditing = !!editId;
@@ -1230,7 +1248,7 @@ function addLinkAnyway() {
   const tags = document.getElementById('mTags').value.split(',').map(t => t.trim()).filter(Boolean);
   const desc = document.getElementById('mDesc').value.trim();
   const newId = Date.now().toString(36) + Math.random().toString(36).slice(2);
-  links.unshift({ id: newId, url, title, desc, folder, subfolder, tags });
+  links.unshift({ id: newId, url, title, desc, folder, subfolder, path: [folder, subfolder].filter(Boolean), tags });
   captureSnapshot(newId, url);
   save(); closeModal(); render();
   showToast('Link saved');
