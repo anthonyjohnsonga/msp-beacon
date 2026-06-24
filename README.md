@@ -42,7 +42,7 @@ move between machines, or host on a file share.
 <details open>
 <summary>Show 7 features</summary>
 
-- **Add, edit, delete links** — save any URL with a title, description, folder, sub-folder, and tags
+- **Add, edit, delete links** — save any URL with a title, description, nested folder path, and tags
 - **Auto-fetch page title** — blurring the URL field fetches the page title automatically; falls back to `og:title` and `meta[name=title]` if `<title>` is missing
 - **Copy URL** — one-click copy button on every card
 - **Duplicate URL warning** — inline warning when adding a URL that already exists, with an "Add anyway" option
@@ -55,17 +55,18 @@ move between machines, or host on a file share.
 ### Organization
 
 <details>
-<summary>Show 11 features</summary>
+<summary>Show 12 features</summary>
 
-- **Folders & sub-folders** — group links into collapsible folders with one level of sub-folder nesting; smooth slide/fade animation on expand/collapse
+- **Nested folders (up to 5 levels)** — group links into collapsible folders that can contain sub-folders to any depth (max 5); the folder list renders as an indented tree with smooth slide/fade animation on expand/collapse
+- **Reorganize folders** — right-click any folder → **Move to folder…** to nest it (with its whole subtree) under another folder, plus **Move up one level** and **Promote to top level**; moves enforce the 5-level limit and merge into an existing same-named folder
+- **Move links to a folder** — right-click a link → **Move to folder…** to send it anywhere (right-clicking within a multi-selection moves the whole selection); the Add/Edit form picks any nested folder or creates a new path (type `Work / Clients`)
 - **Folder color coding** — assign a custom color to each folder; color cascades to sub-folders and card accents
 - **Folder icons** — click the folder icon to pick from 24 presets; persists across rename
-- **Folder rename** — inline rename via pencil icon; updates all links, colors, order, and icon atomically
-- **Subfolder rename** — pencil icon on subfolder headers enables inline rename; updates all links and collapsed state
+- **Folder rename** — inline rename via pencil icon at any nesting level; updates all links, colors, order, and icon atomically
 - **Delete folder** — trash icon removes the folder and moves its links to no folder
 - **Tags** — tag links freely, independent of folders, with autocomplete that suggests existing tags as you type so you don't create near-duplicates
 - **Tag colors & Tag Manager** — assign a custom color to any tag and rename, recolor, or delete tags from Settings → Manage tags
-- **Drag to reorder** — drag cards to reorder within folders; drag folders to reorder sections; drop a card onto a folder or sub-folder header to move it
+- **Drag to reorder** — drag cards to reorder within folders; drag folders to reorder among their siblings; drop a card onto a folder header to move it
 - **Bulk actions** — checkbox select mode to delete, move, or tag multiple links at once
 - **Collapse all / Expand all** — Settings menu buttons to collapse or expand every folder at once
 
@@ -134,8 +135,8 @@ move between machines, or host on a file share.
 <details>
 <summary>Show 3 features</summary>
 
-- **Import bookmarks** — drop a browser-exported HTML file to import from Chrome, Edge, or Firefox; preview and select before importing
-- **Export bookmarks** — export all links as a browser-compatible HTML bookmark file
+- **Import bookmarks** — drop a browser-exported HTML file to import from Chrome, Edge, or Firefox, preserving the nested folder structure; preview and select before importing
+- **Export bookmarks** — export all links as a browser-compatible HTML bookmark file with folders nested to match your library
 - **Full backup & restore** — export everything (all links plus your settings) to a single JSON file, and restore it later in one step
 
 </details>
