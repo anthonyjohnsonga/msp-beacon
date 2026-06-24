@@ -1,4 +1,4 @@
-import { getFavicon, getDomain, esc, isHexColor, isWebUrl, hexToRgb, hexToHsl, hslToHex, deriveAccent, subKey, timeAgo, linkPath, pathKey, MAX_FOLDER_DEPTH } from './utils.js';
+import { getFavicon, getDomain, esc, isHexColor, isWebUrl, hexToRgb, hexToHsl, hslToHex, deriveAccent, timeAgo, linkPath, pathKey, MAX_FOLDER_DEPTH } from './utils.js';
 import { ui } from './state.js';
 import { applyDensity, cycleDensity, idOrder, sortLinks } from './view.js';
 import { applyMode, applyTheme, previewCustomAccent, setCustomAccent, THEMES } from './theme.js';
@@ -542,10 +542,6 @@ export function getOrderedFolders(parentPath, names) {
 }
 export function allTags() { return [...new Set(links.filter(l => !l.archived).flatMap(l => l.tags || []))].sort(); }
 
-export function subfoldersByFolder(folderName) {
-  return childFolders([folderName]).sort();
-}
-
 
 // ============================================================================
 // NAVIGATION & VIEW SWITCHING
@@ -753,7 +749,7 @@ export function renderHome() {
     recent: active.filter(l => l.lastVisited).sort((a, b) => (b.lastVisited || 0) - (a.lastVisited || 0)).slice(0, 8),
     'most-visited': active.filter(l => (l.visits || 0) > 0).sort((a, b) => (b.visits || 0) - (a.visits || 0)).slice(0, 8),
     'recently-added': active.slice().sort((a, b) => idOrder(b.id) - idOrder(a.id)).slice(0, 8),
-    folders: getOrderedFolders(allFolders()).slice(0, 8),
+    folders: getOrderedFolders([], allFolders()).slice(0, 8),
   };
   const list = getDashboard();
 
@@ -975,11 +971,11 @@ export function render() {
       if (!parsed.tags.every(tg => lt.some(t => t.includes(tg)))) return false;
     }
     if (parsed.folders.length) {
-      const lf = (l.folder || '').toLowerCase(), lsf = (l.subfolder || '').toLowerCase();
-      if (!parsed.folders.some(fd => lf.includes(fd) || lsf.includes(fd))) return false;
+      const segs = linkPath(l).map(s => s.toLowerCase());
+      if (!parsed.folders.some(fd => segs.some(s => s.includes(fd)))) return false;
     }
     if (parsed.text) {
-      const textMatch = (l.title+l.url+l.desc+(l.folder||'')+(l.subfolder||'')+(l.tags||[]).join(' ')).toLowerCase().includes(parsed.text);
+      const textMatch = (l.title+l.url+l.desc+linkPath(l).join(' ')+(l.tags||[]).join(' ')).toLowerCase().includes(parsed.text);
       const contentMatch = contentActive && contentMatchIds.has(l.id);
       if (!textMatch && !contentMatch) return false;
       if (!textMatch && contentMatch) contentOnlyIds.add(l.id);
@@ -1163,10 +1159,14 @@ function openModal(id) {
   document.getElementById('mDesc').value = l ? l.desc : '';
   document.getElementById('mTags').value = l ? (l.tags || []).join(', ') : '';
   document.getElementById('mNewFolder').value = '';
-  document.getElementById('mSubfolder').value = l ? (l.subfolder || '') : '';
+  // Folder dropdown lists every existing folder path (any depth); a new nested
+  // path can be typed in mNewFolder using "/" separators.
   const mf = document.getElementById('mFolder');
-  mf.innerHTML = '<option value="">No folder</option>' + allFolders().map(f => `<option value="${esc(f)}"${l&&l.folder===f?' selected':''}>${esc(f)}</option>`).join('');
-  updateSubfolderDatalist();
+  const cur = l ? pathKey(linkPath(l)) : '';
+  const opts = ['<option value="">No folder</option>'];
+  allFolderPaths().map(k => JSON.parse(k)).sort((a, b) => a.join(' ').localeCompare(b.join(' ')))
+    .forEach(p => { const key = pathKey(p); opts.push(`<option value="${esc(key)}"${key === cur ? ' selected' : ''}>${esc(p.join(' / '))}</option>`); });
+  mf.innerHTML = opts.join('');
   document.getElementById('dupWarning').style.display = 'none';
   document.getElementById('modalBg').style.display = 'flex';
   setTimeout(() => document.getElementById('mUrl').focus(), 50);
@@ -1196,12 +1196,14 @@ async function fetchPageTitle() {
   wrap.classList.remove('fetching');
 }
 
-function updateSubfolderDatalist() {
-  const nf = document.getElementById('mNewFolder').value.trim();
-  const selectedFolder = nf || document.getElementById('mFolder').value || '';
-  const subs = selectedFolder ? subfoldersByFolder(selectedFolder) : [];
-  const dl = document.getElementById('subfolderList');
-  dl.innerHTML = subs.map(s => `<option value="${esc(s)}">`).join('');
+// The link's folder path from the modal: a typed "A / B" new path wins, else the
+// selected existing folder (pathKey), else [] (no folder).
+function modalFolderPath() {
+  const np = document.getElementById('mNewFolder').value.trim();
+  if (np) return np.split('/').map(s => s.trim()).filter(Boolean).slice(0, MAX_FOLDER_DEPTH);
+  const sel = document.getElementById('mFolder').value;
+  if (!sel) return [];
+  try { return JSON.parse(sel); } catch { return []; }
 }
 
 // --- Tag autocomplete (add/edit modal) -------------------------------------
@@ -1275,9 +1277,9 @@ function saveLink() {
   const url = document.getElementById('mUrl').value.trim();
   const title = document.getElementById('mTitle').value.trim();
   if (!url || !title) { alert('URL and title are required.'); return; }
-  const nf = document.getElementById('mNewFolder').value.trim();
-  const folder = nf || document.getElementById('mFolder').value || '';
-  const subfolder = document.getElementById('mSubfolder').value.trim() || null;
+  const path = modalFolderPath();
+  const folder = path[0] || '';
+  const subfolder = path[1] || null;
   const tags = document.getElementById('mTags').value.split(',').map(t => t.trim()).filter(Boolean);
   const desc = document.getElementById('mDesc').value.trim();
   if (!editId) {
@@ -1293,12 +1295,12 @@ function saveLink() {
     const i = links.findIndex(l => l.id === editId);
     if (i > -1) {
       const urlChanged = links[i].url !== url;
-      links[i] = { ...links[i], url, title, desc, folder, subfolder, path: [folder, subfolder].filter(Boolean), tags };
+      links[i] = { ...links[i], url, title, desc, folder, subfolder, path, tags };
       if (urlChanged) captureSnapshot(editId, url);
     }
   } else {
     const newId = Date.now().toString(36) + Math.random().toString(36).slice(2);
-    links.unshift({ id: newId, url, title, desc, folder, subfolder, path: [folder, subfolder].filter(Boolean), tags });
+    links.unshift({ id: newId, url, title, desc, folder, subfolder, path, tags });
     captureSnapshot(newId, url);
   }
   const wasEditing = !!editId;
@@ -1308,13 +1310,13 @@ function saveLink() {
 function addLinkAnyway() {
   const url = document.getElementById('mUrl').value.trim();
   const title = document.getElementById('mTitle').value.trim();
-  const nf = document.getElementById('mNewFolder').value.trim();
-  const folder = nf || document.getElementById('mFolder').value || '';
-  const subfolder = document.getElementById('mSubfolder').value.trim() || null;
+  const path = modalFolderPath();
+  const folder = path[0] || '';
+  const subfolder = path[1] || null;
   const tags = document.getElementById('mTags').value.split(',').map(t => t.trim()).filter(Boolean);
   const desc = document.getElementById('mDesc').value.trim();
   const newId = Date.now().toString(36) + Math.random().toString(36).slice(2);
-  links.unshift({ id: newId, url, title, desc, folder, subfolder, path: [folder, subfolder].filter(Boolean), tags });
+  links.unshift({ id: newId, url, title, desc, folder, subfolder, path, tags });
   captureSnapshot(newId, url);
   save(); closeModal(); render();
   showToast('Link saved');
@@ -1534,23 +1536,23 @@ export function filterByTag(tag) {
 // EXPORT
 // ============================================================================
 function exportLinks() {
-  const rows = links.map(l => {
-    const folder = l.folder || '';
-    return { url: l.url, title: l.title, folder };
-  });
-  const folders = [...new Set(rows.map(r => r.folder))];
-  let inner = '';
-  folders.forEach(f => {
-    const items = rows.filter(r => r.folder === f);
-    const xmlEsc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-    const itemsHtml = items.map(r => `        <DT><A HREF="${xmlEsc(r.url)}">${xmlEsc(r.title)}</A>`).join('\n');
-    if (f) {
-      inner += `    <DT><H3>${xmlEsc(f)}</H3>\n    <DL><p>\n${itemsHtml}\n    </DL><p>\n`;
-    } else {
-      inner += itemsHtml + '\n';
-    }
-  });
-  const html = `<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n${inner}</DL>`;
+  const xmlEsc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const childrenOf = parentPath => {
+    const d = parentPath.length, names = new Set();
+    links.forEach(l => { const p = linkPath(l); if (p.length > d && pathStartsWith(p, parentPath)) names.add(p[d]); });
+    return [...names].sort();
+  };
+  // Emit a nested <DL> tree: a folder's own links, then its sub-folders.
+  const emit = (parentPath, indent) => {
+    let out = '';
+    links.filter(l => { const p = linkPath(l); return p.length === parentPath.length && pathStartsWith(p, parentPath); })
+      .forEach(l => { out += `${indent}<DT><A HREF="${xmlEsc(l.url)}">${xmlEsc(l.title)}</A>\n`; });
+    childrenOf(parentPath).forEach(name => {
+      out += `${indent}<DT><H3>${xmlEsc(name)}</H3>\n${indent}<DL><p>\n${emit([...parentPath, name], indent + '    ')}${indent}</DL><p>\n`;
+    });
+    return out;
+  };
+  const html = `<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n${emit([], '    ')}</DL>`;
   const blob = new Blob([html], { type: 'text/html' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -1677,7 +1679,7 @@ Object.assign(window, {
   startFolderRename, toggleAll, toggleDashboardEdit, toggleDefaultView, toggleFavorites,
   toggleStatsNever,
   toggleFilter, toggleFolder, toggleSelectMode, toggleSettings, toggleView,
-  undoAction, updateFilterBadge, updateSubfolderDatalist, uploadWallpaper, widgetRemove, widgetToggle,
+  undoAction, updateFilterBadge, uploadWallpaper, widgetRemove, widgetToggle,
 });
 
 // ============================================================================

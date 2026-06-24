@@ -2,11 +2,12 @@
 // import.js — browser-bookmark import (HTML export → preview → add to links).
 // parseBookmarks is pure DOM parsing; doImport mutates the shared links array
 // and calls save/render from app.js (call-time circular import, fine in ESM).
+// Nested bookmark folders become a link path array (capped at MAX_FOLDER_DEPTH).
 // ============================================================================
 
-import { esc, getDomain } from './utils.js';
+import { esc, getDomain, pathKey, MAX_FOLDER_DEPTH } from './utils.js';
 import { showToast } from './toast.js';
-import { links, save, render, allFolders } from './app.js';
+import { links, save, render, allFolderPaths } from './app.js';
 
 let parsedBookmarks = [];
 
@@ -19,7 +20,10 @@ export function openImport() {
   document.getElementById('impTags').value = '';
   document.getElementById('impNewFolder').value = '';
   const fs = document.getElementById('impFolder');
-  fs.innerHTML = '<option value="">No folder</option>' + allFolders().map(f => `<option value="${esc(f)}">${esc(f)}</option>`).join('');
+  const opts = ['<option value="">No folder</option>'];
+  allFolderPaths().map(k => JSON.parse(k)).sort((a, b) => a.join(' ').localeCompare(b.join(' ')))
+    .forEach(p => opts.push(`<option value="${esc(pathKey(p))}">${esc(p.join(' / '))}</option>`));
+  fs.innerHTML = opts.join('');
   document.getElementById('importBg').style.display = 'flex';
 }
 export function closeImport() { document.getElementById('importBg').style.display = 'none'; }
@@ -32,11 +36,11 @@ function parseBookmarks(html) {
     for (const ch of (dl ? dl.children : [])) {
       if (ch.tagName !== 'DT') continue;
       const a = ch.querySelector(':scope > A'), h3 = ch.querySelector(':scope > H3'), dl2 = ch.querySelector(':scope > DL');
-      if (a) { const u = a.getAttribute('HREF') || '', t = a.textContent.trim() || getDomain(u); if (u && !u.startsWith('javascript:') && !u.startsWith('place:') && !u.startsWith('data:')) res.push({ url: u, title: t, folder: path }); }
-      else if (h3 && dl2) { const n = h3.textContent.trim(); const skip = ['Bookmarks bar','Bookmarks Bar','Bookmarks toolbar','Bookmarks Toolbar','Other bookmarks','Other Bookmarks','Mobile bookmarks','Mobile Bookmarks']; walk(dl2, skip.includes(n) ? path : (path ? path + ' / ' + n : n)); }
+      if (a) { const u = a.getAttribute('HREF') || '', t = a.textContent.trim() || getDomain(u); if (u && !u.startsWith('javascript:') && !u.startsWith('place:') && !u.startsWith('data:')) res.push({ url: u, title: t, path: path.slice() }); }
+      else if (h3 && dl2) { const n = h3.textContent.trim(); const skip = ['Bookmarks bar','Bookmarks Bar','Bookmarks toolbar','Bookmarks Toolbar','Other bookmarks','Other Bookmarks','Mobile bookmarks','Mobile Bookmarks']; walk(dl2, skip.includes(n) ? path : [...path, n].slice(0, MAX_FOLDER_DEPTH)); }
     }
   }
-  walk(doc.querySelector('DL'), '');
+  walk(doc.querySelector('DL'), []);
   if (!res.length) { alert('No bookmarks found. Make sure this is a valid browser bookmark export.'); return; }
   parsedBookmarks = res; showPreview();
 }
@@ -48,12 +52,21 @@ function showPreview() {
   document.getElementById('importPreview').innerHTML = parsedBookmarks.map((b, i) => `
     <div class="import-row"><input type="checkbox" id="imp_${i}" checked>
       <div class="import-row-info"><div class="import-row-title">${esc(b.title)}</div><div class="import-row-url">${esc(b.url)}</div></div>
-      ${b.folder ? `<span class="import-row-folder">${esc(b.folder)}</span>` : ''}
+      ${b.path.length ? `<span class="import-row-folder">${esc(b.path.join(' / '))}</span>` : ''}
     </div>`).join('');
 }
 export function toggleAll(v) { parsedBookmarks.forEach((_, i) => { const c = document.getElementById('imp_' + i); if (c) c.checked = v; }); }
+// Import destination: a typed "A / B" new path wins, else the selected existing
+// folder (pathKey), else [] — imported folders nest UNDER this target.
+function importTargetPath() {
+  const np = document.getElementById('impNewFolder').value.trim();
+  if (np) return np.split('/').map(s => s.trim()).filter(Boolean);
+  const sel = document.getElementById('impFolder').value;
+  if (!sel) return [];
+  try { return JSON.parse(sel); } catch { return []; }
+}
 export function doImport() {
-  const of2 = document.getElementById('impNewFolder').value.trim() || document.getElementById('impFolder').value || '';
+  const target = importTargetPath();
   const et = document.getElementById('impTags').value.split(',').map(t => t.trim()).filter(Boolean);
   const eu = new Set(links.map(l => l.url.toLowerCase()));
   let added = 0, skipped = 0;
@@ -61,7 +74,8 @@ export function doImport() {
     const cb = document.getElementById('imp_' + i);
     if (!cb || !cb.checked) return;
     if (eu.has(b.url.toLowerCase())) { skipped++; return; }
-    links.unshift({ id: Date.now().toString(36) + Math.random().toString(36).slice(2) + i, url: b.url, title: b.title, desc: '', folder: of2 || b.folder || '', tags: [...et] });
+    const path = [...target, ...b.path].slice(0, MAX_FOLDER_DEPTH);
+    links.unshift({ id: Date.now().toString(36) + Math.random().toString(36).slice(2) + i, url: b.url, title: b.title, desc: '', folder: path[0] || '', subfolder: path[1] || null, path, tags: [...et] });
     eu.add(b.url.toLowerCase()); added++;
   });
   save(); closeImport(); render();

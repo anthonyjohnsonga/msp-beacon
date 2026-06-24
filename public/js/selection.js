@@ -6,11 +6,11 @@
 // mutation layer (call-time circular imports, fine in ESM).
 // ============================================================================
 
-import { esc } from './utils.js';
+import { esc, pathKey } from './utils.js';
 import { showToast, showUndoToast } from './toast.js';
 import {
-  links, setLinks, pendingDelete, setPendingDelete, setPendingMove,
-  commitPendingMove, visibleIds, render, save, allFolders, subfoldersByFolder,
+  links, setLinks, setLinkLocation, pendingDelete, setPendingDelete, setPendingMove,
+  commitPendingMove, visibleIds, render, save, allFolderPaths, childFolders,
 } from './app.js';
 
 export let selectMode = false;
@@ -61,36 +61,34 @@ function updateBulkBar() {
   document.getElementById('bulkCount').textContent = n + ' selected';
   const mf = document.getElementById('bulkMoveFolder');
   mf.innerHTML = '<option value="">Move to folder…</option>'
-    + allFolders().map(f => `<option value="${esc(f)}">${esc(f)}</option>`).join('')
+    + allFolderPaths().map(k => JSON.parse(k)).sort((a, b) => a.join(' ').localeCompare(b.join(' ')))
+        .map(p => `<option value="${esc(pathKey(p))}">${esc(p.join(' / '))}</option>`).join('')
     + '<option value="__none__">— Remove from folder</option>';
-  document.getElementById('bulkMoveSubfolder').style.display = 'none';
-  document.getElementById('bulkMoveConfirm').style.display = 'none';
   document.getElementById('bulkMoveSubfolder').value = '';
+  document.getElementById('bulkSubfolderList').innerHTML = '';
 }
 
 export function onBulkFolderChange(sel) {
-  if (!sel.value || sel.value === '__none__') {
-    if (sel.value === '__none__' && selectedIds.size) {
+  // "Remove from folder" acts immediately; picking a real path just refreshes the
+  // optional new-sub-folder suggestions (the Move button applies it).
+  if (sel.value === '__none__') {
+    if (selectedIds.size) {
       const n = selectedIds.size;
-      links.forEach(l => { if (selectedIds.has(l.id)) { l.folder = ''; l.subfolder = null; } });
-      sel.value = '';
-      document.getElementById('bulkMoveSubfolder').style.display = 'none';
-      document.getElementById('bulkMoveConfirm').style.display = 'none';
-      save(); render(); updateBulkBar();
-      showToast(`${n} link${n > 1 ? 's' : ''} moved`);
-    } else {
-      document.getElementById('bulkMoveSubfolder').style.display = 'none';
-      document.getElementById('bulkMoveConfirm').style.display = 'none';
+      const saved = links.slice();
+      if (pendingDelete) { clearTimeout(pendingDelete.timer); save(); setPendingDelete(null); }
+      commitPendingMove();
+      links.forEach(l => { if (selectedIds.has(l.id)) setLinkLocation(l, []); });
+      render(); updateBulkBar();
+      setPendingMove({ saved, timer: setTimeout(() => { setPendingMove(null); save(); }, 5000) });
+      showUndoToast(`${n} link${n > 1 ? 's' : ''} removed from folder — Undo?`, 'ti-arrows-move');
     }
+    sel.value = '';
     return;
   }
-  const folder = sel.value;
-  const subs = subfoldersByFolder(folder);
   const dl = document.getElementById('bulkSubfolderList');
-  dl.innerHTML = subs.map(s => `<option value="${esc(s)}">`).join('');
-  document.getElementById('bulkMoveSubfolder').style.display = '';
-  document.getElementById('bulkMoveSubfolder').value = '';
-  document.getElementById('bulkMoveConfirm').style.display = 'flex';
+  if (!sel.value) { dl.innerHTML = ''; return; }
+  let destPath; try { destPath = JSON.parse(sel.value); } catch { destPath = []; }
+  dl.innerHTML = childFolders(destPath).sort().map(s => `<option value="${esc(s)}">`).join('');
 }
 
 export function confirmBulkMove() {
@@ -100,16 +98,14 @@ export function confirmBulkMove() {
   commitPendingMove();
   const saved = links.slice();
   const n = selectedIds.size;
-  const folder = sel.value;
-  const subfolder = document.getElementById('bulkMoveSubfolder').value.trim() || null;
-  links.forEach(l => { if (selectedIds.has(l.id)) { l.folder = folder; l.subfolder = subfolder; } });
+  let destPath; try { destPath = JSON.parse(sel.value); } catch { destPath = []; }
+  const sub = document.getElementById('bulkMoveSubfolder').value.trim();
+  const finalPath = sub ? [...destPath, sub] : destPath;
+  links.forEach(l => { if (selectedIds.has(l.id)) setLinkLocation(l, finalPath); });
   sel.value = '';
-  document.getElementById('bulkMoveSubfolder').style.display = 'none';
-  document.getElementById('bulkMoveConfirm').style.display = 'none';
   render(); updateBulkBar();
-  const label = subfolder ? `${folder} / ${subfolder}` : folder;
   setPendingMove({ saved, timer: setTimeout(() => { setPendingMove(null); save(); }, 5000) });
-  showUndoToast(`${n} link${n > 1 ? 's' : ''} moved to "${label}" — Undo?`, 'ti-arrows-move');
+  showUndoToast(`${n} link${n > 1 ? 's' : ''} moved to "${finalPath.join(' / ')}" — Undo?`, 'ti-arrows-move');
 }
 
 export function bulkDelete() {

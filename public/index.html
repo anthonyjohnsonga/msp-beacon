@@ -103,14 +103,10 @@
     <div class="field"><label>Title</label><div class="title-wrap" id="titleWrap"><input type="text" id="mTitle" placeholder="Site name"><i class="ti ti-loader title-spinner" id="titleSpinner"></i></div></div>
     <div class="field"><label>Description</label><textarea id="mDesc" placeholder="What is this?"></textarea></div>
     <div class="field"><label>Folder</label>
-      <div style="display:flex;gap:8px">
-        <select id="mFolder" style="flex:1" onchange="updateSubfolderDatalist()"></select>
-        <input type="text" id="mNewFolder" placeholder="New folder…" style="flex:1" oninput="updateSubfolderDatalist()">
-      </div>
+      <select id="mFolder" style="width:100%"></select>
     </div>
-    <div class="field"><label>Sub-folder <span style="font-size:10px;color:var(--text2);text-transform:none;letter-spacing:0">(optional)</span></label>
-      <input type="text" id="mSubfolder" placeholder="Sub-folder name…" list="subfolderList" autocomplete="off" onfocus="updateSubfolderDatalist()">
-      <datalist id="subfolderList"></datalist>
+    <div class="field"><label>New folder path <span style="font-size:10px;color:var(--text2);text-transform:none;letter-spacing:0">(optional — use / to nest, e.g. Work / Clients)</span></label>
+      <input type="text" id="mNewFolder" placeholder="New folder path…" autocomplete="off">
     </div>
     <div class="field"><label>Tags (comma separated)</label>
       <div style="position:relative">
@@ -298,9 +294,9 @@
   <a style="font-size:13px;color:var(--text1);cursor:pointer;text-decoration:none" onclick="clearSelection()">None</a>
   <div class="bulk-divider"></div>
   <select id="bulkMoveFolder" onchange="onBulkFolderChange(this)" style="height:32px;font-size:13px"><option value="">Move to folder…</option></select>
-  <input type="text" id="bulkMoveSubfolder" placeholder="Sub-folder (optional)…" list="bulkSubfolderList" autocomplete="off" style="height:32px;font-size:13px;width:150px;display:none">
+  <input type="text" id="bulkMoveSubfolder" placeholder="New sub-folder (optional)…" list="bulkSubfolderList" autocomplete="off" style="height:32px;font-size:13px;width:150px">
   <datalist id="bulkSubfolderList"></datalist>
-  <button id="bulkMoveConfirm" class="btn" style="height:32px;font-size:13px;padding:0 10px;display:none" onclick="confirmBulkMove()"><i class="ti ti-arrow-right"></i> Move</button>
+  <button id="bulkMoveConfirm" class="btn" style="height:32px;font-size:13px;padding:0 10px" onclick="confirmBulkMove()"><i class="ti ti-arrow-right"></i> Move</button>
   <input type="text" id="bulkTagInput" placeholder="Add tag…" style="height:32px;font-size:13px;width:110px" onkeydown="if(event.key==='Enter')bulkAddTag()">
   <button class="btn" style="height:32px;font-size:13px;padding:0 10px" onclick="bulkAddTag()"><i class="ti ti-tag"></i> Tag</button>
   <div class="bulk-divider"></div>

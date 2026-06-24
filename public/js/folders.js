@@ -192,6 +192,41 @@ export function openFolderMove(srcKey) {
 export function closeFolderMove() {
   document.getElementById('folderMoveBg').style.display = 'none';
   folderMoveSrc = null;
+  linkMoveIds = null;
+}
+
+// Same dialog, but moves one or more LINKS into any folder (or to no folder).
+// `ids` is a link id or an array of ids (e.g. the current multi-selection).
+// Links have no subtree, so every folder path (plus top level) is a valid target.
+let linkMoveIds = null;
+export function openLinkMove(ids) {
+  const list = (Array.isArray(ids) ? ids : [ids]).filter(Boolean);
+  if (!list.length) return;
+  linkMoveIds = list;
+  const title = list.length === 1
+    ? `Move "${(links.find(x => x.id === list[0]) || {}).title || 'link'}" to…`
+    : `Move ${list.length} links to…`;
+  document.getElementById('folderMoveTitle').textContent = title;
+  const content = document.getElementById('folderMoveContent');
+  const cands = [[], ...allFolderPaths().map(parseKey).filter(Boolean)]
+    .sort((a, b) => a.join(' ').localeCompare(b.join(' ')));
+  content.innerHTML = cands.map(dp => {
+    const label = dp.length ? esc(dp.join(' / ')) : '<em>(no folder)</em>';
+    const pad = 8 + dp.length * 16;
+    return `<button class="fmgr-row folder-move-row" data-dest='${esc(pathKey(dp))}' style="width:100%;text-align:left;background:none;border:none;cursor:pointer;padding-left:${pad}px">
+      <i class="ti ti-folder" style="color:var(--text2);font-size:14px;flex-shrink:0"></i>
+      <span class="fmgr-name">${label}</span>
+    </button>`;
+  }).join('');
+  content.querySelectorAll('.folder-move-row').forEach(btn => btn.addEventListener('click', () => {
+    const targets = linkMoveIds;                      // capture before closeFolderMove() clears it
+    const dest = parseKey(btn.dataset.dest) || [];
+    closeFolderMove();
+    let moved = 0;
+    targets.forEach(tid => { const lk = links.find(x => x.id === tid); if (lk) { setLinkLocation(lk, dest); moved++; } });
+    if (moved) { save(); render(); showToast(`${moved} link${moved > 1 ? 's' : ''} moved to ${dest.length ? `"${dest.join(' / ')}"` : 'no folder'}`); }
+  }));
+  document.getElementById('folderMoveBg').style.display = 'flex';
 }
 
 export function startFolderRename(btn) {

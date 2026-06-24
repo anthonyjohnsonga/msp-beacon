@@ -14,7 +14,8 @@ import {
   deleteLink, openFolderFromHome,
 } from './app.js';
 import { archiveLink } from './archive.js';
-import { deleteFolder, startFolderRename, moveFolder, openFolderMove } from './folders.js';
+import { selectMode, selectedIds } from './selection.js';
+import { deleteFolder, startFolderRename, moveFolder, openFolderMove, openLinkMove } from './folders.js';
 import { openFolderColorPicker, openFolderIconPicker, openTagColorPicker } from './pickers.js';
 
 // Returns a fake anchor element positioned at the cursor, for the color/icon pickers.
@@ -50,6 +51,10 @@ export function onContextMenu(e) {
       { icon: 'ti-external-link', label: 'Open', action: () => openLink(id, l.url) },
       { icon: 'ti-copy', label: 'Copy URL', action: () => copyLinkUrl(l.url) },
       { icon: 'ti-edit', label: 'Edit', action: () => editLink(id) },
+      // If this link is part of an active multi-selection, move the whole selection.
+      ...(selectMode && selectedIds.has(id) && selectedIds.size > 1
+        ? [{ icon: 'ti-folder-symlink', label: `Move ${selectedIds.size} links to folder…`, action: () => openLinkMove([...selectedIds]) }]
+        : [{ icon: 'ti-folder-symlink', label: 'Move to folder…', action: () => openLinkMove(id) }]),
       { icon: l.favorite ? 'ti-star-off' : 'ti-star', label: l.favorite ? 'Unfavorite' : 'Favorite', action: () => toggleFavorite(id) },
       { icon: l.readLater ? 'ti-bookmark-off' : 'ti-bookmark', label: l.readLater ? 'Remove from read later' : 'Read later', action: () => toggleReadLater(id) },
       { sep: true },

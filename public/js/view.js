@@ -8,9 +8,9 @@ import { ui } from './state.js';
 
 const DENSITY_CYCLE = ['compact', 'comfortable', 'spacious'];
 const DENSITY_SETTINGS = {
-  compact:     { minWidth: '160px', padding: '8px',  gap: '8px',  rowPadding: '4px 10px',  rowGap: '1px', icon: 'ti ti-layout-grid',        label: 'Compact'     },
-  comfortable: { minWidth: '220px', padding: '14px', gap: '12px', rowPadding: '8px 12px',  rowGap: '2px', icon: 'ti ti-layout-grid-2',       label: 'Comfortable' },
-  spacious:    { minWidth: '300px', padding: '20px', gap: '16px', rowPadding: '12px 14px', rowGap: '6px', icon: 'ti ti-layout-grid-3',       label: 'Spacious'    },
+  compact:     { minWidth: '160px', padding: '8px',  gap: '8px',  rowPadding: '4px 10px',  rowGap: '1px', icon: 'ti ti-baseline-density-small',  label: 'Compact'     },
+  comfortable: { minWidth: '220px', padding: '14px', gap: '12px', rowPadding: '8px 12px',  rowGap: '2px', icon: 'ti ti-baseline-density-medium', label: 'Comfortable' },
+  spacious:    { minWidth: '300px', padding: '20px', gap: '16px', rowPadding: '12px 14px', rowGap: '6px', icon: 'ti ti-baseline-density-large',  label: 'Spacious'    },
 };
 
 export function applyDensity(d) {
