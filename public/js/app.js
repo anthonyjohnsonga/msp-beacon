@@ -4,7 +4,7 @@ import { applyDensity, cycleDensity, idOrder, sortLinks } from './view.js';
 import { applyMode, applyTheme, previewCustomAccent, setCustomAccent, THEMES } from './theme.js';
 import { showToast, showUndoToast } from './toast.js';
 import { openImport, closeImport, handleDrop, handleFile, toggleAll, doImport } from './import.js';
-import { toggleFolder, collapseAll, expandAll, renameFolder, deleteFolder, startFolderRename } from './folders.js';
+import { toggleFolder, collapseAll, expandAll, renameFolder, deleteFolder, startFolderRename, closeFolderMove } from './folders.js';
 import { openFolderColorPicker, openTagColorPicker, selectPickerColor, resetPickerColor, closeFolderColorPicker, openFolderIconPicker, selectFolderIcon, closeFolderIconPicker } from './pickers.js';
 import { openFolderManager, closeFolderManager, openTagManager, closeTagManager, openFeedManager, closeFeedManager, addFeed } from './managers.js';
 import { onContextMenu, hideContextMenu } from './contextmenu.js';
@@ -1448,7 +1448,7 @@ document.addEventListener('keydown', e => {
     closeSettings();
     const feedsEl = document.getElementById('feedsBg');
     if (feedsEl && feedsEl.style.display === 'flex') closeFeedManager(); // routes through the homepage refresh
-    ['modalBg','importBg','statsBg','folderMgrBg','tagMgrBg','shortcutsBg','themeBg','archiveBg'].forEach(id => {
+    ['modalBg','importBg','statsBg','folderMgrBg','folderMoveBg','tagMgrBg','shortcutsBg','themeBg','archiveBg'].forEach(id => {
       const el = document.getElementById(id);
       if (el && el.style.display === 'flex') el.style.display = 'none';
     });
@@ -1663,7 +1663,7 @@ Object.assign(window, {
   addFeed, addLinkAnyway, addLinkGroup, addSectionWidget, applyMode, applyTheme,
   autoTitle, backupData, bulkAddTag, bulkArchive, bulkDelete, checkLinks,
   checkUncheckedLinks, clearSearch, clearSelection, closeArchive, closeFeedManager, closeFolderManager,
-  closeImport, closeModal, closeSettings, closeShortcuts, closeStats, closeTagManager,
+  closeFolderMove, closeImport, closeModal, closeSettings, closeShortcuts, closeStats, closeTagManager,
   closeTheme, collapseAll, confirmBulkMove, cycleDensity, deleteFolder, doImport,
   esc, exitSelectMode, expandAll, exportLinks, fetchPageTitle, goHome,
   goManager, handleDrop, handleFile, handleRestoreFile, hideSearchHistory, hideTagSuggest, homeSearchInput, homeShowAll,

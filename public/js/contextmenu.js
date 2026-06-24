@@ -14,7 +14,7 @@ import {
   deleteLink, openFolderFromHome,
 } from './app.js';
 import { archiveLink } from './archive.js';
-import { deleteFolder, startFolderRename } from './folders.js';
+import { deleteFolder, startFolderRename, moveFolder, openFolderMove } from './folders.js';
 import { openFolderColorPicker, openFolderIconPicker, openTagColorPicker } from './pickers.js';
 
 // Returns a fake anchor element positioned at the cursor, for the color/icon pickers.
@@ -60,6 +60,7 @@ export function onContextMenu(e) {
     const f = folderTile.dataset.folder, key = pathKey([f]);
     items = [
       { icon: 'ti-folder-open', label: 'Open folder', action: () => openFolderFromHome(f) },
+      { icon: 'ti-folder-symlink', label: 'Move to folder…', action: () => openFolderMove(key) },
       { icon: 'ti-palette', label: 'Change color', action: () => openFolderColorPicker(key, anchor) },
       { icon: 'ti-photo', label: 'Change icon', action: () => openFolderIconPicker(key, anchor) },
       { sep: true },
@@ -67,13 +68,21 @@ export function onContextMenu(e) {
     ];
   } else if (folderHeader) {
     const key = folderHeader.dataset.path;
+    let path; try { path = JSON.parse(key); } catch { path = []; }
     items = [
       { icon: 'ti-pencil', label: 'Rename', action: () => startFolderRename(folderHeader.querySelector('.folder-rename-btn')) },
+      { icon: 'ti-folder-symlink', label: 'Move to folder…', action: () => openFolderMove(key) },
+    ];
+    if (path.length > 1) {
+      items.push({ icon: 'ti-arrow-up', label: 'Move up one level', action: () => moveFolder(key, path.slice(0, -2)) });
+      items.push({ icon: 'ti-arrow-bar-to-up', label: 'Promote to top level', action: () => moveFolder(key, []) });
+    }
+    items.push(
       { icon: 'ti-palette', label: 'Change color', action: () => openFolderColorPicker(key, anchor) },
       { icon: 'ti-photo', label: 'Change icon', action: () => openFolderIconPicker(key, anchor) },
       { sep: true },
       { icon: 'ti-trash', label: 'Delete folder', danger: true, action: () => deleteFolder(key) },
-    ];
+    );
   }
 
   if (!items) return;

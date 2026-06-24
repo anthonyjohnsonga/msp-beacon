@@ -207,6 +207,16 @@
   </div>
 </div>
 
+<div id="folderMoveBg" class="modal-bg" style="display:none" onclick="if(event.target===this)closeFolderMove()">
+  <div class="modal" role="dialog" aria-modal="true" style="width:min(420px,92vw);max-height:80vh;overflow:hidden;display:flex;flex-direction:column">
+    <div class="modal-header"><i class="ti ti-folder-symlink"></i><h3 id="folderMoveTitle">Move folder</h3></div>
+    <div id="folderMoveContent" style="overflow-y:auto;flex:1;padding:8px 0"></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeFolderMove()">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <div id="tagMgrBg" class="modal-bg" style="display:none" onclick="if(event.target===this)closeTagManager()">
   <div class="modal" role="dialog" aria-modal="true" style="width:min(480px,92vw);max-height:80vh;overflow:hidden;display:flex;flex-direction:column">
     <div class="modal-header"><i class="ti ti-tags"></i><h3>Manage Tags</h3></div>
