@@ -74,7 +74,7 @@ export function onBulkFolderChange(sel) {
   if (sel.value === '__none__') {
     if (selectedIds.size) {
       const n = selectedIds.size;
-      const saved = links.slice();
+      const saved = links.map(l => ({ ...l })); // deep-enough snapshot so Undo restores paths
       if (pendingDelete) { clearTimeout(pendingDelete.timer); save(); setPendingDelete(null); }
       commitPendingMove();
       links.forEach(l => { if (selectedIds.has(l.id)) setLinkLocation(l, []); });
@@ -96,7 +96,7 @@ export function confirmBulkMove() {
   if (!sel.value || !selectedIds.size) { sel.value = ''; return; }
   if (pendingDelete) { clearTimeout(pendingDelete.timer); save(); setPendingDelete(null); }
   commitPendingMove();
-  const saved = links.slice();
+  const saved = links.map(l => ({ ...l })); // deep-enough snapshot so Undo restores paths
   const n = selectedIds.size;
   let destPath; try { destPath = JSON.parse(sel.value); } catch { destPath = []; }
   const sub = document.getElementById('bulkMoveSubfolder').value.trim();

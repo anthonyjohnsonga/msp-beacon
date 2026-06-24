@@ -187,7 +187,7 @@ export function setupDragListeners() {
       if (card && card.dataset.id !== dragId) {
         if (pendingDelete) { clearTimeout(pendingDelete.timer); save(); setPendingDelete(null); }
         commitPendingMove();
-        const saved = links.slice();
+        const saved = links.map(l => ({ ...l })); // deep-enough snapshot so Undo restores moved links' paths
         const srcIdx = links.findIndex(l => l.id === dragId);
         const tgtLink = links.find(l => l.id === card.dataset.id);
         const [moved] = links.splice(srcIdx, 1);
@@ -203,7 +203,7 @@ export function setupDragListeners() {
         if (srcIdx > -1) {
           if (pendingDelete) { clearTimeout(pendingDelete.timer); save(); setPendingDelete(null); }
           commitPendingMove();
-          const saved = links.slice();
+          const saved = links.map(l => ({ ...l })); // deep-enough snapshot so Undo restores the moved link's path
           let destPath; try { destPath = JSON.parse(header.dataset.path); } catch { destPath = []; }
           setLinkLocation(links[srcIdx], destPath);
           render();
