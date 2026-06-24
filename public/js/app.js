@@ -1005,43 +1005,56 @@ export function render() {
   const cardFn = ui.view === 'list' ? cardListHtml : cardHtml;
   const wrap = items => ui.view === 'list' ? `<div class="link-list">${items.map(cardFn).join('')}</div>` : `<div class="grid">${items.map(cardFn).join('')}</div>`;
   if (ff || q || tf || stf) { c.innerHTML = healthHint + wrap(fil); return; }
-  const noF = fil.filter(l => linkPath(l).length === 0);
+  const tree = buildFolderTree(fil);
+  const root = tree.get(pathKey([])) || { direct: [], children: new Set() };
   let html = '';
   const favs = fil.filter(l => l.favorite);
   if (favs.length) {
     html += `<div class="favorites-section"><div class="favorites-header" onclick="toggleFavorites()"><i class="ti ti-chevron-right folder-chevron${favoritesCollapsed ? '' : ' open'}"></i><i class="ti ti-star-filled" style="font-size:15px;color:#F5A623"></i><span class="favorites-title">Favorites</span><span class="count-pill" style="background:rgba(245,166,35,.3);color:#F5A623">${favs.length}</span></div>${favoritesCollapsed ? '' : wrap(favs)}</div>`;
   }
-  if (noF.length) html += wrap(noF);
-  getOrderedFolders([], uniqueChildren(fil, [])).forEach(name => { html += renderFolderSection(fil, [name], wrap); });
+  if (root.direct.length) html += wrap(root.direct); // links with no folder
+  getOrderedFolders([], [...root.children]).forEach(name => { html += renderFolderSection(tree, [name], wrap); });
   c.innerHTML = html;
   updateArchiveBadge();
 }
 
-// Direct child folder-segment names under parentPath among the given links.
-function uniqueChildren(linksArr, parentPath) {
-  const d = parentPath.length, names = new Set();
-  linksArr.forEach(l => { const p = linkPath(l); if (p.length > d && pathStartsWith(p, parentPath)) names.add(p[d]); });
-  return [...names];
+// Aggregate the folder tree in a single pass over the (filtered) links. Returns a
+// Map of pathKey → { direct: links exactly here, count: links at/below here,
+// children: Set of immediate child folder names }. The root key (pathKey([]))
+// holds the no-folder links in `direct` and the top-level folders in `children`.
+// This replaces per-folder re-scans of the link list (was O(folders × links)).
+function buildFolderTree(arr) {
+  const nodes = new Map();
+  const node = key => { let n = nodes.get(key); if (!n) { n = { direct: [], count: 0, children: new Set() }; nodes.set(key, n); } return n; };
+  for (const l of arr) {
+    const p = linkPath(l);
+    node(pathKey(p)).direct.push(l);
+    for (let i = 1; i <= p.length; i++) {
+      node(pathKey(p.slice(0, i))).count++;
+      node(pathKey(p.slice(0, i - 1))).children.add(p[i - 1]);
+    }
+  }
+  return nodes;
 }
 
 // Recursively render one folder (at `path`) and, nested inside it, its direct
-// links followed by its child folders. data-path carries pathKey(path); the
-// header handlers parse it back. Indentation is purely CSS (.folder-content
-// padding) since child sections are nested in the DOM.
-function renderFolderSection(fil, path, wrap) {
-  const d = path.length;
-  const directLinks = fil.filter(l => { const p = linkPath(l); return p.length === d && pathStartsWith(p, path); });
-  const descendantCount = fil.filter(l => pathStartsWith(linkPath(l), path)).length;
-  const collapsed = collapsedFolders.has(pathKey(path));
+// links followed by its child folders, using the precomputed `tree`. data-path
+// carries pathKey(path); the header handlers parse it back. Indentation is purely
+// CSS (.folder-content padding) since child sections are nested in the DOM.
+function renderFolderSection(tree, path, wrap) {
+  const key = pathKey(path);
+  const n = tree.get(key) || { direct: [], count: 0, children: new Set() };
+  const collapsed = collapsedFolders.has(key);
   const fc = getFolderColor(path);
   const fcRgb = hexToRgb(fc);
-  const key = esc(pathKey(path));
+  const keyEsc = esc(key);
+  const descendantCount = n.count;
   let content = '';
   if (!collapsed) {
-    if (directLinks.length) content += wrap(directLinks);
-    getOrderedFolders(path, uniqueChildren(fil, path)).forEach(cn => { content += renderFolderSection(fil, [...path, cn], wrap); });
+    if (n.direct.length) content += wrap(n.direct);
+    getOrderedFolders(path, [...n.children]).forEach(cn => { content += renderFolderSection(tree, [...path, cn], wrap); });
   }
-  return `<div class="folder-section"><div class="folder-header" onclick="toggleFolder(this.dataset.path)" data-path="${key}" style="background:rgba(${fcRgb},.15);border-color:${fc}">`
+  return `<div class="folder-section"><div class="folder-header" onclick="toggleFolder(this.dataset.path)" data-path="${keyEsc}" style="background:rgba(${fcRgb},.15);border-color:${fc}">`
     + `<div class="folder-drag-handle" draggable="true" title="Drag to reorder folder" onclick="event.stopPropagation()"><i class="ti ti-grip-vertical"></i></div>`
     + `<i class="ti ti-chevron-right folder-chevron${collapsed ? '' : ' open'}" style="color:${fc}"></i>`
     + `<i class="ti ${getFolderIcon(path)} folder-icon-btn" style="font-size:16px;color:${fc};cursor:pointer" onclick="event.stopPropagation();openFolderIconPicker(this.closest('.folder-header').dataset.path,this)" title="Change icon"></i>`
@@ -1050,7 +1063,7 @@ function renderFolderSection(fil, path, wrap) {
     + `<button class="folder-rename-btn" onclick="event.stopPropagation();deleteFolder(this.closest('.folder-header').dataset.path)" title="Delete folder" style="color:#E24B4A"><i class="ti ti-trash"></i></button>`
     + `<span class="count-pill" style="background:${fc}">${descendantCount}</span>`
     + `<div class="folder-color-swatch" onclick="event.stopPropagation();openFolderColorPicker(this.closest('.folder-header').dataset.path,this)" style="width:16px;height:16px;border-radius:50%;background:${fc};cursor:pointer;margin-left:auto;flex-shrink:0;border:1.5px solid var(--ring)"></div>`
-    + `</div><div class="folder-content" data-path="${key}">${content}</div></div>`;
+    + `</div><div class="folder-content" data-path="${keyEsc}">${content}</div></div>`;
 }
 
 function contentBadge(id) {
