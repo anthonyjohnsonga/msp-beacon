@@ -6,13 +6,13 @@
 // binding app.js holds stays valid.
 // ============================================================================
 
-import { esc, getDomain } from './utils.js';
+import { esc, getDomain, pathKey, linkPath } from './utils.js';
 import {
-  links, allFolders, getOrderedFolders, subfoldersByFolder,
+  links, allFolders, getOrderedFolders, childFolders, pathStartsWith,
   getFolderColor, getFolderIcon, allTags, getTagColor, tagColors,
   rssFeeds, currentMode, renderHome, render, save, saveConfig,
 } from './app.js';
-import { renameFolder, renameSubfolder, deleteFolder, deleteSubfolder } from './folders.js';
+import { renameFolder, deleteFolder } from './folders.js';
 import { openTagColorPicker } from './pickers.js';
 import { showToast } from './toast.js';
 
@@ -23,49 +23,42 @@ export function openFolderManager() {
 }
 export function closeFolderManager() { document.getElementById('folderMgrBg').style.display = 'none'; }
 function renderFolderManager() {
-  const folders = getOrderedFolders(allFolders());
   const content = document.getElementById('folderMgrContent');
-  if (!folders.length) {
+  if (!allFolders().length) {
     content.innerHTML = '<p style="text-align:center;color:var(--text2);padding:24px 16px">No folders yet.</p>';
     return;
   }
+  // Walk the folder tree depth-first; each row carries its pathKey (data-key).
   let html = '';
-  folders.forEach(f => {
-    const color = getFolderColor(f);
-    const icon = getFolderIcon(f);
-    const count = links.filter(l => !l.archived && l.folder === f).length;
-    const subs = subfoldersByFolder(f);
-    html += `<div class="fmgr-row">
-      <i class="ti ${esc(icon)}" style="color:${esc(color)};font-size:15px;flex-shrink:0"></i>
-      <span class="fmgr-name">${esc(f)}</span>
-      <span class="fmgr-count">${count}</span>
-      <div class="fmgr-actions">
-        <button class="icon-btn" title="Rename" data-type="folder" data-folder="${esc(f)}" data-subfolder=""><i class="ti ti-pencil"></i></button>
-        <button class="icon-btn" style="color:#E24B4A" title="Delete" data-type="folder" data-folder="${esc(f)}" data-subfolder=""><i class="ti ti-trash"></i></button>
-      </div>
-    </div>`;
-    subs.forEach(sf => {
-      const sfCount = links.filter(l => !l.archived && l.folder === f && l.subfolder === sf).length;
-      html += `<div class="fmgr-row fmgr-subfolder">
-        <i class="ti ti-corner-down-right" style="color:var(--text2);font-size:13px;flex-shrink:0"></i>
-        <span class="fmgr-name">${esc(sf)}</span>
-        <span class="fmgr-count">${sfCount}</span>
+  const walk = (parentPath, depth) => {
+    getOrderedFolders(parentPath, childFolders(parentPath)).forEach(name => {
+      const path = [...parentPath, name];
+      const key = pathKey(path);
+      const color = getFolderColor(path);
+      const icon = depth ? 'ti-corner-down-right' : getFolderIcon(path);
+      const iconColor = depth ? 'var(--text2)' : color;
+      const count = links.filter(l => !l.archived && pathStartsWith(linkPath(l), path)).length;
+      html += `<div class="fmgr-row${depth ? ' fmgr-subfolder' : ''}"${depth ? ` style="padding-left:${8 + depth * 16}px"` : ''}>
+        <i class="ti ${esc(icon)}" style="color:${esc(iconColor)};font-size:${depth ? '13' : '15'}px;flex-shrink:0"></i>
+        <span class="fmgr-name">${esc(name)}</span>
+        <span class="fmgr-count">${count}</span>
         <div class="fmgr-actions">
-          <button class="icon-btn" title="Rename" data-type="subfolder" data-folder="${esc(f)}" data-subfolder="${esc(sf)}"><i class="ti ti-pencil"></i></button>
-          <button class="icon-btn" style="color:#E24B4A" title="Delete" data-type="subfolder" data-folder="${esc(f)}" data-subfolder="${esc(sf)}"><i class="ti ti-trash"></i></button>
+          <button class="icon-btn" title="Rename" data-key='${esc(key)}'><i class="ti ti-pencil"></i></button>
+          <button class="icon-btn" style="color:#E24B4A" title="Delete" data-key='${esc(key)}'><i class="ti ti-trash"></i></button>
         </div>
       </div>`;
+      walk(path, depth + 1);
     });
-  });
+  };
+  walk([], 0);
   content.innerHTML = html;
   content.querySelectorAll('[title="Rename"]').forEach(btn => btn.addEventListener('click', () => fmgrStartRename(btn)));
   content.querySelectorAll('[title="Delete"]').forEach(btn => btn.addEventListener('click', () => fmgrDeleteRow(btn)));
 }
 function fmgrStartRename(btn) {
-  const type = btn.dataset.type;
-  const folder = btn.dataset.folder;
-  const subfolder = btn.dataset.subfolder;
-  const oldName = type === 'folder' ? folder : subfolder;
+  const key = btn.dataset.key;
+  let path; try { path = JSON.parse(key); } catch { return; }
+  const oldName = path[path.length - 1];
   const row = btn.closest('.fmgr-row');
   const nameSpan = row.querySelector('.fmgr-name');
   const input = document.createElement('input');
@@ -77,11 +70,7 @@ function fmgrStartRename(btn) {
   function commit() {
     if (committed) return; committed = true;
     const newName = input.value.trim();
-    if (newName && newName !== oldName) {
-      if (type === 'folder') renameFolder(folder, newName);
-      else renameSubfolder(folder, subfolder, newName);
-      render();
-    }
+    if (newName && newName !== oldName) { renameFolder(key, newName); render(); }
     renderFolderManager();
   }
   input.addEventListener('blur', commit);
@@ -91,11 +80,7 @@ function fmgrStartRename(btn) {
   });
 }
 function fmgrDeleteRow(btn) {
-  const type = btn.dataset.type;
-  const folder = btn.dataset.folder;
-  const subfolder = btn.dataset.subfolder;
-  if (type === 'folder') deleteFolder(folder);
-  else deleteSubfolder(folder, subfolder);
+  deleteFolder(btn.dataset.key);
   renderFolderManager();
 }
 

@@ -11,6 +11,20 @@ export function isHexColor(c) { return typeof c === 'string' && /^#[0-9A-Fa-f]{6
 export function isWebUrl(u) { return /^https?:\/\//i.test(u); }
 export function subKey(folder, sf) { return JSON.stringify([folder, sf]); }
 
+// Nested folders: a link's location is an array of folder-segment names
+// (`l.path`), 0..MAX_FOLDER_DEPTH deep ([] = no folder). During/after migration
+// linkPath() reads l.path, falling back to the legacy flat folder/subfolder pair.
+// pathKey() is the canonical metadata key for a path (colors / icons / collapse /
+// child-order) — for a depth-2 path it equals the legacy subKey(folder, sub),
+// and JSON-array keys are distinguishable from legacy bare-name keys (they start
+// with '['), which the one-time migration relies on.
+export const MAX_FOLDER_DEPTH = 5;
+export function pathKey(path) { return JSON.stringify(path || []); }
+export function linkPath(l) {
+  if (Array.isArray(l.path)) return l.path;
+  return [l.folder, l.subfolder].filter(Boolean);
+}
+
 export function hexToRgb(hex) {
   if (!isHexColor(hex)) return '29,158,117';
   const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);

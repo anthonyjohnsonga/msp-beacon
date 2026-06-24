@@ -7,15 +7,15 @@
 // hideContextMenu (global scroll/resize/click handlers).
 // ============================================================================
 
-import { esc } from './utils.js';
+import { esc, pathKey } from './utils.js';
 import { showToast } from './toast.js';
 import {
   links, filterByTag, openLink, editLink, toggleFavorite, toggleReadLater,
   deleteLink, openFolderFromHome,
 } from './app.js';
 import { archiveLink } from './archive.js';
-import { deleteFolder, startFolderRename, startSubfolderRename } from './folders.js';
-import { openFolderColorPicker, openSubfolderColorPicker, openFolderIconPicker, openTagColorPicker } from './pickers.js';
+import { deleteFolder, startFolderRename } from './folders.js';
+import { openFolderColorPicker, openFolderIconPicker, openTagColorPicker } from './pickers.js';
 
 // Returns a fake anchor element positioned at the cursor, for the color/icon pickers.
 function cursorAnchor(x, y) {
@@ -38,8 +38,7 @@ export function onContextMenu(e) {
   }
   const linkEl = e.target.closest('.card[data-id], .card-row[data-id], .home-tile[data-id]');
   const folderTile = e.target.closest('.home-folder-tile[data-folder]');
-  const subHeader = e.target.closest('.subfolder-header[data-subfolder]');
-  const folderHeader = e.target.closest('.folder-header[data-folder]');
+  const folderHeader = e.target.closest('.folder-header[data-path]');
   const anchor = cursorAnchor(e.clientX, e.clientY);
   let items = null;
 
@@ -58,28 +57,22 @@ export function onContextMenu(e) {
       { icon: 'ti-trash', label: 'Delete', danger: true, action: () => deleteLink(id) },
     ];
   } else if (folderTile) {
-    const f = folderTile.dataset.folder;
+    const f = folderTile.dataset.folder, key = pathKey([f]);
     items = [
       { icon: 'ti-folder-open', label: 'Open folder', action: () => openFolderFromHome(f) },
-      { icon: 'ti-palette', label: 'Change color', action: () => openFolderColorPicker(f, anchor) },
-      { icon: 'ti-photo', label: 'Change icon', action: () => openFolderIconPicker(f, anchor) },
+      { icon: 'ti-palette', label: 'Change color', action: () => openFolderColorPicker(key, anchor) },
+      { icon: 'ti-photo', label: 'Change icon', action: () => openFolderIconPicker(key, anchor) },
       { sep: true },
-      { icon: 'ti-trash', label: 'Delete folder', danger: true, action: () => deleteFolder(f) },
-    ];
-  } else if (subHeader) {
-    const f = subHeader.dataset.folder, sf = subHeader.dataset.subfolder;
-    items = [
-      { icon: 'ti-pencil', label: 'Rename', action: () => startSubfolderRename(subHeader.querySelector('.folder-rename-btn')) },
-      { icon: 'ti-palette', label: 'Change color', action: () => openSubfolderColorPicker(f, sf, anchor) },
+      { icon: 'ti-trash', label: 'Delete folder', danger: true, action: () => deleteFolder(key) },
     ];
   } else if (folderHeader) {
-    const f = folderHeader.dataset.folder;
+    const key = folderHeader.dataset.path;
     items = [
       { icon: 'ti-pencil', label: 'Rename', action: () => startFolderRename(folderHeader.querySelector('.folder-rename-btn')) },
-      { icon: 'ti-palette', label: 'Change color', action: () => openFolderColorPicker(f, anchor) },
-      { icon: 'ti-photo', label: 'Change icon', action: () => openFolderIconPicker(f, anchor) },
+      { icon: 'ti-palette', label: 'Change color', action: () => openFolderColorPicker(key, anchor) },
+      { icon: 'ti-photo', label: 'Change icon', action: () => openFolderIconPicker(key, anchor) },
       { sep: true },
-      { icon: 'ti-trash', label: 'Delete folder', danger: true, action: () => deleteFolder(f) },
+      { icon: 'ti-trash', label: 'Delete folder', danger: true, action: () => deleteFolder(key) },
     ];
   }
 

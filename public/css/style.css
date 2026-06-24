@@ -89,6 +89,10 @@ select:focus { outline: none; border-color: var(--g4); }
 .empty { text-align: center; padding: 4rem 1rem; color: var(--text2); font-size: 14px; }
 .empty i { font-size: 36px; display: block; margin-bottom: 10px; color: var(--g5); }
 .folder-section { margin-bottom: 1.5rem; }
+/* Nested folders: each child folder-section sits inside its parent's
+   .folder-content, so a per-level indent compounds with depth. A folder's own
+   links (.grid/.link-list) stay aligned with its header; only sub-folders indent. */
+.folder-content > .folder-section { margin-left: 14px; margin-bottom: 0.85rem; margin-top: 0.5rem; }
 .folder-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding: 6px 10px; background: rgba(var(--g5-rgb),.15); border-radius: 8px; border: 0.5px solid var(--g5); cursor: pointer; user-select: none; }
 .folder-header:hover { background: rgba(var(--g5-rgb),.25); }
 .folder-chevron { font-size: 14px; color: var(--text2); transition: transform .2s; flex-shrink: 0; }

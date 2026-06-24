@@ -1,11 +1,11 @@
-import { getFavicon, getDomain, esc, isHexColor, isWebUrl, hexToRgb, hexToHsl, hslToHex, deriveAccent, subKey, timeAgo } from './utils.js';
+import { getFavicon, getDomain, esc, isHexColor, isWebUrl, hexToRgb, hexToHsl, hslToHex, deriveAccent, subKey, timeAgo, linkPath, pathKey, MAX_FOLDER_DEPTH } from './utils.js';
 import { ui } from './state.js';
 import { applyDensity, cycleDensity, idOrder, sortLinks } from './view.js';
 import { applyMode, applyTheme, previewCustomAccent, setCustomAccent, THEMES } from './theme.js';
 import { showToast, showUndoToast } from './toast.js';
 import { openImport, closeImport, handleDrop, handleFile, toggleAll, doImport } from './import.js';
-import { toggleFolder, collapseAll, expandAll, renameFolder, deleteFolder, deleteSubfolder, startFolderRename, renameSubfolder, startSubfolderRename, toggleSubfolder, moveSubfolder } from './folders.js';
-import { openFolderColorPicker, openSubfolderColorPicker, openTagColorPicker, selectPickerColor, resetPickerColor, closeFolderColorPicker, openFolderIconPicker, selectFolderIcon, closeFolderIconPicker } from './pickers.js';
+import { toggleFolder, collapseAll, expandAll, renameFolder, deleteFolder, startFolderRename } from './folders.js';
+import { openFolderColorPicker, openTagColorPicker, selectPickerColor, resetPickerColor, closeFolderColorPicker, openFolderIconPicker, selectFolderIcon, closeFolderIconPicker } from './pickers.js';
 import { openFolderManager, closeFolderManager, openTagManager, closeTagManager, openFeedManager, closeFeedManager, addFeed } from './managers.js';
 import { onContextMenu, hideContextMenu } from './contextmenu.js';
 import { selectMode, selectedIds, toggleSelectMode, exitSelectMode, toggleSelect, selectAllVisible, clearSelection, onBulkFolderChange, confirmBulkMove, bulkDelete, bulkAddTag, bulkArchive } from './selection.js';
@@ -23,11 +23,16 @@ export let links = [];
 export let linkStatus = {};
 let editId = null;
 let saveTimer = null;
+// Nested-folder metadata, all keyed by pathKey(path) (every level, any depth):
+//   collapsedFolders — Set of collapsed folder pathKeys (localStorage only)
+//   folderColors     — { pathKey: hex }
+//   folderIcons      — { pathKey: icon }
+//   childOrder       — { parentPathKey: [orderedChildSegmentNames] }
+// The legacy stores (collapsedSubfolders / subfolderColors / folderOrder-array)
+// are folded into these by the one-time migrateFolders() normalization.
 export let collapsedFolders = new Set(JSON.parse(localStorage.getItem('msp-collapsed') || '[]'));
-export let collapsedSubfolders = JSON.parse(localStorage.getItem('msp-subfolder-collapsed') || '{}');
-export let folderOrder = JSON.parse(localStorage.getItem('msp-folder-order') || 'null');
+export let childOrder = JSON.parse(localStorage.getItem('msp-folder-order') || '{}');
 export let folderColors = JSON.parse(localStorage.getItem('msp-folder-colors') || '{}');
-export let subfolderColors = JSON.parse(localStorage.getItem('msp-subfolder-colors') || '{}');
 export let tagColors = JSON.parse(localStorage.getItem('msp-tag-colors') || '{}');
 export { rssFeeds, currentMode };
 export let folderIcons = JSON.parse(localStorage.getItem('msp-folder-icons') || '{}');
@@ -231,15 +236,46 @@ function migrateDashboard() {
 // dashboardMigrations (runs once per user, synced via config) like the dashboard
 // migration above.
 function migrateFolders() {
-  if (dashboardMigrations.includes('folders-path-v1')) return;
-  dashboardMigrations.push('folders-path-v1');
+  if (dashboardMigrations.includes('folders-nested-v1')) return;
+  dashboardMigrations.push('folders-nested-v1');
   localStorage.setItem('msp-dashboard-migrations', JSON.stringify(dashboardMigrations));
+  // 1. Per-link path (idempotent — only sets links that lack one).
   let changed = false;
   links.forEach(l => {
     if (!Array.isArray(l.path)) { l.path = [l.folder, l.subfolder].filter(Boolean); changed = true; }
   });
   if (changed) save();
-  persistDashboard(); // persists the migration flag (+ dashboard) to config
+  // 2. Re-key folder metadata onto pathKey(path). Legacy keys are bare folder
+  // names (folderColors/folderIcons/collapsedFolders) or JSON([folder,sub])
+  // pairs (subfolderColors/collapsedSubfolders — already pathKey-shaped). New
+  // keys are JSON arrays, so a key starting with '[' is already migrated.
+  const toPathKey = k => (typeof k === 'string' && k.startsWith('[')) ? k : pathKey([k]);
+  folderColors = Object.fromEntries(Object.entries(folderColors).map(([k, v]) => [toPathKey(k), v]));
+  const oldSubColors = JSON.parse(localStorage.getItem('msp-subfolder-colors') || '{}');
+  for (const [k, v] of Object.entries(oldSubColors)) folderColors[k] = v; // k is JSON([f,s]) === pathKey
+  folderIcons = Object.fromEntries(Object.entries(folderIcons).map(([k, v]) => [toPathKey(k), v]));
+  const nextCollapsed = new Set([...collapsedFolders].map(toPathKey));
+  const oldSubCollapsed = JSON.parse(localStorage.getItem('msp-subfolder-collapsed') || '{}');
+  for (const [k, v] of Object.entries(oldSubCollapsed)) if (v) nextCollapsed.add(k);
+  collapsedFolders = nextCollapsed;
+  // folderOrder was a flat top-level array (or null); childOrder is per-parent.
+  if (Array.isArray(childOrder)) childOrder = childOrder.length ? { [pathKey([])]: childOrder } : {};
+  else if (!childOrder || typeof childOrder !== 'object') childOrder = {};
+  localStorage.setItem('msp-folder-colors', JSON.stringify(folderColors));
+  localStorage.setItem('msp-folder-icons', JSON.stringify(folderIcons));
+  localStorage.setItem('msp-collapsed', JSON.stringify([...collapsedFolders]));
+  localStorage.setItem('msp-folder-order', JSON.stringify(childOrder));
+  localStorage.removeItem('msp-subfolder-colors');
+  localStorage.removeItem('msp-subfolder-collapsed');
+  saveConfig();        // persist the new-shape metadata to the server
+  persistDashboard();  // persists the migration flag (+ dashboard) to config
+}
+// Set a link's nested-folder location, keeping the legacy flat fields mirrored
+// (first two path segments) so any not-yet-converted code keeps working.
+export function setLinkLocation(l, path) {
+  l.path = (path || []).slice(0, MAX_FOLDER_DEPTH);
+  l.folder = l.path[0] || '';
+  l.subfolder = l.path[1] || null;
 }
 // Accept only known widget shapes — a restored/hand-edited config must not be
 // able to inject unknown types or non-http link URLs into the homepage.
@@ -294,7 +330,7 @@ function onSortChange() {
 // CONFIG, PERSISTENCE & DATA LOADING
 // ============================================================================
 export function saveConfig() {
-  const cfg = { folderColors, subfolderColors, tagColors, folderIcons, folderOrder, rssFeeds, theme: ui.theme, accent: ui.accent, mode: ui.mode, defaultView, homeBg, dashboard, dashboardMigrations };
+  const cfg = { folderColors, tagColors, folderIcons, childOrder, rssFeeds, theme: ui.theme, accent: ui.accent, mode: ui.mode, defaultView, homeBg, dashboard, dashboardMigrations };
   fetch('/api/config', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -312,8 +348,9 @@ function applyServerConfig(cfg) {
     localStorage.setItem('msp-folder-colors', JSON.stringify(folderColors));
   }
   if (cfg.subfolderColors && typeof cfg.subfolderColors === 'object') {
-    subfolderColors = Object.fromEntries(Object.entries(cfg.subfolderColors).filter(([, v]) => isHexColor(v)));
-    localStorage.setItem('msp-subfolder-colors', JSON.stringify(subfolderColors));
+    // Legacy (pre-nested-folders) config; stash for migrateFolders to fold into
+    // the path-keyed folderColors. (Its keys are already JSON([folder,sub]) pairs.)
+    localStorage.setItem('msp-subfolder-colors', JSON.stringify(Object.fromEntries(Object.entries(cfg.subfolderColors).filter(([, v]) => isHexColor(v)))));
   }
   if (cfg.tagColors && typeof cfg.tagColors === 'object') {
     // Only keep valid hex values — a restored/edited config must not be able to
@@ -337,9 +374,13 @@ function applyServerConfig(cfg) {
     folderIcons = cfg.folderIcons;
     localStorage.setItem('msp-folder-icons', JSON.stringify(folderIcons));
   }
-  if (Array.isArray(cfg.folderOrder)) {
-    folderOrder = cfg.folderOrder;
-    localStorage.setItem('msp-folder-order', JSON.stringify(folderOrder));
+  if (cfg.childOrder && typeof cfg.childOrder === 'object' && !Array.isArray(cfg.childOrder)) {
+    childOrder = cfg.childOrder;
+    localStorage.setItem('msp-folder-order', JSON.stringify(childOrder));
+  } else if (Array.isArray(cfg.folderOrder)) {
+    // Legacy flat top-level order; migrateFolders converts it to the per-parent map.
+    childOrder = cfg.folderOrder;
+    localStorage.setItem('msp-folder-order', JSON.stringify(childOrder));
   }
   if (Array.isArray(cfg.rssFeeds)) {
     rssFeeds = cfg.rssFeeds.filter(f => f && typeof f.url === 'string');
@@ -413,7 +454,7 @@ export let pendingMove = null;
 export function setLinks(arr) { links = arr; }
 export function setPendingDelete(v) { pendingDelete = v; }
 export function setPendingMove(v) { pendingMove = v; }
-export function setFolderOrder(arr) { folderOrder = arr; localStorage.setItem('msp-folder-order', JSON.stringify(folderOrder)); }
+export function setChildOrder(parentPath, names) { childOrder[pathKey(parentPath)] = names; localStorage.setItem('msp-folder-order', JSON.stringify(childOrder)); }
 
 
 // ============================================================================
@@ -454,26 +495,55 @@ export function commitPendingMove() {
 // ============================================================================
 // UTILITIES & HELPERS
 // ============================================================================
-export function getFolderColor(f) { return isHexColor(folderColors[f]) ? folderColors[f] : '#1D9E75'; }
-export function getSubfolderColor(folder, sf) { const c = subfolderColors[subKey(folder, sf)]; return isHexColor(c) ? c : getFolderColor(folder); }
+// All folder metadata getters take a path array (a bare string is accepted as a
+// single top-level segment for legacy callers). Colors fall back up the path.
+function asPath(path) { return Array.isArray(path) ? path : (path ? [path] : []); }
+export function pathStartsWith(path, prefix) { return prefix.length <= path.length && prefix.every((s, i) => path[i] === s); }
+export function getFolderColor(path) {
+  const p = asPath(path);
+  const c = folderColors[pathKey(p)];
+  if (isHexColor(c)) return c;
+  return p.length > 1 ? getFolderColor(p.slice(0, -1)) : '#1D9E75';
+}
 export function getTagColor(t) { return isHexColor(tagColors[t]) ? tagColors[t] : null; }
 function tagHtml(t) {
   const tc = getTagColor(t);
   const style = tc ? ` style="background:rgba(${hexToRgb(tc)},.2);color:${tc};border-color:${tc}"` : '';
   return `<span class="tag" data-tag="${esc(t)}" title="Filter by &quot;${esc(t)}&quot;"${style}>${esc(t)}</span>`;
 }
-export function getFolderIcon(f) { return folderIcons[f] || 'ti-folder'; }
-export function allFolders() { return [...new Set(links.filter(l => !l.archived).map(l => l.folder).filter(Boolean))].sort(); }
-export function getOrderedFolders(names) {
-  if (!folderOrder) return names.slice().sort();
-  const known = new Set(folderOrder);
+export function getFolderIcon(path) { return folderIcons[pathKey(asPath(path))] || 'ti-folder'; }
+// Segment names directly under parentPath ([] = top level), derived from links.
+export function childFolders(parentPath) {
+  const d = parentPath.length, names = new Set();
+  links.filter(l => !l.archived).forEach(l => {
+    const p = linkPath(l);
+    if (p.length > d && pathStartsWith(p, parentPath)) names.add(p[d]);
+  });
+  return [...names];
+}
+export function allFolders() { return childFolders([]).sort(); }
+// pathKey of every folder node at any depth (each prefix of every link path).
+export function allFolderPaths() {
+  const set = new Set();
+  links.filter(l => !l.archived).forEach(l => {
+    const p = linkPath(l);
+    for (let i = 1; i <= p.length; i++) set.add(pathKey(p.slice(0, i)));
+  });
+  return [...set];
+}
+// Order the given child segment names under parentPath using the saved per-parent
+// childOrder, with any not-yet-ordered names appended alphabetically.
+export function getOrderedFolders(parentPath, names) {
+  const order = childOrder[pathKey(parentPath)];
+  if (!Array.isArray(order)) return names.slice().sort();
+  const known = new Set(order);
   const fresh = names.filter(f => !known.has(f)).sort();
-  return [...folderOrder.filter(f => names.includes(f)), ...fresh];
+  return [...order.filter(f => names.includes(f)), ...fresh];
 }
 export function allTags() { return [...new Set(links.filter(l => !l.archived).flatMap(l => l.tags || []))].sort(); }
 
 export function subfoldersByFolder(folderName) {
-  return [...new Set(links.filter(l => !l.archived && l.folder === folderName && l.subfolder).map(l => l.subfolder))].sort();
+  return childFolders([folderName]).sort();
 }
 
 
@@ -939,69 +1009,65 @@ export function render() {
   const cardFn = ui.view === 'list' ? cardListHtml : cardHtml;
   const wrap = items => ui.view === 'list' ? `<div class="link-list">${items.map(cardFn).join('')}</div>` : `<div class="grid">${items.map(cardFn).join('')}</div>`;
   if (ff || q || tf || stf) { c.innerHTML = healthHint + wrap(fil); return; }
-  const byF = {}, noF = [];
-  fil.forEach(l => { l.folder ? (byF[l.folder] = byF[l.folder] || [], byF[l.folder].push(l)) : noF.push(l); });
+  const noF = fil.filter(l => linkPath(l).length === 0);
   let html = '';
   const favs = fil.filter(l => l.favorite);
   if (favs.length) {
     html += `<div class="favorites-section"><div class="favorites-header" onclick="toggleFavorites()"><i class="ti ti-chevron-right folder-chevron${favoritesCollapsed ? '' : ' open'}"></i><i class="ti ti-star-filled" style="font-size:15px;color:#F5A623"></i><span class="favorites-title">Favorites</span><span class="count-pill" style="background:rgba(245,166,35,.3);color:#F5A623">${favs.length}</span></div>${favoritesCollapsed ? '' : wrap(favs)}</div>`;
   }
   if (noF.length) html += wrap(noF);
-  getOrderedFolders(Object.keys(byF)).forEach(f => {
-    const collapsed = collapsedFolders.has(f);
-    let folderContent = '';
-    if (!collapsed) {
-      folderContent = renderFolderContents(f, byF[f]);
-    }
-    const fc = getFolderColor(f);
-    const fcRgb = hexToRgb(fc);
-    html += `<div class="folder-section"><div class="folder-header" onclick="toggleFolder(this.dataset.folder)" data-folder="${esc(f)}" style="background:rgba(${fcRgb},.15);border-color:${fc}"><div class="folder-drag-handle" draggable="true" title="Drag to reorder folder" onclick="event.stopPropagation()"><i class="ti ti-grip-vertical"></i></div><i class="ti ti-chevron-right folder-chevron${collapsed ? '' : ' open'}" style="color:${fc}"></i><i class="ti ${getFolderIcon(f)} folder-icon-btn" style="font-size:16px;color:${fc};cursor:pointer" onclick="event.stopPropagation();openFolderIconPicker(this.closest('.folder-header').dataset.folder,this)" title="Change icon"></i><span class="folder-name">${esc(f)}</span><button class="folder-rename-btn" onclick="event.stopPropagation();startFolderRename(this)" title="Rename folder"><i class="ti ti-pencil"></i></button><button class="folder-rename-btn" onclick="event.stopPropagation();deleteFolder(this.closest('.folder-header').dataset.folder)" title="Delete folder" style="color:#E24B4A"><i class="ti ti-trash"></i></button><span class="count-pill" style="background:${fc}">${byF[f].length}</span><div class="folder-color-swatch" onclick="event.stopPropagation();openFolderColorPicker(this.closest('.folder-header').dataset.folder,this)" style="width:16px;height:16px;border-radius:50%;background:${fc};cursor:pointer;margin-left:auto;flex-shrink:0;border:1.5px solid var(--ring)"></div></div><div class="folder-content" data-folder="${esc(f)}">${folderContent}</div></div>`;
-  });
+  getOrderedFolders([], uniqueChildren(fil, [])).forEach(name => { html += renderFolderSection(fil, [name], wrap); });
   c.innerHTML = html;
   updateArchiveBadge();
 }
 
-function renderFolderContents(folderName, folderLinks) {
-  const rootLinks = folderLinks.filter(l => !l.subfolder);
-  const bySubfolder = {};
-  folderLinks.filter(l => l.subfolder).forEach(l => {
-    bySubfolder[l.subfolder] = bySubfolder[l.subfolder] || [];
-    bySubfolder[l.subfolder].push(l);
-  });
+// Direct child folder-segment names under parentPath among the given links.
+function uniqueChildren(linksArr, parentPath) {
+  const d = parentPath.length, names = new Set();
+  linksArr.forEach(l => { const p = linkPath(l); if (p.length > d && pathStartsWith(p, parentPath)) names.add(p[d]); });
+  return [...names];
+}
 
-  const cardFn = ui.view === 'list' ? cardListHtml : cardHtml;
-  const wrap = items => ui.view === 'list' ? `<div class="link-list">${items.map(cardFn).join('')}</div>` : `<div class="grid">${items.map(cardFn).join('')}</div>`;
-
-  let html = '';
-  if (rootLinks.length) {
-    html += wrap(rootLinks);
+// Recursively render one folder (at `path`) and, nested inside it, its direct
+// links followed by its child folders. data-path carries pathKey(path); the
+// header handlers parse it back. Indentation is purely CSS (.folder-content
+// padding) since child sections are nested in the DOM.
+function renderFolderSection(fil, path, wrap) {
+  const d = path.length;
+  const directLinks = fil.filter(l => { const p = linkPath(l); return p.length === d && pathStartsWith(p, path); });
+  const descendantCount = fil.filter(l => pathStartsWith(linkPath(l), path)).length;
+  const collapsed = collapsedFolders.has(pathKey(path));
+  const fc = getFolderColor(path);
+  const fcRgb = hexToRgb(fc);
+  const key = esc(pathKey(path));
+  let content = '';
+  if (!collapsed) {
+    if (directLinks.length) content += wrap(directLinks);
+    getOrderedFolders(path, uniqueChildren(fil, path)).forEach(cn => { content += renderFolderSection(fil, [...path, cn], wrap); });
   }
-
-  Object.keys(bySubfolder).sort().forEach(sf => {
-    const key = JSON.stringify([folderName, sf]);
-    const sfCollapsed = !!collapsedSubfolders[key];
-    const sfLinks = bySubfolder[sf];
-    const sfc = getSubfolderColor(folderName, sf);
-    const sfcRgb = hexToRgb(sfc);
-    html += `<div class="subfolder-header" onclick="toggleSubfolder(this.dataset.folder,this.dataset.subfolder)" data-folder="${esc(folderName)}" data-subfolder="${esc(sf)}" style="border-left-color:rgba(${sfcRgb},.5)">`;
-    html += `<div class="subfolder-drag-handle" draggable="true" title="Drag to move sub-folder to another folder" onclick="event.stopPropagation()"><i class="ti ti-grip-vertical"></i></div>`;
-    html += `<i class="ti ti-chevron-right folder-chevron${sfCollapsed ? '' : ' open'}" style="font-size:12px;color:${sfc}"></i>`;
-    html += `<i class="ti ti-folder" style="font-size:12px;color:${sfc};opacity:.7"></i>`;
-    html += `<span class="subfolder-title">${esc(sf)}</span>`;
-    html += `<span class="count-pill" style="font-size:10px;padding:1px 5px;background:rgba(${sfcRgb},.5)">${sfLinks.length}</span>`;
-    html += `<button class="folder-rename-btn" onclick="event.stopPropagation();startSubfolderRename(this)" title="Rename sub-folder" style="font-size:11px"><i class="ti ti-pencil"></i></button>`;
-    html += `<div class="subfolder-color-swatch" onclick="event.stopPropagation();openSubfolderColorPicker(this.closest('.subfolder-header').dataset.folder,this.closest('.subfolder-header').dataset.subfolder,this)" title="Change color" style="width:13px;height:13px;border-radius:50%;background:${sfc};cursor:pointer;flex-shrink:0;border:1.5px solid var(--ring)"></div>`;
-    html += `</div>`;
-    if (!sfCollapsed) {
-      html += `<div class="subfolder-grid">${wrap(sfLinks)}</div>`;
-    }
-  });
-
-  return html;
+  return `<div class="folder-section"><div class="folder-header" onclick="toggleFolder(this.dataset.path)" data-path="${key}" style="background:rgba(${fcRgb},.15);border-color:${fc}">`
+    + `<div class="folder-drag-handle" draggable="true" title="Drag to reorder folder" onclick="event.stopPropagation()"><i class="ti ti-grip-vertical"></i></div>`
+    + `<i class="ti ti-chevron-right folder-chevron${collapsed ? '' : ' open'}" style="color:${fc}"></i>`
+    + `<i class="ti ${getFolderIcon(path)} folder-icon-btn" style="font-size:16px;color:${fc};cursor:pointer" onclick="event.stopPropagation();openFolderIconPicker(this.closest('.folder-header').dataset.path,this)" title="Change icon"></i>`
+    + `<span class="folder-name">${esc(path[path.length - 1])}</span>`
+    + `<button class="folder-rename-btn" onclick="event.stopPropagation();startFolderRename(this)" title="Rename folder"><i class="ti ti-pencil"></i></button>`
+    + `<button class="folder-rename-btn" onclick="event.stopPropagation();deleteFolder(this.closest('.folder-header').dataset.path)" title="Delete folder" style="color:#E24B4A"><i class="ti ti-trash"></i></button>`
+    + `<span class="count-pill" style="background:${fc}">${descendantCount}</span>`
+    + `<div class="folder-color-swatch" onclick="event.stopPropagation();openFolderColorPicker(this.closest('.folder-header').dataset.path,this)" style="width:16px;height:16px;border-radius:50%;background:${fc};cursor:pointer;margin-left:auto;flex-shrink:0;border:1.5px solid var(--ring)"></div>`
+    + `</div><div class="folder-content" data-path="${key}">${content}</div></div>`;
 }
 
 function contentBadge(id) {
   return contentOnlyIds.has(id) ? `<span class="content-badge" title="Matched in the page text"><i class="ti ti-file-search"></i> in page</span>` : '';
+}
+// Card folder badge ("A / B / C") + left-border color, from the link's path.
+function folderBadgeHtml(l, extraStyle = '') {
+  const p = linkPath(l);
+  return p.length ? `<span class="folder-badge"${extraStyle ? ` style="${extraStyle}"` : ''}><i class="ti ti-folder" style="font-size:11px"></i> ${esc(p.join(' / '))}</span>` : '';
+}
+function cardBorderStyle(l) {
+  const p = linkPath(l);
+  return p.length ? ` style="border-left:3px solid ${getFolderColor(p)}"` : '';
 }
 function cardHtml(l) {
   const fav = getFavicon(l.url);
@@ -1013,7 +1079,7 @@ function cardHtml(l) {
       ${rlBtn}
       ${(l.tags || []).map(tagHtml).join('')}
       ${contentBadge(l.id)}
-      ${l.folder ? `<span class="folder-badge"><i class="ti ti-folder" style="font-size:11px"></i> ${esc(l.folder)}${l.subfolder ? ' / ' + esc(l.subfolder) : ''}</span>` : ''}
+      ${folderBadgeHtml(l)}
     </div>`;
   const top = `<div class="card-top"><div class="favicon">${fi}</div>
       <div style="min-width:0"><div class="card-title">${esc(l.title)}</div><div class="card-url">${esc(getDomain(l.url))}</div>${l.lastVisited ? `<div style="font-size:11px;color:var(--text2);margin-top:1px">${timeAgo(l.lastVisited)}</div>` : ''}</div>
@@ -1031,7 +1097,7 @@ function cardHtml(l) {
       ${footer}
     </div>`;
   }
-  return `<div class="card" data-id="${esc(l.id)}" data-url="${esc(l.url)}"${l.folder ? ` style="border-left:3px solid ${getFolderColor(l.folder)}"` : ''}>
+  return `<div class="card" data-id="${esc(l.id)}" data-url="${esc(l.url)}"${cardBorderStyle(l)}>
     <div class="card-actions">
       <div class="drag-handle" draggable="true" title="Drag to reorder"><i class="ti ti-grip-vertical"></i></div>
       <button class="icon-btn" title="Copy URL" data-action="copy" data-id="${esc(l.id)}" data-url="${esc(l.url)}"><i class="ti ti-copy"></i></button>
@@ -1061,10 +1127,10 @@ function cardListHtml(l) {
       <span class="card-row-title">${esc(l.title)}</span>
       <span class="card-row-domain">${esc(getDomain(l.url))}</span>
       <div class="card-row-tags">${(l.tags || []).map(tagHtml).join('')}</div>
-      ${l.folder ? `<span class="folder-badge" style="margin-left:0"><i class="ti ti-folder" style="font-size:11px"></i> ${esc(l.folder)}${l.subfolder ? ' / ' + esc(l.subfolder) : ''}</span>` : ''}
+      ${folderBadgeHtml(l, 'margin-left:0')}
     </div>`;
   }
-  return `<div class="card-row" data-id="${esc(l.id)}" data-url="${esc(l.url)}"${l.folder ? ` style="border-left:3px solid ${getFolderColor(l.folder)}"` : ''}>
+  return `<div class="card-row" data-id="${esc(l.id)}" data-url="${esc(l.url)}"${cardBorderStyle(l)}>
     <div class="favicon">${fi}</div>
     ${statusBadge}
     <span class="card-row-title">${esc(l.title)}</span>
@@ -1072,7 +1138,7 @@ function cardListHtml(l) {
     ${l.lastVisited ? `<span style="font-size:11px;color:var(--text2);flex-shrink:0">${timeAgo(l.lastVisited)}</span>` : ''}
     <div class="card-row-tags">${(l.tags || []).map(tagHtml).join('')}</div>
     ${contentBadge(l.id)}
-    ${l.folder ? `<span class="folder-badge" style="margin-left:0"><i class="ti ti-folder" style="font-size:11px"></i> ${esc(l.folder)}${l.subfolder ? ' / ' + esc(l.subfolder) : ''}</span>` : ''}
+    ${folderBadgeHtml(l, 'margin-left:0')}
     <button class="star-btn${l.favorite ? ' active' : ''}" data-action="favorite" data-id="${esc(l.id)}" title="${l.favorite ? 'Remove from favorites' : 'Add to favorites'}" style="flex-shrink:0"><i class="ti ti-star${l.favorite ? '-filled' : ''}"></i></button>
     <button class="rl-btn${l.readLater ? ' active' : ''}" data-action="readlater" data-id="${esc(l.id)}" title="${l.readLater ? 'Remove from read later' : 'Save to read later'}" style="flex-shrink:0"><i class="ti ti-bookmark${l.readLater ? '-filled' : ''}"></i></button>
     <div class="card-row-actions">
@@ -1604,13 +1670,13 @@ Object.assign(window, {
   indexAllContent, lgAddSubmit, lgStartRename, linkgroupRemoveItem, onBulkFolderChange, onSearchInput,
   onSortChange, onTagInput, onTagKeydown, openArchive, openFeedItem, openFeedManager,
   openFolderColorPicker, openFolderIconPicker, openFolderManager, openImport, openModal, openRestore,
-  openShortcuts, openStatLink, openStats, openSubfolderColorPicker, openTagManager, openTheme,
+  openShortcuts, openStatLink, openStats, openTagManager, openTheme,
   previewCustomAccent, render, renderStats, resetPickerColor, resetStats, saveLink,
   saveSearchTerm, scanLinksForStats, selectAllVisible, selectFolderIcon, selectPickerColor, setBgBlur,
   setBgDim, setBgPreset, setBgType, setBgUrl, setCustomAccent, showSearchHistory,
-  startFolderRename, startSubfolderRename, toggleAll, toggleDashboardEdit, toggleDefaultView, toggleFavorites,
+  startFolderRename, toggleAll, toggleDashboardEdit, toggleDefaultView, toggleFavorites,
   toggleStatsNever,
-  toggleFilter, toggleFolder, toggleSelectMode, toggleSettings, toggleSubfolder, toggleView,
+  toggleFilter, toggleFolder, toggleSelectMode, toggleSettings, toggleView,
   undoAction, updateFilterBadge, updateSubfolderDatalist, uploadWallpaper, widgetRemove, widgetToggle,
 });
 

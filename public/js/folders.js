@@ -1,76 +1,31 @@
 // ============================================================================
-// folders.js — folder & sub-folder operations: collapse/expand, rename, delete.
-// State (collapsedFolders/collapsedSubfolders/folderColors/subfolderColors/
-// folderIcons/folderOrder) and the hub primitives live in app.js and are
-// imported here (call-time circular import, fine in ESM). These mutate the
-// shared state in place — folderOrder is spliced (not reassigned) so the live
-// binding app.js holds stays valid.
+// folders.js — nested-folder operations: collapse/expand, rename, delete.
+// With the path model every folder is identified by a pathKey (JSON of its path
+// array, e.g. ["Work","Clients"]) at any depth, so there's a single set of ops
+// for all levels. Folder metadata (collapsedFolders/folderColors/folderIcons/
+// childOrder) and the hub primitives live in app.js and are imported here
+// (call-time circular import, fine in ESM); these mutate shared state in place.
 // ============================================================================
 
 import {
-  links, save, render, saveConfig, allFolders,
-  collapsedFolders, collapsedSubfolders,
-  folderColors, subfolderColors, folderIcons, folderOrder,
+  links, save, render, saveConfig, setLinkLocation,
+  collapsedFolders, folderColors, folderIcons, childOrder,
+  allFolderPaths, pathStartsWith,
 } from './app.js';
+import { pathKey, linkPath } from './utils.js';
 import { showToast } from './toast.js';
 
-export function toggleFolder(name) {
-  const contentEl = Array.from(document.querySelectorAll('.folder-content')).find(el => el.dataset.folder === name);
-  const isCollapsed = collapsedFolders.has(name);
+const parseKey = k => { try { return JSON.parse(k); } catch { return null; } };
 
-  if (!isCollapsed && contentEl) {
-    if (contentEl.dataset.animating) return;
-    contentEl.dataset.animating = '1';
-    const chevron = Array.from(document.querySelectorAll('.folder-header')).find(el => el.dataset.folder === name)?.querySelector('.folder-chevron');
-    if (chevron) chevron.classList.remove('open');
-    contentEl.style.overflow = 'hidden';
-    contentEl.style.maxHeight = contentEl.scrollHeight + 'px';
-    contentEl.style.opacity = '1';
-    requestAnimationFrame(() => {
-      contentEl.style.transition = 'max-height 0.25s ease, opacity 0.2s ease';
-      contentEl.style.maxHeight = '0';
-      contentEl.style.opacity = '0';
-    });
-    setTimeout(() => {
-      delete contentEl.dataset.animating;
-      collapsedFolders.add(name);
-      localStorage.setItem('msp-collapsed', JSON.stringify([...collapsedFolders]));
-      render();
-    }, 260);
-    return;
-  }
-
-  if (isCollapsed) collapsedFolders.delete(name);
-  else collapsedFolders.add(name);
+export function toggleFolder(key) {
+  if (collapsedFolders.has(key)) collapsedFolders.delete(key);
+  else collapsedFolders.add(key);
   localStorage.setItem('msp-collapsed', JSON.stringify([...collapsedFolders]));
   render();
-
-  if (isCollapsed) {
-    const newEl = Array.from(document.querySelectorAll('.folder-content')).find(el => el.dataset.folder === name);
-    if (newEl && !newEl.dataset.animating) {
-      newEl.dataset.animating = '1';
-      const height = newEl.scrollHeight;
-      newEl.style.overflow = 'hidden';
-      newEl.style.maxHeight = '0';
-      newEl.style.opacity = '0';
-      requestAnimationFrame(() => requestAnimationFrame(() => {
-        newEl.style.transition = 'max-height 0.25s ease, opacity 0.2s ease';
-        newEl.style.maxHeight = height + 'px';
-        newEl.style.opacity = '1';
-        setTimeout(() => {
-          delete newEl.dataset.animating;
-          newEl.style.maxHeight = '';
-          newEl.style.overflow = '';
-          newEl.style.transition = '';
-          newEl.style.opacity = '';
-        }, 260);
-      }));
-    }
-  }
 }
 
 export function collapseAll() {
-  allFolders().forEach(f => collapsedFolders.add(f));
+  allFolderPaths().forEach(k => collapsedFolders.add(k));
   localStorage.setItem('msp-collapsed', JSON.stringify([...collapsedFolders]));
   render();
 }
@@ -79,118 +34,93 @@ export function expandAll() {
   localStorage.setItem('msp-collapsed', JSON.stringify([]));
   render();
 }
-export function renameFolder(oldName, newName) {
-  newName = newName.trim();
-  if (!newName || newName === oldName) return;
-  // Update all links
-  links.forEach(l => { if (l.folder === oldName) l.folder = newName; });
-  // Update folderColors
-  if (folderColors[oldName]) {
-    folderColors[newName] = folderColors[oldName];
-    delete folderColors[oldName];
-    localStorage.setItem('msp-folder-colors', JSON.stringify(folderColors));
+
+// Re-key the path-keyed metadata stores (colors/icons/collapsed) by running each
+// stored path through transform(); returning null drops the entry. childOrder is
+// handled separately by the callers (they clear affected branches).
+function remapFolderMeta(transform) {
+  for (const store of [folderColors, folderIcons]) {
+    for (const k of Object.keys(store)) {
+      const arr = parseKey(k); if (!arr) continue;
+      const np = transform(arr);
+      if (pathKey(np || []) === k) continue;
+      const v = store[k]; delete store[k];
+      if (np) store[pathKey(np)] = v;
+    }
   }
-  // Update folderOrder
-  if (folderOrder) {
-    const idx = folderOrder.indexOf(oldName);
-    if (idx > -1) folderOrder[idx] = newName;
-    localStorage.setItem('msp-folder-order', JSON.stringify(folderOrder));
+  for (const k of [...collapsedFolders]) {
+    const arr = parseKey(k); if (!arr) continue;
+    const np = transform(arr);
+    if (pathKey(np || []) === k) continue;
+    collapsedFolders.delete(k);
+    if (np) collapsedFolders.add(pathKey(np));
   }
-  // Update collapsedFolders
-  if (collapsedFolders.has(oldName)) {
-    collapsedFolders.delete(oldName);
-    collapsedFolders.add(newName);
-    localStorage.setItem('msp-collapsed', JSON.stringify([...collapsedFolders]));
-  }
-  // Update folderIcons
-  if (folderIcons[oldName]) {
-    folderIcons[newName] = folderIcons[oldName];
-    delete folderIcons[oldName];
-    localStorage.setItem('msp-folder-icons', JSON.stringify(folderIcons));
-  }
-  // Migrate subfolder keys (collapsed state + colors) — they embed the folder name
-  [['msp-subfolder-collapsed', collapsedSubfolders], ['msp-subfolder-colors', subfolderColors]].forEach(([lsKey, store]) => {
-    Object.keys(store).forEach(key => {
-      try {
-        const parsed = JSON.parse(key);
-        if (parsed[0] === oldName) {
-          store[JSON.stringify([newName, parsed[1]])] = store[key];
-          delete store[key];
-        }
-      } catch {}
-    });
-    localStorage.setItem(lsKey, JSON.stringify(store));
-  });
-  save();
-  saveConfig();
 }
-export function deleteFolder(name) {
-  const count = links.filter(l => !l.archived && l.folder === name).length;
-  if (!confirm(`Delete folder "${name}"? ${count} link${count !== 1 ? 's' : ''} will be moved to no folder.`)) return;
-  links.forEach(l => { if (l.folder === name) { l.folder = ''; l.subfolder = null; } });
-  delete folderColors[name];
+// Drop any childOrder entry whose parent path is at/under `prefix` (so the
+// affected branch reverts to alphabetical order — custom order is a nice-to-have).
+function clearChildOrderUnder(prefix) {
+  for (const k of Object.keys(childOrder)) {
+    const arr = parseKey(k);
+    if (arr && pathStartsWith(arr, prefix)) delete childOrder[k];
+  }
+}
+function persistFolderMeta() {
   localStorage.setItem('msp-folder-colors', JSON.stringify(folderColors));
-  delete folderIcons[name];
   localStorage.setItem('msp-folder-icons', JSON.stringify(folderIcons));
-  if (folderOrder) {
-    const idx = folderOrder.indexOf(name);
-    if (idx > -1) folderOrder.splice(idx, 1);
-    localStorage.setItem('msp-folder-order', JSON.stringify(folderOrder));
-  }
-  collapsedFolders.delete(name);
   localStorage.setItem('msp-collapsed', JSON.stringify([...collapsedFolders]));
-  Object.keys(collapsedSubfolders).forEach(key => {
-    try { if (JSON.parse(key)[0] === name) delete collapsedSubfolders[key]; } catch {}
-  });
-  localStorage.setItem('msp-subfolder-collapsed', JSON.stringify(collapsedSubfolders));
-  Object.keys(subfolderColors).forEach(key => {
-    try { if (JSON.parse(key)[0] === name) delete subfolderColors[key]; } catch {}
-  });
-  localStorage.setItem('msp-subfolder-colors', JSON.stringify(subfolderColors));
-  save(); render(); saveConfig();
-  showToast(`Folder "${name}" deleted`);
-}
-export function deleteSubfolder(folderName, subName) {
-  const count = links.filter(l => !l.archived && l.folder === folderName && l.subfolder === subName).length;
-  if (!confirm(`Delete sub-folder "${subName}"? ${count} link${count !== 1 ? 's' : ''} will be moved to folder "${folderName}".`)) return;
-  links.forEach(l => { if (l.folder === folderName && l.subfolder === subName) l.subfolder = null; });
-  const key = JSON.stringify([folderName, subName]);
-  delete collapsedSubfolders[key];
-  localStorage.setItem('msp-subfolder-collapsed', JSON.stringify(collapsedSubfolders));
-  delete subfolderColors[key];
-  localStorage.setItem('msp-subfolder-colors', JSON.stringify(subfolderColors));
-  save(); render(); saveConfig();
-  showToast(`Sub-folder "${subName}" deleted`);
+  localStorage.setItem('msp-folder-order', JSON.stringify(childOrder));
 }
 
-export function moveSubfolder(srcFolder, subName, destFolder) {
-  if (!destFolder || destFolder === srcFolder) return;
-  // Re-parent every link in this sub-folder; the sub-folder name is preserved,
-  // so if destFolder already has a sub-folder of the same name the two merge.
-  let moved = 0;
+export function renameFolder(key, newName) {
+  newName = (newName || '').trim();
+  const path = parseKey(key);
+  if (!path || !path.length || !newName || newName === path[path.length - 1]) return;
+  const idx = path.length - 1;
+  // Re-segment every link in this folder's subtree.
   links.forEach(l => {
-    if (l.folder === srcFolder && l.subfolder === subName) { l.folder = destFolder; moved++; }
+    const p = linkPath(l);
+    if (pathStartsWith(p, path)) { const np = p.slice(); np[idx] = newName; setLinkLocation(l, np); }
   });
-  if (!moved) return;
-  // Migrate per-sub-folder UI state (collapsed + color), which is keyed on the
-  // parent folder name — without clobbering state the destination already has.
-  const oldKey = JSON.stringify([srcFolder, subName]);
-  const newKey = JSON.stringify([destFolder, subName]);
-  [['msp-subfolder-collapsed', collapsedSubfolders], ['msp-subfolder-colors', subfolderColors]].forEach(([lsKey, store]) => {
-    if (store[oldKey] !== undefined) {
-      if (store[newKey] === undefined) store[newKey] = store[oldKey];
-      delete store[oldKey];
-      localStorage.setItem(lsKey, JSON.stringify(store));
-    }
+  remapFolderMeta(arr => {
+    if (!pathStartsWith(arr, path)) return arr;
+    const np = arr.slice(); np[idx] = newName; return np;
   });
+  clearChildOrderUnder(path.slice(0, idx)); // parent's child-name order references the old name
+  persistFolderMeta();
+  save(); saveConfig(); render();
+}
+
+export function deleteFolder(key) {
+  const path = parseKey(key);
+  if (!path || !path.length) return;
+  const idx = path.length - 1;
+  const parent = path.slice(0, idx);
+  const count = links.filter(l => !l.archived && pathStartsWith(linkPath(l), path)).length;
+  const dest = parent.length ? `"${parent.join(' / ')}"` : 'no folder';
+  if (!confirm(`Delete folder "${path[idx]}"? ${count} link${count !== 1 ? 's' : ''} (and any sub-folders) will move to ${dest}.`)) return;
+  // Splice this level out of every descendant link's path (promote up one level).
+  links.forEach(l => {
+    const p = linkPath(l);
+    if (pathStartsWith(p, path)) { const np = p.slice(); np.splice(idx, 1); setLinkLocation(l, np); }
+  });
+  remapFolderMeta(arr => {
+    if (!pathStartsWith(arr, path)) return arr;
+    if (arr.length === path.length) return null; // the deleted folder's own metadata
+    const np = arr.slice(); np.splice(idx, 1); return np;
+  });
+  clearChildOrderUnder(parent);
+  persistFolderMeta();
   save(); render(); saveConfig();
-  showToast(`Moved "${subName}" to "${destFolder}"`);
+  showToast(`Folder "${path[idx]}" deleted`);
 }
 
 export function startFolderRename(btn) {
-  const header = btn.closest('.folder-header[data-folder]');
+  const header = btn.closest('.folder-header[data-path]');
   if (!header) return;
-  const oldName = header.dataset.folder;
+  const key = header.dataset.path;
+  const path = parseKey(key);
+  if (!path) return;
+  const oldName = path[path.length - 1];
   const nameSpan = header.querySelector('.folder-name');
   if (!nameSpan || header.querySelector('.folder-rename-input')) return;
   const input = document.createElement('input');
@@ -206,59 +136,7 @@ export function startFolderRename(btn) {
     if (committed) return;
     committed = true;
     const newName = input.value.trim();
-    if (newName && newName !== oldName) {
-      renameFolder(oldName, newName);
-      render();
-    } else {
-      input.replaceWith(nameSpan);
-    }
-  }
-  input.addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); commit(); }
-    if (e.key === 'Escape') { committed = true; input.replaceWith(nameSpan); }
-  });
-  input.addEventListener('blur', commit);
-}
-export function renameSubfolder(folderName, oldName, newName) {
-  newName = newName.trim();
-  if (!newName || newName === oldName) return;
-  links.forEach(l => { if (l.folder === folderName && l.subfolder === oldName) l.subfolder = newName; });
-  const oldKey = JSON.stringify([folderName, oldName]);
-  const newKey = JSON.stringify([folderName, newName]);
-  if (collapsedSubfolders[oldKey] !== undefined) {
-    collapsedSubfolders[newKey] = collapsedSubfolders[oldKey];
-    delete collapsedSubfolders[oldKey];
-    localStorage.setItem('msp-subfolder-collapsed', JSON.stringify(collapsedSubfolders));
-  }
-  if (subfolderColors[oldKey] !== undefined) {
-    subfolderColors[newKey] = subfolderColors[oldKey];
-    delete subfolderColors[oldKey];
-    localStorage.setItem('msp-subfolder-colors', JSON.stringify(subfolderColors));
-  }
-  save();
-  saveConfig();
-}
-export function startSubfolderRename(btn) {
-  const header = btn.closest('.subfolder-header');
-  if (!header) return;
-  const folderName = header.dataset.folder;
-  const oldName = header.dataset.subfolder;
-  const nameSpan = header.querySelector('.subfolder-title');
-  if (!nameSpan || header.querySelector('.folder-rename-input')) return;
-  const input = document.createElement('input');
-  input.type = 'text';
-  input.value = oldName;
-  input.className = 'folder-rename-input';
-  input.style.cssText = 'height:20px;padding:0 6px;border-radius:5px;border:1px solid var(--g4);background:var(--bg2);color:var(--text0);font-size:12px;font-weight:500;font-family:inherit;width:120px';
-  nameSpan.replaceWith(input);
-  input.focus();
-  input.select();
-  let committed = false;
-  function commit() {
-    if (committed) return;
-    committed = true;
-    const newName = input.value.trim();
-    if (newName && newName !== oldName) { renameSubfolder(folderName, oldName, newName); render(); }
+    if (newName && newName !== oldName) { renameFolder(key, newName); render(); }
     else input.replaceWith(nameSpan);
   }
   input.addEventListener('keydown', e => {
@@ -266,11 +144,4 @@ export function startSubfolderRename(btn) {
     if (e.key === 'Escape') { committed = true; input.replaceWith(nameSpan); }
   });
   input.addEventListener('blur', commit);
-}
-
-export function toggleSubfolder(folderName, subfolder) {
-  const key = JSON.stringify([folderName, subfolder]);
-  collapsedSubfolders[key] = !collapsedSubfolders[key];
-  localStorage.setItem('msp-subfolder-collapsed', JSON.stringify(collapsedSubfolders));
-  render();
 }
