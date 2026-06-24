@@ -1401,7 +1401,7 @@ document.addEventListener('click', e => {
   closeSettings();
   if (!e.target.closest('#filterMenu') && !e.target.closest('#filterBtn')) closeFilter();
   if (!e.target.closest('.search-wrap')) hideSearchHistory();
-  if (!e.target.closest('#folderColorPicker') && !e.target.closest('.folder-color-swatch') && !e.target.closest('.subfolder-color-swatch')) {
+  if (!e.target.closest('#folderColorPicker') && !e.target.closest('.folder-color-swatch')) {
     closeFolderColorPicker();
   }
   if (!e.target.closest('#folderIconPicker') && !e.target.closest('.folder-icon-btn')) {
