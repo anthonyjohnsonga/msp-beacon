@@ -14,6 +14,7 @@ import { checkLinks, checkUncheckedLinks } from './health.js';
 import { openStats, closeStats, openStatLink, scanLinksForStats, renderStats, resetStats, toggleStatsNever } from './stats.js';
 import { setupDragListeners } from './drag.js';
 import { parseSearch, linkMatchesFlag, contentMatchIds, contentMatchQuery, onSearchInput, clearSearch, saveSearchTerm, showSearchHistory, hideSearchHistory } from './search.js';
+import { openModal, closeModal, autoTitle, fetchPageTitle, saveLink, addLinkAnyway } from './modals.js';
 
 // ============================================================================
 // STATE & GLOBALS
@@ -21,7 +22,6 @@ import { parseSearch, linkMatchesFlag, contentMatchIds, contentMatchQuery, onSea
 
 export let links = [];
 export let linkStatus = {};
-let editId = null;
 let saveTimer = null;
 // Nested-folder metadata, all keyed by pathKey(path) (every level, any depth):
 //   collapsedFolders — Set of collapsed folder pathKeys (localStorage only)
@@ -138,7 +138,7 @@ let favoritesCollapsed = JSON.parse(localStorage.getItem('msp-fav-collapsed') ||
 // contentOnlyIds is computed by render() and read by the card badge, so it
 // stays here; render imports contentMatchIds/contentMatchQuery from search.js.
 let contentOnlyIds = new Set();    // matched via page text only (no title/url/tag hit) — for the badge
-function captureSnapshot(id, url) {
+export function captureSnapshot(id, url) {
   if (!/^https?:\/\//i.test(url || '')) return;
   fetch('/api/snapshot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, url }) }).catch(() => {});
 }
@@ -1163,62 +1163,6 @@ function cardListHtml(l) {
 // ============================================================================
 // ADD / EDIT LINK MODAL
 // ============================================================================
-function openModal(id) {
-  editId = id || null;
-  const l = id ? links.find(x => x.id === id) : null;
-  document.getElementById('modalTitle').textContent = l ? 'Edit link' : 'Add link';
-  document.getElementById('mUrl').value = l ? l.url : '';
-  document.getElementById('mTitle').value = l ? l.title : '';
-  document.getElementById('mDesc').value = l ? l.desc : '';
-  document.getElementById('mTags').value = l ? (l.tags || []).join(', ') : '';
-  document.getElementById('mNewFolder').value = '';
-  // Folder dropdown lists every existing folder path (any depth); a new nested
-  // path can be typed in mNewFolder using "/" separators.
-  const mf = document.getElementById('mFolder');
-  const cur = l ? pathKey(linkPath(l)) : '';
-  const opts = ['<option value="">No folder</option>'];
-  allFolderPaths().map(k => JSON.parse(k)).sort((a, b) => a.join(' ').localeCompare(b.join(' ')))
-    .forEach(p => { const key = pathKey(p); opts.push(`<option value="${esc(key)}"${key === cur ? ' selected' : ''}>${esc(p.join(' / '))}</option>`); });
-  mf.innerHTML = opts.join('');
-  document.getElementById('dupWarning').style.display = 'none';
-  document.getElementById('modalBg').style.display = 'flex';
-  setTimeout(() => document.getElementById('mUrl').focus(), 50);
-}
-function closeModal() { document.getElementById('modalBg').style.display = 'none'; document.getElementById('dupWarning').style.display = 'none'; editId = null; }
-function autoTitle() {
-  const u = document.getElementById('mUrl').value.trim();
-  const t = document.getElementById('mTitle');
-  if (!t.value && u && !/^https?:\/\//i.test(u)) {
-    try { t.value = new URL(u).hostname.replace('www.', ''); } catch {}
-  }
-}
-
-async function fetchPageTitle() {
-  if (editId) return;
-  const u = document.getElementById('mUrl').value.trim();
-  const t = document.getElementById('mTitle');
-  if (!u || !/^https?:\/\//i.test(u)) return;
-  if (t.value) return;
-  const wrap = document.getElementById('titleWrap');
-  wrap.classList.add('fetching');
-  try {
-    const res = await fetch('/api/fetch-title?url=' + encodeURIComponent(u));
-    const data = await res.json();
-    if (!t.value && data.title) t.value = data.title;
-  } catch {}
-  wrap.classList.remove('fetching');
-}
-
-// The link's folder path from the modal: a typed "A / B" new path wins, else the
-// selected existing folder (pathKey), else [] (no folder).
-function modalFolderPath() {
-  const np = document.getElementById('mNewFolder').value.trim();
-  if (np) return np.split('/').map(s => s.trim()).filter(Boolean).slice(0, MAX_FOLDER_DEPTH);
-  const sel = document.getElementById('mFolder').value;
-  if (!sel) return [];
-  try { return JSON.parse(sel); } catch { return []; }
-}
-
 // --- Tag autocomplete (add/edit modal) -------------------------------------
 // Suggests existing tags for the comma-separated segment currently being typed,
 // excluding tags already entered in the field.
@@ -1286,54 +1230,6 @@ function hideTagSuggest() {
 // ============================================================================
 // SAVE / EDIT / DELETE LINK
 // ============================================================================
-function saveLink() {
-  const url = document.getElementById('mUrl').value.trim();
-  const title = document.getElementById('mTitle').value.trim();
-  if (!url || !title) { alert('URL and title are required.'); return; }
-  const path = modalFolderPath();
-  const folder = path[0] || '';
-  const subfolder = path[1] || null;
-  const tags = document.getElementById('mTags').value.split(',').map(t => t.trim()).filter(Boolean);
-  const desc = document.getElementById('mDesc').value.trim();
-  if (!editId) {
-    const dup = links.find(l => !l.archived && l.url.trim().toLowerCase() === url.toLowerCase());
-    if (dup) {
-      const w = document.getElementById('dupWarning');
-      document.getElementById('dupWarningMsg').innerHTML = `A link with this URL already exists — <strong>${esc(dup.title)}</strong>`;
-      w.style.display = 'flex';
-      return;
-    }
-  }
-  if (editId) {
-    const i = links.findIndex(l => l.id === editId);
-    if (i > -1) {
-      const urlChanged = links[i].url !== url;
-      links[i] = { ...links[i], url, title, desc, folder, subfolder, path, tags };
-      if (urlChanged) captureSnapshot(editId, url);
-    }
-  } else {
-    const newId = Date.now().toString(36) + Math.random().toString(36).slice(2);
-    links.unshift({ id: newId, url, title, desc, folder, subfolder, path, tags });
-    captureSnapshot(newId, url);
-  }
-  const wasEditing = !!editId;
-  save(); closeModal(); render();
-  showToast(wasEditing ? 'Link updated' : 'Link saved');
-}
-function addLinkAnyway() {
-  const url = document.getElementById('mUrl').value.trim();
-  const title = document.getElementById('mTitle').value.trim();
-  const path = modalFolderPath();
-  const folder = path[0] || '';
-  const subfolder = path[1] || null;
-  const tags = document.getElementById('mTags').value.split(',').map(t => t.trim()).filter(Boolean);
-  const desc = document.getElementById('mDesc').value.trim();
-  const newId = Date.now().toString(36) + Math.random().toString(36).slice(2);
-  links.unshift({ id: newId, url, title, desc, folder, subfolder, path, tags });
-  captureSnapshot(newId, url);
-  save(); closeModal(); render();
-  showToast('Link saved');
-}
 function copyUrl(url, btn) {
   navigator.clipboard.writeText(url).then(() => {
     const icon = btn.querySelector('i');
