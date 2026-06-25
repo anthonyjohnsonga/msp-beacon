@@ -105,6 +105,164 @@ async function writeConfig(cfg) {
   await fsp.rename(tmp, CONFIG_FILE);
 }
 
+// ============================================================================
+// AUTH — single shared password gate. The HMAC secret + password hash live in
+// /data/auth.json (separate from links/config, so they're NOT in backups). No
+// new deps — built-in crypto only. The static shell (index.html/app.js/css) is
+// public; every /api/* route registered BELOW the gate requires a valid signed
+// session cookie once a password has been configured. Public share routes (a
+// future phase) would be registered above the gate to stay exempt.
+// ============================================================================
+app.set('trust proxy', true); // so req.secure reflects an upstream HTTPS proxy
+
+const AUTH_FILE = path.join('/data', 'auth.json');
+const COOKIE_NAME = 'beacon_session';
+const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+let authState = { secret: null, passHash: null }; // cached in memory; loaded by initAuth()
+
+async function readAuth() {
+  try {
+    const raw = await fsp.readFile(AUTH_FILE, 'utf8');
+    const data = JSON.parse(raw);
+    return data && typeof data === 'object' ? data : {};
+  } catch (e) {
+    if (e.code !== 'ENOENT') console.error('Failed to read auth file:', e);
+    return {};
+  }
+}
+async function writeAuth(data) {
+  await fsp.mkdir(path.dirname(AUTH_FILE), { recursive: true });
+  const tmp = path.join(path.dirname(AUTH_FILE), `.auth-${Date.now()}.json`);
+  await fsp.writeFile(tmp, JSON.stringify(data, null, 2), 'utf8');
+  await fsp.rename(tmp, AUTH_FILE);
+}
+// Load (or first-time create) the HMAC secret, and cache the stored hash.
+async function initAuth() {
+  const data = await readAuth();
+  if (!data.secret) {
+    data.secret = crypto.randomBytes(32).toString('hex');
+    data.createdAt = data.createdAt || new Date().toISOString();
+    await writeAuth(data);
+  }
+  authState = { secret: data.secret, passHash: data.passHash || null };
+}
+
+function hashPassword(pw) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  return `${salt}:${crypto.scryptSync(pw, salt, 64).toString('hex')}`;
+}
+function verifyPassword(pw, stored) {
+  if (!stored || !stored.includes(':')) return false;
+  const [salt, hash] = stored.split(':');
+  const expected = Buffer.from(hash, 'hex');
+  let actual;
+  try { actual = crypto.scryptSync(pw, salt, 64); } catch { return false; }
+  return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
+}
+function authConfigured() {
+  return !!process.env.BEACON_PASSWORD || !!authState.passHash;
+}
+function checkPassword(pw) {
+  if (typeof pw !== 'string' || !pw) return false;
+  if (process.env.BEACON_PASSWORD) {
+    const a = Buffer.from(pw), b = Buffer.from(process.env.BEACON_PASSWORD);
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
+  }
+  return verifyPassword(pw, authState.passHash);
+}
+
+// Stateless signed session cookie: value = <expBase64url>.<HMAC(exp, secret)>.
+function signToken(expMs) {
+  const payload = Buffer.from(String(expMs)).toString('base64url');
+  const sig = crypto.createHmac('sha256', authState.secret).update(payload).digest('base64url');
+  return `${payload}.${sig}`;
+}
+function verifyToken(token) {
+  if (!token || typeof token !== 'string' || !token.includes('.') || !authState.secret) return false;
+  const [payload, sig] = token.split('.');
+  const expected = crypto.createHmac('sha256', authState.secret).update(payload).digest('base64url');
+  const a = Buffer.from(sig), b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return false;
+  const expMs = parseInt(Buffer.from(payload, 'base64url').toString(), 10);
+  return Number.isFinite(expMs) && expMs > Date.now();
+}
+function parseCookies(req) {
+  const out = {};
+  const header = req.headers.cookie;
+  if (!header) return out;
+  for (const part of header.split(';')) {
+    const i = part.indexOf('=');
+    if (i < 0) continue;
+    out[part.slice(0, i).trim()] = part.slice(i + 1).trim();
+  }
+  return out;
+}
+function isAuthed(req) { return verifyToken(parseCookies(req)[COOKIE_NAME]); }
+function setSessionCookie(req, res) {
+  const secure = req.secure || req.headers['x-forwarded-proto'] === 'https';
+  const attrs = [
+    `${COOKIE_NAME}=${signToken(Date.now() + SESSION_MAX_AGE_MS)}`,
+    'HttpOnly', 'SameSite=Strict', 'Path=/', `Max-Age=${Math.floor(SESSION_MAX_AGE_MS / 1000)}`,
+  ];
+  if (secure) attrs.push('Secure');
+  res.setHeader('Set-Cookie', attrs.join('; '));
+}
+function clearSessionCookie(res) {
+  res.setHeader('Set-Cookie', `${COOKIE_NAME}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0`);
+}
+
+// In-memory login rate limit (per IP): 10 attempts / 15 min.
+const loginAttempts = new Map();
+const LOGIN_MAX = 10, LOGIN_WINDOW_MS = 15 * 60 * 1000;
+function rateLimited(req) {
+  const ip = req.ip || 'unknown';
+  const now = Date.now();
+  let rec = loginAttempts.get(ip);
+  if (!rec || rec.resetAt < now) { rec = { count: 0, resetAt: now + LOGIN_WINDOW_MS }; loginAttempts.set(ip, rec); }
+  rec.count++;
+  return rec.count > LOGIN_MAX;
+}
+
+// --- Auth endpoints (registered ABOVE the gate, so they stay reachable) -----
+app.get('/api/me', (req, res) => {
+  res.json({ authed: isAuthed(req), configured: authConfigured() });
+});
+app.post('/api/setup', async (req, res) => {
+  if (authConfigured()) return res.status(409).json({ error: 'Password already set' });
+  if (rateLimited(req)) return res.status(429).json({ error: 'Too many attempts — try again later' });
+  const pw = req.body && req.body.password;
+  if (typeof pw !== 'string' || pw.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+  try {
+    const data = await readAuth();
+    if (!data.secret) data.secret = crypto.randomBytes(32).toString('hex');
+    data.passHash = hashPassword(pw);
+    data.createdAt = data.createdAt || new Date().toISOString();
+    await writeAuth(data);
+    authState = { secret: data.secret, passHash: data.passHash };
+    setSessionCookie(req, res);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('POST /api/setup error:', e);
+    res.status(500).json({ error: 'Failed to set password' });
+  }
+});
+app.post('/api/login', (req, res) => {
+  if (!authConfigured()) return res.status(400).json({ error: 'No password set' });
+  if (rateLimited(req)) return res.status(429).json({ error: 'Too many attempts — try again later' });
+  if (!checkPassword(req.body && req.body.password)) return res.status(401).json({ error: 'Incorrect password' });
+  setSessionCookie(req, res);
+  res.json({ ok: true });
+});
+app.post('/api/logout', (req, res) => { clearSessionCookie(res); res.json({ ok: true }); });
+
+// --- The gate: every /api/* route below requires auth once configured -------
+app.use((req, res, next) => {
+  if (!req.path.startsWith('/api/')) return next();
+  if (!authConfigured()) return next();   // open until a password is set
+  if (isAuthed(req)) return next();
+  res.status(401).json({ error: 'Authentication required' });
+});
+
 app.get('/api/links', async (req, res) => {
   try {
     res.json(await readLinks());
@@ -780,10 +938,11 @@ app.get('/api/content-status', (req, res) => {
 // first request after a restart doesn't hit an empty allowlist (403s on valid
 // feeds) or an empty search index. Both helpers swallow their own errors, so
 // the server still starts if a load fails.
-Promise.all([loadContentIndex(), loadAllowedFeeds()]).finally(() => {
+Promise.all([loadContentIndex(), loadAllowedFeeds(), initAuth()]).finally(() => {
   app.listen(PORT, () => {
     console.log(`MSP Beacon running on http://0.0.0.0:${PORT}`);
     console.log(`Data file: ${DATA_FILE}`);
     console.log(`Config file: ${CONFIG_FILE}`);
+    console.log(`Auth: ${authConfigured() ? 'password set' : 'OPEN — no password set yet'}`);
   });
 });

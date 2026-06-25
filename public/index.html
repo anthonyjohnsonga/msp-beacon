@@ -62,6 +62,11 @@
             <button class="settings-item" onclick="openRestore()"><i class="ti ti-database-import"></i> Restore</button>
           </div>
         </div>
+        <div class="settings-group" id="accountGroup" style="display:none">
+          <div class="settings-group-label">Account</div>
+          <button class="settings-item" id="setPwItem" style="display:none"><i class="ti ti-lock"></i> Set a password</button>
+          <button class="settings-item" id="logoutItem" style="display:none" onclick="logout()"><i class="ti ti-logout"></i> Log out</button>
+        </div>
       </div>
     </div>
   </div>
@@ -295,6 +300,7 @@
 <input type="file" id="restoreInput" accept=".json" style="display:none" onchange="handleRestoreFile(this)">
 <div class="toast" id="toast"><i class="ti ti-check" id="toastIcon"></i> <span id="toastMsg"></span><button class="toast-undo" id="toastUndo" style="display:none" onclick="undoAction()">Undo</button></div>
 
+<div id="authBg" class="auth-bg" style="display:none"></div>
 <div id="ctxMenu" class="ctx-menu"></div>
 <div id="folderColorPicker" style="display:none;position:fixed;z-index:300;background:var(--bg1);border:1px solid var(--g5);border-radius:10px;padding:8px;gap:6px;flex-wrap:wrap;width:168px;box-shadow:0 8px 24px rgba(0,0,0,.4)"></div>
 <div id="folderIconPicker" style="display:none;position:fixed;z-index:300;background:var(--bg1);border:1px solid var(--g5);border-radius:10px;padding:8px;flex-wrap:wrap;width:224px;gap:4px;box-shadow:0 8px 24px rgba(0,0,0,.4)"></div>

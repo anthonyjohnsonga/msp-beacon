@@ -323,6 +323,19 @@ select:focus { outline: none; border-color: var(--g4); }
    rules tighten spacing, keep fixed/overflowing chrome on-screen, and collapse
    the header/toolbar buttons to icon-only so they stay on one row.
    ============================================================================ */
+/* Auth overlay (login / first-run setup) */
+.auth-bg { position: fixed; inset: 0; background: var(--bg0); display: flex; align-items: center; justify-content: center; z-index: 500; padding: 1.5rem; }
+.auth-card { background: var(--bg1); border: 1px solid var(--g5); border-radius: 14px; padding: 1.75rem; width: min(360px, 100%); display: flex; flex-direction: column; gap: 12px; box-shadow: 0 12px 40px rgba(0,0,0,.5); }
+.auth-brand { display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 600; color: var(--g2); justify-content: center; }
+.auth-brand i { color: var(--g3); }
+.auth-title { font-size: 15px; color: var(--text0); text-align: center; margin-top: 4px; }
+.auth-sub { font-size: 12.5px; color: var(--text2); text-align: center; line-height: 1.5; }
+.auth-input { width: 100%; height: 40px; }
+.auth-error { font-size: 12.5px; color: #E24B4A; min-height: 16px; text-align: center; }
+.auth-btn { justify-content: center; height: 40px; }
+.auth-actions { display: flex; gap: 8px; }
+.auth-actions .btn { flex: 1; justify-content: center; height: 40px; }
+
 @media (max-width: 768px) {
   .container { padding: 0 1rem 2.5rem; }
   .home { padding-top: 5vh; gap: 1.75rem; }

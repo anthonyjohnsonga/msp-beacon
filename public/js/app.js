@@ -17,6 +17,7 @@ import { parseSearch, linkMatchesFlag, contentMatchIds, contentMatchQuery, onSea
 import { openModal, closeModal, autoTitle, fetchPageTitle, saveLink, addLinkAnyway } from './modals.js';
 import { backupData, openRestore, handleRestoreFile } from './backup.js';
 import { openTrash, closeTrash, emptyTrash, updateTrashBadge } from './trash.js';
+import { ensureAuth, handleUnauthorized, logout } from './auth.js';
 
 // ============================================================================
 // STATE & GLOBALS
@@ -423,6 +424,7 @@ async function loadLinks() {
       fetch('/api/links'),
       fetch('/api/config').catch(() => null)
     ]);
+    if (linksRes.status === 401) { handleUnauthorized(); return; }
     const data = await linksRes.json();
     links = Array.isArray(data) ? data : [];
     if (cfgRes && cfgRes.ok) applyServerConfig(await cfgRes.json());
@@ -448,6 +450,7 @@ export async function save() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(links)
       });
+      if (res.status === 401) { status.innerHTML = ''; handleUnauthorized(); return; }
       if (!res.ok) throw new Error('Server error ' + res.status);
       status.innerHTML = '<i class="ti ti-circle-check" style="color:var(--g3)"></i> Saved';
       setTimeout(() => status.innerHTML = '', 2000);
@@ -1576,7 +1579,7 @@ Object.assign(window, {
   closeFolderMove, closeImport, closeModal, closeSettings, closeShortcuts, closeStats, closeTagManager, closeTrash,
   closeTheme, collapseAll, confirmBulkMove, cycleDensity, deleteFolder, doImport,
   emptyTrash, esc, exitSelectMode, expandAll, exportLinks, fetchPageTitle, goHome,
-  goManager, handleDrop, handleFile, handleRestoreFile, hideSearchHistory, hideTagSuggest, homeSearchInput, homeShowAll,
+  goManager, handleDrop, handleFile, handleRestoreFile, hideSearchHistory, hideTagSuggest, homeSearchInput, homeShowAll, logout,
   indexAllContent, lgAddSubmit, lgStartRename, linkgroupRemoveItem, onBulkFolderChange, onSearchInput,
   onSortChange, onTagInput, onTagKeydown, openArchive, openFeedItem, openFeedManager,
   openFolderColorPicker, openFolderIconPicker, openFolderManager, openImport, openModal, openRestore,
@@ -1606,7 +1609,9 @@ setupDragListeners();
 window.addEventListener('scroll', hideContextMenu, true);
 window.addEventListener('resize', hideContextMenu);
 setMode(defaultView, false);
-loadLinks();
+// Gate the data load on auth: 'login' keeps the app blocked behind the overlay;
+// 'ok' and 'setup' (open until a password is set) proceed to load.
+ensureAuth().then(state => { if (state !== 'login') loadLinks(); });
 
 // Guard: the window bridge above must run at module load (not be trapped inside
 // a function), or every inline on*= handler is a dead button. Sentinel-check a
