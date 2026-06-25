@@ -68,7 +68,7 @@ function importTargetPath() {
 export function doImport() {
   const target = importTargetPath();
   const et = document.getElementById('impTags').value.split(',').map(t => t.trim()).filter(Boolean);
-  const eu = new Set(links.map(l => l.url.toLowerCase()));
+  const eu = new Set(links.filter(l => !l.deleted).map(l => l.url.toLowerCase()));
   let added = 0, skipped = 0;
   parsedBookmarks.forEach((b, i) => {
     const cb = document.getElementById('imp_' + i);
