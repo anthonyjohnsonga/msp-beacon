@@ -113,7 +113,13 @@ async function writeConfig(cfg) {
 // session cookie once a password has been configured. Public share routes (a
 // future phase) would be registered above the gate to stay exempt.
 // ============================================================================
-app.set('trust proxy', true); // so req.secure reflects an upstream HTTPS proxy
+// NOTE: we deliberately do NOT `app.set('trust proxy', true)`. Trusting all
+// proxies makes req.ip come from the client-controlled X-Forwarded-For header,
+// which lets an attacker rotate it to bypass the login rate-limiter. Using the
+// raw socket address keeps the limiter honest. The Secure-cookie check below
+// reads the x-forwarded-proto header directly, so HTTPS detection still works
+// behind a TLS-terminating proxy. (Behind a reverse proxy all clients share one
+// rate-limit bucket — acceptable: it fails closed, not open.)
 
 const AUTH_FILE = path.join('/data', 'auth.json');
 const COOKIE_NAME = 'beacon_session';
