@@ -15,6 +15,7 @@ import { openStats, closeStats, openStatLink, scanLinksForStats, renderStats, re
 import { setupDragListeners } from './drag.js';
 import { parseSearch, linkMatchesFlag, contentMatchIds, contentMatchQuery, onSearchInput, clearSearch, saveSearchTerm, showSearchHistory, hideSearchHistory } from './search.js';
 import { openModal, closeModal, autoTitle, fetchPageTitle, saveLink, addLinkAnyway } from './modals.js';
+import { backupData, openRestore, handleRestoreFile } from './backup.js';
 
 // ============================================================================
 // STATE & GLOBALS
@@ -1522,40 +1523,7 @@ export function openLink(id, url) {
 // resetStats/toggleStatsNever + its panel state).
 
 
-// ============================================================================
-// BACKUP / RESTORE
-// ============================================================================
-function backupData() {
-  closeSettings();
-  const a = document.createElement('a');
-  a.href = '/api/backup';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-}
-function openRestore() {
-  closeSettings();
-  document.getElementById('restoreInput').click();
-}
-async function handleRestoreFile(input) {
-  const file = input.files[0];
-  if (!file) return;
-  input.value = '';
-  let text, backup;
-  try { text = await file.text(); backup = JSON.parse(text); } catch { showToast('Invalid backup file'); return; }
-  if (!backup.links || !Array.isArray(backup.links)) { showToast('Invalid backup file'); return; }
-  const date = backup.exportedAt ? new Date(backup.exportedAt).toLocaleString() : 'unknown date';
-  if (!confirm(`Restore ${backup.links.length} links from backup dated ${date}?\n\nThis will replace all current links and settings.`)) return;
-  try {
-    const res = await fetch('/api/restore', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: text
-    });
-    if (res.ok) { showToast('Restore successful — reloading…'); setTimeout(() => location.reload(), 1500); }
-    else showToast('Restore failed');
-  } catch { showToast('Restore failed'); }
-}
+// Backup / restore (backupData / openRestore / handleRestoreFile) lives in backup.js.
 // Stats panel (resetStats / renderStats) lives in stats.js.
 
 // Color & icon pickers live in pickers.js (renderColorPicker/
