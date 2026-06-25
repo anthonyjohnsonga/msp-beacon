@@ -176,6 +176,8 @@ services:
     volumes:
       - ./data:/data
       - ./config:/data/config
+    # environment:
+    #   - BEACON_PASSWORD=change-me   # optional; otherwise set a password on first load
     restart: unless-stopped
     deploy:
       resources:
@@ -205,6 +207,20 @@ http://<your-server-ip>:3000
 ```
 
 That's it. Your links are saved to `./data/links.json` in the same folder.
+
+---
+
+## Password protection
+
+On first load, MSP Beacon prompts you to **create a password** that gates the whole app; the
+password hash is stored in `./data/auth.json` (kept out of backups). After that, every device
+must log in. You can change the prompt by setting `BEACON_PASSWORD` in `docker-compose.yml`
+instead — handy for fresh deploys.
+
+> [!NOTE]
+> The login cookie is `HttpOnly` + `SameSite=Strict`. The `Secure` flag is only added when you
+> reach Beacon over HTTPS, so password protection also works over plain HTTP on a trusted
+> network (e.g. LAN or Tailscale).
 
 ---
 

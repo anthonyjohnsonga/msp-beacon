@@ -7,6 +7,10 @@ services:
     volumes:
       - ./data:/data
       - ./config:/data/config
+    # environment:
+    #   # Optional: preset the app password. If unset, you'll be prompted to
+    #   # create one on first load. The password also persists in ./data/auth.json.
+    #   - BEACON_PASSWORD=change-me
     restart: unless-stopped
     deploy:
       resources:
