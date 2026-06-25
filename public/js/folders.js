@@ -95,7 +95,7 @@ export function deleteFolder(key) {
   if (!path || !path.length) return;
   const idx = path.length - 1;
   const parent = path.slice(0, idx);
-  const count = links.filter(l => !l.archived && pathStartsWith(linkPath(l), path)).length;
+  const count = links.filter(l => !l.archived && !l.deleted && pathStartsWith(linkPath(l), path)).length;
   const dest = parent.length ? `"${parent.join(' / ')}"` : 'the top level';
   if (!confirm(`Delete folder "${path[idx]}"? ${count} link${count !== 1 ? 's' : ''} (and any sub-folders) will move up to ${dest}.`)) return;
   // Splice this level out of every descendant link's path (promote up one level).

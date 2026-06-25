@@ -40,6 +40,7 @@
           <button class="settings-item" onclick="closeSettings();openTagManager()"><i class="ti ti-tags"></i> Manage tags</button>
           <button class="settings-item" onclick="closeSettings();openFeedManager()"><i class="ti ti-rss"></i> Manage feeds</button>
           <button class="settings-item" onclick="closeSettings();openArchive()"><i class="ti ti-archive"></i> Archive <span id="archiveBadge" class="filter-badge" style="display:none;margin-left:auto"></span></button>
+          <button class="settings-item" onclick="closeSettings();openTrash()"><i class="ti ti-trash"></i> Trash <span id="trashBadge" class="filter-badge" style="display:none;margin-left:auto"></span></button>
         </div>
         <div class="settings-group">
           <div class="settings-group-label">Tools</div>
@@ -265,6 +266,17 @@
     <div id="archiveContent" style="overflow-y:auto;flex:1;padding:8px 0"></div>
     <div class="modal-footer">
       <button class="btn btn-primary" onclick="closeArchive()">Done</button>
+    </div>
+  </div>
+</div>
+
+<div id="trashBg" class="modal-bg" style="display:none" onclick="if(event.target===this)closeTrash()">
+  <div class="modal" role="dialog" aria-modal="true" style="width:min(480px,92vw);max-height:80vh;overflow:hidden;display:flex;flex-direction:column">
+    <div class="modal-header"><i class="ti ti-trash"></i><h3>Trash</h3></div>
+    <div id="trashContent" style="overflow-y:auto;flex:1;padding:8px 0"></div>
+    <div class="modal-footer">
+      <button id="emptyTrashBtn" class="btn" style="color:#E24B4A;border-color:#b91c1c;margin-right:auto;display:none" onclick="emptyTrash()"><i class="ti ti-trash-x"></i> Empty trash</button>
+      <button class="btn btn-primary" onclick="closeTrash()">Done</button>
     </div>
   </div>
 </div>

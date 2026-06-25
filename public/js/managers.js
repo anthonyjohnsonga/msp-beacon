@@ -37,7 +37,7 @@ function renderFolderManager() {
       const color = getFolderColor(path);
       const icon = depth ? 'ti-corner-down-right' : getFolderIcon(path);
       const iconColor = depth ? 'var(--text2)' : color;
-      const count = links.filter(l => !l.archived && pathStartsWith(linkPath(l), path)).length;
+      const count = links.filter(l => !l.archived && !l.deleted && pathStartsWith(linkPath(l), path)).length;
       html += `<div class="fmgr-row${depth ? ' fmgr-subfolder' : ''}"${depth ? ` style="padding-left:${8 + depth * 16}px"` : ''}>
         <i class="ti ${esc(icon)}" style="color:${esc(iconColor)};font-size:${depth ? '13' : '15'}px;flex-shrink:0"></i>
         <span class="fmgr-name">${esc(name)}</span>
@@ -102,7 +102,7 @@ function renameTag(oldName, newName) {
   save(); render();
 }
 function deleteTag(name) {
-  const count = links.filter(l => !l.archived && (l.tags || []).includes(name)).length;
+  const count = links.filter(l => !l.archived && !l.deleted && (l.tags || []).includes(name)).length;
   if (!confirm(`Delete tag "${name}"? It will be removed from ${count} link${count !== 1 ? 's' : ''}.`)) return;
   links.forEach(l => { if (l.tags) l.tags = l.tags.filter(t => t !== name); });
   if (tagColors[name] !== undefined) {
@@ -126,7 +126,7 @@ function renderTagManager() {
     return;
   }
   content.innerHTML = tags.map(t => {
-    const count = links.filter(l => !l.archived && (l.tags || []).includes(t)).length;
+    const count = links.filter(l => !l.archived && !l.deleted && (l.tags || []).includes(t)).length;
     return `<div class="fmgr-row">
       <i class="ti ti-tag" style="color:${getTagColor(t) || 'var(--g3)'};font-size:14px;flex-shrink:0"></i>
       <span class="fmgr-name">${esc(t)}</span>

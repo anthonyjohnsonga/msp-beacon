@@ -37,7 +37,7 @@ function permanentDeleteLink(id) {
 }
 
 export function updateArchiveBadge() {
-  const count = links.filter(l => l.archived).length;
+  const count = links.filter(l => l.archived && !l.deleted).length;
   const badge = document.getElementById('archiveBadge');
   if (!badge) return;
   badge.textContent = count;
@@ -47,7 +47,7 @@ export function updateArchiveBadge() {
 export function openArchive() { renderArchive(); document.getElementById('archiveBg').style.display = 'flex'; }
 export function closeArchive() { document.getElementById('archiveBg').style.display = 'none'; }
 function renderArchive() {
-  const archived = links.filter(l => l.archived);
+  const archived = links.filter(l => l.archived && !l.deleted);
   const content = document.getElementById('archiveContent');
   if (!archived.length) {
     content.innerHTML = '<p style="text-align:center;color:var(--text2);padding:24px 16px">No archived links.</p>';

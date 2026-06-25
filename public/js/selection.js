@@ -113,15 +113,16 @@ export function bulkDelete() {
   commitPendingMove();
   const n = selectedIds.size;
   if (pendingDelete) { clearTimeout(pendingDelete.timer); save(); }
-  const saved = links.slice();
-  setLinks(links.filter(l => !selectedIds.has(l.id)));
+  const ids = [...selectedIds];
+  const now = Date.now();
+  links.forEach(l => { if (selectedIds.has(l.id)) l.deleted = now; });   // soft-delete to Trash
   selectedIds.clear();
   render(); updateBulkBar();
   setPendingDelete({
-    saved,
+    ids,
     timer: setTimeout(() => { setPendingDelete(null); save(); }, 5000)
   });
-  showUndoToast(`${n} link${n > 1 ? 's' : ''} deleted — Undo?`);
+  showUndoToast(`${n} link${n > 1 ? 's' : ''} moved to trash — Undo?`);
 }
 
 export function bulkAddTag() {

@@ -80,7 +80,7 @@ export function saveLink() {
   const tags = document.getElementById('mTags').value.split(',').map(t => t.trim()).filter(Boolean);
   const desc = document.getElementById('mDesc').value.trim();
   if (!editId) {
-    const dup = links.find(l => !l.archived && l.url.trim().toLowerCase() === url.toLowerCase());
+    const dup = links.find(l => !l.archived && !l.deleted && l.url.trim().toLowerCase() === url.toLowerCase());
     if (dup) {
       const w = document.getElementById('dupWarning');
       document.getElementById('dupWarningMsg').innerHTML = `A link with this URL already exists — <strong>${esc(dup.title)}</strong>`;

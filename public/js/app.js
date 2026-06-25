@@ -16,6 +16,7 @@ import { setupDragListeners } from './drag.js';
 import { parseSearch, linkMatchesFlag, contentMatchIds, contentMatchQuery, onSearchInput, clearSearch, saveSearchTerm, showSearchHistory, hideSearchHistory } from './search.js';
 import { openModal, closeModal, autoTitle, fetchPageTitle, saveLink, addLinkAnyway } from './modals.js';
 import { backupData, openRestore, handleRestoreFile } from './backup.js';
+import { openTrash, closeTrash, emptyTrash, updateTrashBadge } from './trash.js';
 
 // ============================================================================
 // STATE & GLOBALS
@@ -152,7 +153,7 @@ async function indexAllContent() {
     const res = await fetch('/api/content-status');
     if (res.ok) indexed = new Set((await res.json()).indexed || []);
   } catch {}
-  const targets = links.filter(l => !l.archived && isWebUrl(l.url) && !indexed.has(l.id));
+  const targets = links.filter(l => !l.archived && !l.deleted && isWebUrl(l.url) && !indexed.has(l.id));
   if (!targets.length) { showToast('All links already indexed'); return; }
   if (btn) btn.disabled = true;
   let done = 0;
@@ -407,6 +408,15 @@ function applyServerConfig(cfg) {
   }
 }
 
+// Trashed links (l.deleted = delete timestamp) are kept for this long, then
+// purged for good on the next load. Soft-delete safety net beyond the 5s undo.
+const TRASH_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+function purgeTrash() {
+  const cutoff = Date.now() - TRASH_RETENTION_MS;
+  const kept = links.filter(l => !(l.deleted && l.deleted < cutoff));
+  if (kept.length !== links.length) { links = kept; save(); }
+}
+
 async function loadLinks() {
   try {
     const [linksRes, cfgRes] = await Promise.all([
@@ -418,7 +428,9 @@ async function loadLinks() {
     if (cfgRes && cfgRes.ok) applyServerConfig(await cfgRes.json());
     migrateDashboard();
     migrateFolders();
+    purgeTrash();
     render();
+    updateTrashBadge();
   } catch(e) {
     console.error('Failed to load links', e);
     showToast('Failed to load links from server', true);
@@ -470,9 +482,10 @@ function undoAction() {
 function undoDelete() {
   if (!pendingDelete) return;
   clearTimeout(pendingDelete.timer);
-  links = pendingDelete.saved;
+  // Soft-delete sets l.deleted in place; undo just clears the flag on those ids.
+  (pendingDelete.ids || []).forEach(id => { const l = links.find(x => x.id === id); if (l) delete l.deleted; });
   pendingDelete = null;
-  render();
+  render(); updateTrashBadge();
   showToast('Restored');
 }
 
@@ -516,7 +529,7 @@ export function getFolderIcon(path) { return folderIcons[pathKey(asPath(path))] 
 // Segment names directly under parentPath ([] = top level), derived from links.
 export function childFolders(parentPath) {
   const d = parentPath.length, names = new Set();
-  links.filter(l => !l.archived).forEach(l => {
+  links.filter(l => !l.archived && !l.deleted).forEach(l => {
     const p = linkPath(l);
     if (p.length > d && pathStartsWith(p, parentPath)) names.add(p[d]);
   });
@@ -526,7 +539,7 @@ export function allFolders() { return childFolders([]).sort(); }
 // pathKey of every folder node at any depth (each prefix of every link path).
 export function allFolderPaths() {
   const set = new Set();
-  links.filter(l => !l.archived).forEach(l => {
+  links.filter(l => !l.archived && !l.deleted).forEach(l => {
     const p = linkPath(l);
     for (let i = 1; i <= p.length; i++) set.add(pathKey(p.slice(0, i)));
   });
@@ -541,7 +554,7 @@ export function getOrderedFolders(parentPath, names) {
   const fresh = names.filter(f => !known.has(f)).sort();
   return [...order.filter(f => names.includes(f)), ...fresh];
 }
-export function allTags() { return [...new Set(links.filter(l => !l.archived).flatMap(l => l.tags || []))].sort(); }
+export function allTags() { return [...new Set(links.filter(l => !l.archived && !l.deleted).flatMap(l => l.tags || []))].sort(); }
 
 
 // ============================================================================
@@ -743,7 +756,7 @@ function renderWidget(w, data) {
 
 export function renderHome() {
   const c = document.getElementById('content');
-  const active = links.filter(l => !l.archived);
+  const active = links.filter(l => !l.archived && !l.deleted);
   const data = {
     favorites: active.filter(l => l.favorite).slice(0, 8),
     readlater: active.filter(l => l.readLater).slice(0, 8),
@@ -774,6 +787,7 @@ export function renderHome() {
   if (rssFeeds.length && list.some(w => w.type === 'latest' && w.enabled)) loadHomeFeeds();
   loadHomeStatus();
   updateArchiveBadge();
+  updateTrashBadge();
   applyHomeBg();
 }
 
@@ -961,6 +975,7 @@ export function render() {
   const contentActive = parsed.text && contentMatchQuery === parsed.text;
   contentOnlyIds = new Set();
   let fil = links.filter(l => {
+    if (l.deleted) return false;   // trashed links never show in any list
     if (wantArchived) { if (!l.archived) return false; }
     else if (l.archived) return false;
     if (ff && l.folder !== ff) return false;
@@ -990,7 +1005,7 @@ export function render() {
   // status is unknown so is:broken/is:online results may be incomplete. Offer a one-click scan.
   let healthHint = '';
   if (!wantArchived && (parsed.flags.includes('broken') || parsed.flags.includes('online'))) {
-    const webLinks = links.filter(l => !l.archived && isWebUrl(l.url));
+    const webLinks = links.filter(l => !l.archived && !l.deleted && isWebUrl(l.url));
     const unchecked = webLinks.filter(l => linkStatus[l.id] === undefined).length;
     if (unchecked > 0) {
       healthHint = `<div class="health-hint">
@@ -1017,6 +1032,7 @@ export function render() {
   getOrderedFolders([], [...root.children]).forEach(name => { html += renderFolderSection(tree, [name], wrap); });
   c.innerHTML = html;
   updateArchiveBadge();
+  updateTrashBadge();
 }
 
 // Aggregate the folder tree in a single pass over the (filtered) links. Returns a
@@ -1243,14 +1259,15 @@ export function editLink(id) { openModal(id); }
 export function deleteLink(id) {
   commitPendingMove();
   if (pendingDelete) { clearTimeout(pendingDelete.timer); save(); }
-  const saved = links.slice();
-  links = links.filter(l => l.id !== id);
-  render();
+  const l = links.find(x => x.id === id);
+  if (!l) return;
+  l.deleted = Date.now();   // soft-delete: move to Trash, recoverable until purged
+  render(); updateTrashBadge();
   pendingDelete = {
-    saved,
+    ids: [id],
     timer: setTimeout(() => { pendingDelete = null; save(); }, 5000)
   };
-  showUndoToast('Link deleted — Undo?');
+  showUndoToast('Link moved to trash — Undo?');
 }
 
 
@@ -1360,7 +1377,7 @@ document.addEventListener('keydown', e => {
     closeSettings();
     const feedsEl = document.getElementById('feedsBg');
     if (feedsEl && feedsEl.style.display === 'flex') closeFeedManager(); // routes through the homepage refresh
-    ['modalBg','importBg','statsBg','folderMgrBg','folderMoveBg','tagMgrBg','shortcutsBg','themeBg','archiveBg'].forEach(id => {
+    ['modalBg','importBg','statsBg','folderMgrBg','folderMoveBg','tagMgrBg','shortcutsBg','themeBg','archiveBg','trashBg'].forEach(id => {
       const el = document.getElementById(id);
       if (el && el.style.display === 'flex') el.style.display = 'none';
     });
@@ -1542,14 +1559,14 @@ Object.assign(window, {
   addFeed, addLinkAnyway, addLinkGroup, addSectionWidget, applyMode, applyTheme,
   autoTitle, backupData, bulkAddTag, bulkArchive, bulkDelete, checkLinks,
   checkUncheckedLinks, clearSearch, clearSelection, closeArchive, closeFeedManager, closeFolderManager,
-  closeFolderMove, closeImport, closeModal, closeSettings, closeShortcuts, closeStats, closeTagManager,
+  closeFolderMove, closeImport, closeModal, closeSettings, closeShortcuts, closeStats, closeTagManager, closeTrash,
   closeTheme, collapseAll, confirmBulkMove, cycleDensity, deleteFolder, doImport,
-  esc, exitSelectMode, expandAll, exportLinks, fetchPageTitle, goHome,
+  emptyTrash, esc, exitSelectMode, expandAll, exportLinks, fetchPageTitle, goHome,
   goManager, handleDrop, handleFile, handleRestoreFile, hideSearchHistory, hideTagSuggest, homeSearchInput, homeShowAll,
   indexAllContent, lgAddSubmit, lgStartRename, linkgroupRemoveItem, onBulkFolderChange, onSearchInput,
   onSortChange, onTagInput, onTagKeydown, openArchive, openFeedItem, openFeedManager,
   openFolderColorPicker, openFolderIconPicker, openFolderManager, openImport, openModal, openRestore,
-  openShortcuts, openStatLink, openStats, openTagManager, openTheme,
+  openShortcuts, openStatLink, openStats, openTagManager, openTheme, openTrash,
   previewCustomAccent, render, renderStats, resetPickerColor, resetStats, saveLink,
   saveSearchTerm, scanLinksForStats, selectAllVisible, selectFolderIcon, selectPickerColor, setBgBlur,
   setBgDim, setBgPreset, setBgType, setBgUrl, setCustomAccent, showSearchHistory,
