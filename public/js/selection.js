@@ -1,15 +1,15 @@
 // ============================================================================
 // selection.js — multi-select mode + the bulk action bar (move / tag / archive
 // / delete). Owns selectMode + selectedIds (app.js render reads them). Bulk
-// delete/move reassign the links array and the pending undo timers, which live
-// in app.js, so they go through the setLinks/setPendingDelete/setPendingMove
-// mutation layer (call-time circular imports, fine in ESM).
+// delete (soft-delete flag) / move mutate links in place and set the pending
+// undo timers, which live in app.js, so they go through the setPendingDelete/
+// setPendingMove mutation layer (call-time circular imports, fine in ESM).
 // ============================================================================
 
 import { esc, pathKey } from './utils.js';
 import { showToast, showUndoToast } from './toast.js';
 import {
-  links, setLinks, setLinkLocation, pendingDelete, setPendingDelete, setPendingMove,
+  links, setLinkLocation, pendingDelete, setPendingDelete, setPendingMove,
   commitPendingMove, visibleIds, render, save, allFolderPaths, childFolders,
 } from './app.js';
 
