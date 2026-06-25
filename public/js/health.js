@@ -13,7 +13,7 @@ export async function checkLinks() {
   const btn = document.getElementById('checkLinksBtn');
   if (!btn || btn.disabled) return;
   closeSettings();
-  const ids = visibleIds.length ? visibleIds : links.map(l => l.id);
+  const ids = visibleIds.length ? visibleIds : links.filter(l => !l.deleted).map(l => l.id);
   if (!ids.length) { showToast('No links to check'); return; }
   btn.disabled = true;
   btn.innerHTML = '<i class="ti ti-loader" style="animation:spin 1s linear infinite"></i> Checking…';
