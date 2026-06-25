@@ -10,7 +10,7 @@
 import { esc, pathKey } from './utils.js';
 import { showToast } from './toast.js';
 import {
-  links, filterByTag, openLink, editLink, toggleFavorite, toggleReadLater,
+  links, filterByTag, openLink, openAllInFolder, editLink, toggleFavorite, toggleReadLater,
   deleteLink, openFolderFromHome,
 } from './app.js';
 import { archiveLink } from './archive.js';
@@ -65,6 +65,7 @@ export function onContextMenu(e) {
     const f = folderTile.dataset.folder, key = pathKey([f]);
     items = [
       { icon: 'ti-folder-open', label: 'Open folder', action: () => openFolderFromHome(f) },
+      { icon: 'ti-external-link', label: 'Open all links', action: () => openAllInFolder([f]) },
       { icon: 'ti-folder-symlink', label: 'Move to folder…', action: () => openFolderMove(key) },
       { icon: 'ti-palette', label: 'Change color', action: () => openFolderColorPicker(key, anchor) },
       { icon: 'ti-photo', label: 'Change icon', action: () => openFolderIconPicker(key, anchor) },
@@ -75,6 +76,7 @@ export function onContextMenu(e) {
     const key = folderHeader.dataset.path;
     let path; try { path = JSON.parse(key); } catch { path = []; }
     items = [
+      { icon: 'ti-external-link', label: 'Open all links', action: () => openAllInFolder(path) },
       { icon: 'ti-pencil', label: 'Rename', action: () => startFolderRename(folderHeader.querySelector('.folder-rename-btn')) },
       { icon: 'ti-folder-symlink', label: 'Move to folder…', action: () => openFolderMove(key) },
     ];

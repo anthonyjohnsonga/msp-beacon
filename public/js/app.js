@@ -1535,6 +1535,20 @@ export function openLink(id, url) {
   window.open(url, '_blank');
 }
 
+// Open every (non-archived, non-trashed) link in a folder and its sub-folders in
+// new tabs, bumping visits like openLink. Confirms first when there are a lot, so
+// a stray click can't fling open dozens of tabs.
+export function openAllInFolder(path) {
+  const matches = links.filter(l => !l.archived && !l.deleted && pathStartsWith(linkPath(l), path));
+  if (!matches.length) { showToast('No links in this folder'); return; }
+  if (matches.length > 12 && !confirm(`Open all ${matches.length} links in new tabs?`)) return;
+  const now = Date.now();
+  matches.forEach(l => { l.visits = (l.visits || 0) + 1; l.lastVisited = now; });
+  save();
+  matches.forEach(l => window.open(l.url, '_blank'));
+  render();
+}
+
 // The Stats panel lives in stats.js (openStats/closeStats/openStatLink/
 // scanLinksForStats/renderHealthSection/updateHealthSection/renderStats/
 // resetStats/toggleStatsNever + its panel state).
