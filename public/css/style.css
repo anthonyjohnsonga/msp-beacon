@@ -315,3 +315,35 @@ select:focus { outline: none; border-color: var(--g4); }
 .ctx-sep { height: 1px; background: var(--border0); margin: 4px 6px; }
 .content-badge { font-size: 10px; padding: 2px 7px; border-radius: 20px; background: var(--bg3); color: var(--text1); border: 0.5px solid var(--border0); display: inline-flex; align-items: center; gap: 3px; }
 .content-badge i { font-size: 11px; color: var(--g3); }
+
+/* ============================================================================
+   RESPONSIVE — narrow desktop windows, tablets, and phones.
+   Two breakpoints: tablet (<=768px) and phone (<=480px). The layout is mostly
+   fluid already (auto-fill grids, wrapping toolbar, vw-bound modals); these
+   rules tighten spacing, keep fixed/overflowing chrome on-screen, and collapse
+   the header/toolbar buttons to icon-only so they stay on one row.
+   ============================================================================ */
+@media (max-width: 768px) {
+  .container { padding: 0 1rem 2.5rem; }
+  .home { padding-top: 5vh; gap: 1.75rem; }
+  .home-time { font-size: clamp(40px, 13vw, 56px); }
+  /* The bulk action bar is position:fixed + nowrap; pin it to the viewport
+     edges and let it scroll horizontally instead of running off-screen. */
+  .bulk-bar { left: 0.5rem; right: 0.5rem; transform: none; justify-content: flex-start; overflow-x: auto; max-width: none; }
+}
+@media (max-width: 480px) {
+  .container { padding: 0 0.75rem 2rem; }
+  .app-header { gap: 6px; }
+  .app-header span { font-size: 18px; }
+  /* Collapse header + toolbar buttons to icon-only (labels hidden via
+     font-size:0; the icon keeps its own size). Modal-footer buttons keep
+     their labels — they live outside the header/toolbar. */
+  .app-header .btn, .toolbar .btn { font-size: 0; gap: 0; padding: 0 11px; }
+  .app-header .btn > i, .toolbar .btn > i { font-size: 16px; }
+  .toolbar .btn .filter-badge { font-size: 10px; margin-left: 5px; }
+  /* Search box takes the full first row; the icon buttons wrap below it. */
+  .search-wrap { flex-basis: 100%; }
+  .home-time { font-size: clamp(34px, 12vw, 46px); }
+  .settings-menu { max-width: calc(100vw - 1.5rem); }
+  .theme-grid { grid-template-columns: repeat(3, 1fr); }
+}
