@@ -239,6 +239,11 @@ const LOGIN_MAX = 10, LOGIN_WINDOW_MS = 15 * 60 * 1000;
 function rateLimited(req) {
   const ip = req.ip || 'unknown';
   const now = Date.now();
+  // Bound memory: sweep expired buckets when the map grows. Login attempts are
+  // rare, so the occasional O(n) pass is cheap.
+  if (loginAttempts.size > 256) {
+    for (const [k, v] of loginAttempts) if (v.resetAt < now) loginAttempts.delete(k);
+  }
   let rec = loginAttempts.get(ip);
   if (!rec || rec.resetAt < now) { rec = { count: 0, resetAt: now + LOGIN_WINDOW_MS }; loginAttempts.set(ip, rec); }
   rec.count++;
