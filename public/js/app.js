@@ -1466,13 +1466,13 @@ function exportLinks() {
   const xmlEsc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   const childrenOf = parentPath => {
     const d = parentPath.length, names = new Set();
-    links.forEach(l => { const p = linkPath(l); if (p.length > d && pathStartsWith(p, parentPath)) names.add(p[d]); });
+    links.filter(l => !l.deleted).forEach(l => { const p = linkPath(l); if (p.length > d && pathStartsWith(p, parentPath)) names.add(p[d]); });
     return [...names].sort();
   };
   // Emit a nested <DL> tree: a folder's own links, then its sub-folders.
   const emit = (parentPath, indent) => {
     let out = '';
-    links.filter(l => { const p = linkPath(l); return p.length === parentPath.length && pathStartsWith(p, parentPath); })
+    links.filter(l => { if (l.deleted) return false; const p = linkPath(l); return p.length === parentPath.length && pathStartsWith(p, parentPath); })
       .forEach(l => { out += `${indent}<DT><A HREF="${xmlEsc(l.url)}">${xmlEsc(l.title)}</A>\n`; });
     childrenOf(parentPath).forEach(name => {
       out += `${indent}<DT><H3>${xmlEsc(name)}</H3>\n${indent}<DL><p>\n${emit([...parentPath, name], indent + '    ')}${indent}</DL><p>\n`;
