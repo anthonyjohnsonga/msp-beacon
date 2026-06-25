@@ -119,16 +119,22 @@ const AUTH_FILE = path.join('/data', 'auth.json');
 const COOKIE_NAME = 'beacon_session';
 const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 let authState = { secret: null, passHash: null }; // cached in memory; loaded by initAuth()
+let authError = false; // true if auth.json exists but couldn't be read/parsed → fail CLOSED
 
+// Returns {} ONLY for a genuinely-absent file (first run). A file that exists but
+// can't be read or parsed THROWS — so initAuth can fail closed instead of treating
+// corruption as "no password set" (which would open the app and wipe the hash).
 async function readAuth() {
+  let raw;
   try {
-    const raw = await fsp.readFile(AUTH_FILE, 'utf8');
-    const data = JSON.parse(raw);
-    return data && typeof data === 'object' ? data : {};
+    raw = await fsp.readFile(AUTH_FILE, 'utf8');
   } catch (e) {
-    if (e.code !== 'ENOENT') console.error('Failed to read auth file:', e);
-    return {};
+    if (e.code === 'ENOENT') return {};
+    throw e;
   }
+  const data = JSON.parse(raw); // corrupt JSON throws → caller fails closed
+  if (!data || typeof data !== 'object') throw new Error('auth.json is not an object');
+  return data;
 }
 async function writeAuth(data) {
   await fsp.mkdir(path.dirname(AUTH_FILE), { recursive: true });
@@ -136,9 +142,19 @@ async function writeAuth(data) {
   await fsp.writeFile(tmp, JSON.stringify(data, null, 2), 'utf8');
   await fsp.rename(tmp, AUTH_FILE);
 }
-// Load (or first-time create) the HMAC secret, and cache the stored hash.
+// Load (or first-time create) the HMAC secret, and cache the stored hash. If the
+// existing file can't be read/parsed, set authError and DO NOT overwrite it — the
+// gate then fails closed so a transient/corrupt read can't open the app or wipe
+// the password.
 async function initAuth() {
-  const data = await readAuth();
+  let data;
+  try {
+    data = await readAuth();
+  } catch (e) {
+    authError = true;
+    console.error('Auth file unreadable/corrupt — locking the app until it is fixed:', e);
+    return;
+  }
   if (!data.secret) {
     data.secret = crypto.randomBytes(32).toString('hex');
     data.createdAt = data.createdAt || new Date().toISOString();
@@ -258,6 +274,7 @@ app.post('/api/logout', (req, res) => { clearSessionCookie(res); res.json({ ok: 
 // --- The gate: every /api/* route below requires auth once configured -------
 app.use((req, res, next) => {
   if (!req.path.startsWith('/api/')) return next();
+  if (authError) return res.status(503).json({ error: 'Auth unavailable — check the server auth file' });
   if (!authConfigured()) return next();   // open until a password is set
   if (isAuthed(req)) return next();
   res.status(401).json({ error: 'Authentication required' });
@@ -943,6 +960,6 @@ Promise.all([loadContentIndex(), loadAllowedFeeds(), initAuth()]).finally(() => 
     console.log(`MSP Beacon running on http://0.0.0.0:${PORT}`);
     console.log(`Data file: ${DATA_FILE}`);
     console.log(`Config file: ${CONFIG_FILE}`);
-    console.log(`Auth: ${authConfigured() ? 'password set' : 'OPEN — no password set yet'}`);
+    console.log(`Auth: ${authError ? 'LOCKED — auth file unreadable, fix /data/auth.json' : authConfigured() ? 'password set' : 'OPEN — no password set yet'}`);
   });
 });
