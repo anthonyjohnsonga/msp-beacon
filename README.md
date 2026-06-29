@@ -24,6 +24,7 @@ move between machines, or host on a file share.
   - [Import & Export](#import--export)
   - [General](#general)
 - [Getting Started](#getting-started)
+- [Password protection](#password-protection)
 - [Updating](#updating)
 - [Changing the Port](#changing-the-port)
 - [Accessing Over Tailscale](#accessing-over-tailscale)
@@ -232,6 +233,12 @@ docker compose up -d
 ```
 
 Your `data/links.json` is never touched during updates.
+
+> [!IMPORTANT]
+> **As of v1.0.25, MSP Beacon is password-protected.** The first time you load the app
+> after updating, you'll be prompted to **create a password** (or preset one with
+> `BEACON_PASSWORD` before starting), and **every device will then have to log in**. No data
+> migration is required. See [Password protection](#password-protection) for details.
 
 ---
 
