@@ -23,8 +23,8 @@ import { ensureAuth, handleUnauthorized, logout } from './auth.js';
 // `dashboard` binding for saveConfig, and the helpers app.js still drives
 // (render dispatch, leave-home reset, server-config load).
 import {
-  addLinkGroup, addSectionWidget, homeSearchInput, homeShowAll, lgAddSubmit,
-  lgStartRename, linkgroupRemoveItem, openFeedItem, toggleDashboardEdit,
+  addLinkGroup, addNote, addSectionWidget, homeSearchInput, homeShowAll, lgAddSubmit,
+  lgStartRename, linkgroupRemoveItem, noteSave, openFeedItem, toggleDashboardEdit,
   widgetRemove, widgetToggle,
   renderHome, takeHomeFolderFilter, exitHomeMode, dashboardEditMode, dashboard,
   setDashboard, sanitizeDashboard, migrateDashboard, persistDashboard,
@@ -916,14 +916,14 @@ export function openAllInFolder(path) {
 // default. Add any NEW inline-handler function name here.
 // ============================================================================
 Object.assign(window, {
-  addFeed, addLinkAnyway, addLinkGroup, addSectionWidget, applyMode, applyTheme,
+  addFeed, addLinkAnyway, addLinkGroup, addNote, addSectionWidget, applyMode, applyTheme,
   autoTitle, backupData, bulkAddTag, bulkArchive, bulkDelete, checkLinks,
   checkUncheckedLinks, clearSearch, clearSelection, closeArchive, closeFeedManager, closeFolderManager,
   closeFolderMove, closeImport, closeModal, closeSettings, closeShortcuts, closeStats, closeTagManager, closeTrash,
   closeTheme, collapseAll, confirmBulkMove, cycleDensity, deleteFolder, doImport,
   emptyTrash, esc, exitSelectMode, expandAll, exportLinks, fetchPageTitle, goHome,
   goManager, handleDrop, handleFile, handleRestoreFile, hideSearchHistory, hideTagSuggest, homeSearchInput, homeShowAll, logout,
-  indexAllContent, lgAddSubmit, lgStartRename, linkgroupRemoveItem, onBulkFolderChange, onSearchInput,
+  indexAllContent, lgAddSubmit, lgStartRename, linkgroupRemoveItem, noteSave, onBulkFolderChange, onSearchInput,
   onSortChange, onTagInput, onTagKeydown, openArchive, openFeedItem, openFeedManager,
   openFolderColorPicker, openFolderIconPicker, openFolderManager, openImport, openModal, openRestore,
   openShortcuts, openStatLink, openStats, openTagManager, openTheme, openTrash,

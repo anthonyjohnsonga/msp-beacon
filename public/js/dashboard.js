@@ -38,15 +38,18 @@ const SECTION_WIDGETS = ['clock', 'search', 'favorites', 'readlater', 'recent', 
 const WIDGET_LABELS = {
   clock: 'Clock & greeting', search: 'Search box', favorites: 'Favorites',
   readlater: 'Read later', recent: 'Recent', 'most-visited': 'Most visited',
-  'recently-added': 'Recently added', folders: 'Folders', latest: 'Latest (RSS)', linkgroup: 'Link group'
+  'recently-added': 'Recently added', folders: 'Folders', latest: 'Latest (RSS)',
+  linkgroup: 'Link group', notes: 'Note'
 };
 const WIDGET_ICONS = {
   clock: 'ti-clock', search: 'ti-search', favorites: 'ti-star-filled',
   readlater: 'ti-bookmark', recent: 'ti-history', 'most-visited': 'ti-flame',
-  'recently-added': 'ti-clock-plus', folders: 'ti-folders', latest: 'ti-rss', linkgroup: 'ti-apps'
+  'recently-added': 'ti-clock-plus', folders: 'ti-folders', latest: 'ti-rss',
+  linkgroup: 'ti-apps', notes: 'ti-note'
 };
 const DEFAULT_DASHBOARD = SECTION_WIDGETS.map(type => ({ id: type, type, enabled: true }));
 const LINKGROUP_MAX_ITEMS = 50;
+const NOTE_MAX_LEN = 10000;
 export let dashboard = JSON.parse(localStorage.getItem('msp-dashboard') || 'null');
 export let dashboardEditMode = false;
 
@@ -113,6 +116,14 @@ function sanitizeDashboard(arr) {
         .slice(0, LINKGROUP_MAX_ITEMS)
         .map(it => ({ title: it.title.slice(0, 80), url: it.url })) : [];
       out.push({ id, type: 'linkgroup', enabled, title, items });
+    } else if (type === 'notes') {
+      // Same id discipline as linkgroup — the id is inlined into onclick handlers.
+      let id = (typeof w.id === 'string' && /^note-[a-z0-9]+$/i.test(w.id)) ? w.id : '';
+      if (!id || seenId.has(id)) id = 'note-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+      seenId.add(id);
+      const title = (typeof w.title === 'string' ? w.title : 'Note').slice(0, 60);
+      const text = (typeof w.text === 'string' ? w.text : '').slice(0, NOTE_MAX_LEN);
+      out.push({ id, type: 'notes', enabled, title, text });
     }
   }
   return out.length ? out : null;
@@ -254,6 +265,11 @@ function widgetInner(w, data) {
         : '';
       return `<div class="home-section"><div class="home-section-head"><i class="ti ti-apps" style="font-size:14px;color:var(--g3)"></i><span class="home-section-title">${esc(w.title || 'Links')}</span></div>${tiles}${emptyMsg}${addForm}</div>`;
     }
+    case 'notes': {
+      // Always editable (even outside dashboard edit mode) — that's the point of
+      // a sticky note. Text saves on blur; no re-render so focus/caret survive.
+      return `<div class="home-section"><div class="home-section-head"><i class="ti ti-note" style="font-size:14px;color:var(--g3)"></i><span class="home-section-title">${esc(w.title || 'Note')}</span></div><textarea class="home-note" placeholder="Write a note…" maxlength="${NOTE_MAX_LEN}" onblur="noteSave('${w.id}',this)">${esc(w.text || '')}</textarea></div>`;
+    }
     default: return '';
   }
 }
@@ -266,10 +282,11 @@ function sectionShell(title, icon, body) {
 // link-group controls). Widget ids are validated to /^lg-[a-z0-9]+$/i or are a
 // fixed section name, so inlining them in onclick is safe.
 function widgetToolbar(w) {
-  const label = w.type === 'linkgroup' ? (w.title || 'Link group') : (WIDGET_LABELS[w.type] || w.type);
+  const userTitled = w.type === 'linkgroup' || w.type === 'notes';
+  const label = userTitled ? (w.title || WIDGET_LABELS[w.type]) : (WIDGET_LABELS[w.type] || w.type);
   let extra = '';
-  if (w.type === 'linkgroup') {
-    extra = `<button class="icon-btn lg-rename-btn" title="Rename group" onclick="lgStartRename('${w.id}',this)"><i class="ti ti-pencil"></i></button>`
+  if (userTitled) {
+    extra = `<button class="icon-btn lg-rename-btn" title="Rename" onclick="lgStartRename('${w.id}',this)"><i class="ti ti-pencil"></i></button>`
           + `<button class="icon-btn" style="color:#E24B4A" title="Remove widget" onclick="widgetRemove('${w.id}')"><i class="ti ti-trash"></i></button>`;
   }
   return `<div class="widget-toolbar"><span class="widget-drag-handle" draggable="true" title="Drag to reorder"><i class="ti ti-grip-vertical"></i></span><i class="ti ${WIDGET_ICONS[w.type] || 'ti-square'} widget-tb-icon"></i><span class="widget-tb-label">${esc(label)}</span><button class="icon-btn" title="${w.enabled ? 'Hide' : 'Show'}" onclick="widgetToggle('${w.id}')"><i class="ti ${w.enabled ? 'ti-eye' : 'ti-eye-off'}"></i></button>${extra}</div>`;
@@ -304,7 +321,7 @@ export function renderHome() {
     const present = new Set(list.map(w => w.type));
     const chips = SECTION_WIDGETS.filter(t => !present.has(t))
       .map(t => `<button class="btn" onclick="addSectionWidget('${t}')"><i class="ti ${WIDGET_ICONS[t]}"></i> ${esc(WIDGET_LABELS[t])}</button>`).join('');
-    html += `<div class="add-widget-bar"><span class="add-widget-label">Add widget</span>${chips}<button class="btn" onclick="addLinkGroup()"><i class="ti ti-apps"></i> Link group</button></div>`;
+    html += `<div class="add-widget-bar"><span class="add-widget-label">Add widget</span>${chips}<button class="btn" onclick="addLinkGroup()"><i class="ti ti-apps"></i> Link group</button><button class="btn" onclick="addNote()"><i class="ti ti-note"></i> Note</button></div>`;
   }
   html += '</div>';
   c.innerHTML = html;
@@ -366,7 +383,7 @@ function lgStartRename(id, btn) {
   const w = ensureDashboard().find(x => x.id === id);
   const span = toolbar && toolbar.querySelector('.widget-tb-label');
   if (!w || !span) return;
-  const old = w.title || 'Links';
+  const old = w.title || (w.type === 'notes' ? 'Note' : 'Links');
   const input = document.createElement('input');
   input.type = 'text';
   input.className = 'fmgr-input lg-rename-input';
@@ -411,6 +428,24 @@ function linkgroupRemoveItem(id, idx) {
   if (!w || !Array.isArray(w.items)) return;
   w.items.splice(idx, 1);
   persistDashboard(); render();
+}
+
+// Add a blank Note widget and immediately start naming it (mirrors addLinkGroup).
+function addNote() {
+  const id = 'note-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  ensureDashboard().push({ id, type: 'notes', enabled: true, title: 'Note', text: '' });
+  persistDashboard(); render();
+  const btn = document.querySelector(`.home-widget[data-widget-id="${id}"] .lg-rename-btn`);
+  if (btn) lgStartRename(id, btn);
+}
+// Persist a note's text on blur. No render() — keep the textarea's caret/scroll.
+function noteSave(id, el) {
+  const w = ensureDashboard().find(x => x.id === id);
+  if (!w || w.type !== 'notes') return;
+  const text = el.value.slice(0, NOTE_MAX_LEN);
+  if (text === (w.text || '')) return;
+  w.text = text;
+  persistDashboard();
 }
 
 // Fetch every configured feed in parallel, merge + sort by date, show the newest.
@@ -485,7 +520,7 @@ async function loadHomeStatus() {
 // setLastHomeStatusAt are already `export`-prefixed above.)
 // ============================================================================
 export {
-  addLinkGroup, addSectionWidget, homeSearchInput, homeShowAll, lgAddSubmit,
-  lgStartRename, linkgroupRemoveItem, openFeedItem, toggleDashboardEdit,
+  addLinkGroup, addNote, addSectionWidget, homeSearchInput, homeShowAll, lgAddSubmit,
+  lgStartRename, linkgroupRemoveItem, noteSave, openFeedItem, toggleDashboardEdit,
   widgetRemove, widgetToggle, sanitizeDashboard, migrateDashboard,
 };

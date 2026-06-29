@@ -304,6 +304,9 @@ select:focus { outline: none; border-color: var(--g4); }
 .lg-add-form input { flex: 1 1 120px; min-width: 0; height: 32px; font-size: 13px; }
 .lg-add-form .btn { height: 32px; font-size: 12px; flex-shrink: 0; }
 .widget-toolbar .lg-rename-input { height: 24px; font-size: 12px; margin-right: auto; max-width: 240px; }
+.home-note { width: 100%; min-height: 90px; resize: vertical; padding: 10px 12px; font-family: inherit; font-size: 13px; line-height: 1.5; color: var(--text0); background: var(--bg1); border: 1px solid var(--g5); border-radius: 10px; box-sizing: border-box; }
+.home-note:focus { outline: none; border-color: var(--g4); }
+.home-note::placeholder { color: var(--text2); }
 .ctx-menu { position: fixed; z-index: 400; background: var(--bg1); border: 1px solid var(--g5); border-radius: 10px; padding: 4px; min-width: 172px; box-shadow: 0 8px 24px rgba(0,0,0,.4); display: none; flex-direction: column; }
 .ctx-menu.open { display: flex; }
 .ctx-item { display: flex; align-items: center; gap: 9px; padding: 8px 12px; border-radius: 7px; font-size: 13px; color: var(--text0); cursor: pointer; background: none; border: none; font-family: inherit; width: 100%; text-align: left; white-space: nowrap; }
