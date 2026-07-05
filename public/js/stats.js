@@ -39,11 +39,13 @@ export async function scanLinksForStats() {
     for (let i = 0; i < ids.length; i += CHUNK) {
       const chunk = ids.slice(i, i + CHUNK);
       const res = await fetch('/api/check-links?ids=' + chunk.map(encodeURIComponent).join(','));
-      if (res.ok) Object.assign(linkStatus, await res.json());
+      // Stamp per merged chunk (not once after the loop) so a mid-scan failure
+      // still records that the chunks it DID merge refreshed the statuses; a
+      // scan that dies before merging anything leaves the stamp untouched.
+      if (res.ok) { Object.assign(linkStatus, await res.json()); setLastHomeStatusAt(Date.now()); }
       statsScanDone = Math.min(i + CHUNK, ids.length);
       if (statsOpen()) updateHealthSection();
     }
-    setLastHomeStatusAt(Date.now());
   } catch { showToast('Link check failed', true); }
   finally {
     statsScanning = false;
