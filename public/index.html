@@ -29,7 +29,7 @@
       <div class="settings-menu" id="settingsMenu">
         <div class="settings-group">
           <div class="settings-group-label">View</div>
-          <button class="settings-item" id="defaultViewItem" onclick="toggleDefaultView()"><i class="ti ti-home"></i> Start on <span id="defaultViewLabel" style="margin-left:auto;color:var(--g2);font-size:12px"></span></button>
+          <button class="settings-item" id="defaultViewItem" onclick="toggleDefaultView()"><i class="ti ti-home"></i> Start on <span id="defaultViewLabel" style="margin-left:auto;color:var(--accent-text);font-size:12px"></span></button>
           <button class="settings-item" onclick="toggleDashboardEdit()"><i class="ti ti-layout-dashboard"></i> Edit dashboard</button>
           <button class="settings-item" onclick="closeSettings();collapseAll()"><i class="ti ti-chevrons-up"></i> Collapse all</button>
           <button class="settings-item" onclick="closeSettings();expandAll()"><i class="ti ti-chevrons-down"></i> Expand all</button>
@@ -154,7 +154,7 @@
     <input type="file" id="fileIn" accept=".html,.htm" style="display:none" onchange="handleFile(this.files[0])">
     <div id="importPreviewWrap" style="display:none;flex-direction:column;gap:8px">
       <div class="import-actions">
-        <span id="importCount" style="font-weight:500;color:var(--g2)"></span>&nbsp;
+        <span id="importCount" style="font-weight:500;color:var(--accent-text)"></span>&nbsp;
         <a onclick="toggleAll(true)">Select all</a> · <a onclick="toggleAll(false)">Deselect all</a>
       </div>
       <div id="importPreview" class="import-preview"></div>
@@ -315,7 +315,7 @@
 <div class="bulk-bar hidden" id="bulkBar">
   <span class="bulk-count" id="bulkCount">0 selected</span>
   <div class="bulk-divider"></div>
-  <a style="font-size:13px;color:var(--g3);cursor:pointer;text-decoration:none" onclick="selectAllVisible()">All</a>
+  <a style="font-size:13px;color:var(--accent-label);cursor:pointer;text-decoration:none" onclick="selectAllVisible()">All</a>
   <a style="font-size:13px;color:var(--text1);cursor:pointer;text-decoration:none" onclick="clearSelection()">None</a>
   <div class="bulk-divider"></div>
   <select id="bulkMoveFolder" onchange="onBulkFolderChange(this)" style="height:32px;font-size:13px"><option value="">Move to folder…</option></select>

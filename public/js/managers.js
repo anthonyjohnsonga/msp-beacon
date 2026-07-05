@@ -129,7 +129,7 @@ function renderTagManager() {
   content.innerHTML = tags.map(t => {
     const count = links.filter(l => !l.archived && !l.deleted && (l.tags || []).includes(t)).length;
     return `<div class="fmgr-row">
-      <i class="ti ti-tag" style="color:${getTagColor(t) || 'var(--g3)'};font-size:14px;flex-shrink:0"></i>
+      <i class="ti ti-tag" style="color:${getTagColor(t) || 'var(--accent-icon)'};font-size:14px;flex-shrink:0"></i>
       <span class="fmgr-name">${esc(t)}</span>
       <span class="fmgr-count">${count}</span>
       <div class="fmgr-actions">
@@ -208,7 +208,7 @@ function renderFeedManager() {
     return;
   }
   content.innerHTML = rssFeeds.map(f => `<div class="fmgr-row">
-      <i class="ti ti-rss" style="color:var(--g3);font-size:14px;flex-shrink:0"></i>
+      <i class="ti ti-rss" style="color:var(--accent-icon);font-size:14px;flex-shrink:0"></i>
       <span class="fmgr-name" title="${esc(f.url)}">${esc(f.name || getDomain(f.url))}</span>
       <div class="fmgr-actions">
         <button class="icon-btn" style="color:#E24B4A" title="Remove" data-feed="${esc(f.url)}"><i class="ti ti-trash"></i></button>

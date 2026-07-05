@@ -433,7 +433,7 @@ export async function save() {
       }
       if (!res.ok) throw new Error('Server error ' + res.status);
       linksVersion = res.headers.get('X-Links-Version') || linksVersion;
-      status.innerHTML = '<i class="ti ti-circle-check" style="color:var(--g3)"></i> Saved';
+      status.innerHTML = '<i class="ti ti-circle-check" style="color:var(--accent-icon)"></i> Saved';
       setTimeout(() => status.innerHTML = '', 2000);
     } catch(e) {
       status.innerHTML = '<i class="ti ti-alert-circle" style="color:#E24B4A"></i> Save failed';
@@ -598,7 +598,7 @@ function onTagInput() {
   if (!tagSuggestMatches.length) return hideTagSuggest();
   tagSuggestIndex = -1;
   box.innerHTML = tagSuggestMatches.map((t, i) =>
-    `<div class="tag-suggest-item" data-i="${i}"><i class="ti ti-tag" style="color:${getTagColor(t) || 'var(--g3)'}"></i>${esc(t)}</div>`
+    `<div class="tag-suggest-item" data-i="${i}"><i class="ti ti-tag" style="color:${getTagColor(t) || 'var(--accent-icon)'}"></i>${esc(t)}</div>`
   ).join('');
   box.querySelectorAll('.tag-suggest-item').forEach(el =>
     el.addEventListener('mousedown', e => { e.preventDefault(); pickTagSuggest(+el.dataset.i); })
@@ -652,7 +652,7 @@ function copyUrl(url, btn) {
   navigator.clipboard.writeText(url).then(() => {
     const icon = btn.querySelector('i');
     icon.className = 'ti ti-check';
-    btn.style.color = 'var(--g3)';
+    btn.style.color = 'var(--accent-icon)';
     setTimeout(() => { icon.className = 'ti ti-copy'; btn.style.color = ''; }, 1500);
   });
 }

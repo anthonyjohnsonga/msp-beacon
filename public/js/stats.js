@@ -79,10 +79,10 @@ function renderHealthSection() {
             <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">${esc(l.title)}</span>
             <span class="stat-row-sub">${linkStatus[l.id] === 'timeout' ? 'Timed out' : 'Broken'}</span>
           </div>`).join('')}</div>`
-      : `<div style="font-size:13px;color:var(--g3);margin-top:4px">All checked links are online.</div>`;
+      : `<div style="font-size:13px;color:var(--accent-label);margin-top:4px">All checked links are online.</div>`;
     healthBody = `
       <div class="stat-summary" style="grid-template-columns:1fr 1fr 1fr">
-        <div class="stat-summary-card"><div class="stat-summary-value" style="color:var(--g2)">${onlineCount}</div><div class="stat-summary-label">Online</div></div>
+        <div class="stat-summary-card"><div class="stat-summary-value" style="color:var(--accent-text)">${onlineCount}</div><div class="stat-summary-label">Online</div></div>
         <div class="stat-summary-card"><div class="stat-summary-value" style="color:#E24B4A">${downLinks.length}</div><div class="stat-summary-label">Issues</div></div>
         <div class="stat-summary-card"><div class="stat-summary-value" style="color:var(--text2)">${uncheckedCount}</div><div class="stat-summary-label">Unchecked</div></div>
       </div>

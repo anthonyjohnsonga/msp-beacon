@@ -164,7 +164,7 @@ function homeFolderTileHtml(f, draggable = true) {
 function homeSection(title, icon, tilesHtml, count, key) {
   if (!count) return '';
   const secAttr = key === 'favorites' ? ' data-home-section="favorites"' : '';
-  return `<div class="home-section"><div class="home-section-head"><i class="ti ${icon}" style="font-size:14px;color:var(--g3)"></i><span class="home-section-title">${title}</span><button class="home-section-all" onclick="homeShowAll('${key}')">show all <i class="ti ti-arrow-right"></i></button></div><div class="home-tiles"${secAttr}>${tilesHtml}</div></div>`;
+  return `<div class="home-section"><div class="home-section-head"><i class="ti ${icon}" style="font-size:14px;color:var(--accent-icon)"></i><span class="home-section-title">${title}</span><button class="home-section-all" onclick="homeShowAll('${key}')">show all <i class="ti ti-arrow-right"></i></button></div><div class="home-tiles"${secAttr}>${tilesHtml}</div></div>`;
 }
 function homeShowAll(key) {
   if (key === 'most-visited') { ui.sort = 'most-visited'; localStorage.setItem('msp-sort', ui.sort); }
@@ -250,7 +250,7 @@ function widgetInner(w, data) {
       // preview — never the live #homeFeed container, which would spin forever
       // since loadHomeFeeds() only runs for an enabled latest widget.
       if (!w.enabled) return sectionShell('Latest', 'ti-rss', '<div class="home-widget-empty">Latest headlines</div>');
-      return `<div class="home-section"><div class="home-section-head"><i class="ti ti-rss" style="font-size:14px;color:var(--g3)"></i><span class="home-section-title">Latest</span><button class="home-section-all" onclick="closeSettings();openFeedManager()">manage <i class="ti ti-settings"></i></button></div><div class="home-feed" id="homeFeed"><div class="home-feed-msg"><i class="ti ti-loader" style="animation:spin 1s linear infinite"></i> Loading feeds…</div></div></div>`;
+      return `<div class="home-section"><div class="home-section-head"><i class="ti ti-rss" style="font-size:14px;color:var(--accent-icon)"></i><span class="home-section-title">Latest</span><button class="home-section-all" onclick="closeSettings();openFeedManager()">manage <i class="ti ti-settings"></i></button></div><div class="home-feed" id="homeFeed"><div class="home-feed-msg"><i class="ti ti-loader" style="animation:spin 1s linear infinite"></i> Loading feeds…</div></div></div>`;
     case 'linkgroup': {
       const items = w.items || [];
       if (!items.length && !edit) return '';
@@ -263,19 +263,19 @@ function widgetInner(w, data) {
           + `<button class="btn" onclick="lgAddSubmit('${w.id}',this)"><i class="ti ti-plus"></i> Add</button>`
           + `</div>`
         : '';
-      return `<div class="home-section"><div class="home-section-head"><i class="ti ti-apps" style="font-size:14px;color:var(--g3)"></i><span class="home-section-title">${esc(w.title || 'Links')}</span></div>${tiles}${emptyMsg}${addForm}</div>`;
+      return `<div class="home-section"><div class="home-section-head"><i class="ti ti-apps" style="font-size:14px;color:var(--accent-icon)"></i><span class="home-section-title">${esc(w.title || 'Links')}</span></div>${tiles}${emptyMsg}${addForm}</div>`;
     }
     case 'notes': {
       // Always editable (even outside dashboard edit mode) — that's the point of
       // a sticky note. Text saves on blur; no re-render so focus/caret survive.
-      return `<div class="home-section"><div class="home-section-head"><i class="ti ti-note" style="font-size:14px;color:var(--g3)"></i><span class="home-section-title">${esc(w.title || 'Note')}</span></div><textarea class="home-note" placeholder="Write a note…" maxlength="${NOTE_MAX_LEN}" onblur="noteSave('${w.id}',this)">${esc(w.text || '')}</textarea></div>`;
+      return `<div class="home-section"><div class="home-section-head"><i class="ti ti-note" style="font-size:14px;color:var(--accent-icon)"></i><span class="home-section-title">${esc(w.title || 'Note')}</span></div><textarea class="home-note" placeholder="Write a note…" maxlength="${NOTE_MAX_LEN}" onblur="noteSave('${w.id}',this)">${esc(w.text || '')}</textarea></div>`;
     }
     default: return '';
   }
 }
 // A section header + body with no tiles (used for empty widgets in edit mode).
 function sectionShell(title, icon, body) {
-  return `<div class="home-section"><div class="home-section-head"><i class="ti ${icon}" style="font-size:14px;color:var(--g3)"></i><span class="home-section-title">${title}</span></div>${body}</div>`;
+  return `<div class="home-section"><div class="home-section-head"><i class="ti ${icon}" style="font-size:14px;color:var(--accent-icon)"></i><span class="home-section-title">${title}</span></div>${body}</div>`;
 }
 
 // Edit-mode toolbar shown above each widget (drag handle, label, show/hide, and
