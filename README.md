@@ -122,32 +122,35 @@ move between machines, or host on a file share.
 ### Stats & Health
 
 <details>
-<summary>Show 4 features</summary>
+<summary>Show 5 features</summary>
 
 - **Visit counter** — tracks how many times each link has been opened
 - **Last visited timestamp** — shows "2h ago", "3d ago" etc. on each card
 - **Stats report** — Settings → Stats shows total links, total visits, links per folder, top 10 most visited, and never-visited links
-- **Link health check** — Settings → Check links runs HEAD requests against all visible links and badges broken ones
+- **Automatic link health checks** — the server re-checks all links in the background every 6 hours (configurable with `HEALTH_CHECK_HOURS`; `0` disables), so status dots, `is:broken` search, and the Stats health section are populated as soon as the app loads; results survive restarts
+- **Manual health check** — Settings → Check links runs HEAD requests against all visible links on demand and badges broken ones
 
 </details>
 
 ### Import & Export
 
 <details>
-<summary>Show 3 features</summary>
+<summary>Show 4 features</summary>
 
 - **Import bookmarks** — drop a browser-exported HTML file to import from Chrome, Edge, or Firefox, preserving the nested folder structure; preview and select before importing
 - **Export bookmarks** — export all links as a browser-compatible HTML bookmark file with folders nested to match your library
 - **Full backup & restore** — export everything (all links plus your settings) to a single JSON file, and restore it later in one step
+- **Automatic backups** — the server snapshots your links and settings to `./data/backups` once a day (configurable with `BACKUP_HOURS`; `0` disables), rotating old copies automatically and skipping runs when nothing changed; any backup can be restored via Settings → Restore
 
 </details>
 
 ### General
 
 <details>
-<summary>Show 4 features</summary>
+<summary>Show 5 features</summary>
 
 - **Auto-save** — changes save automatically with a debounced write queue and atomic file writes
+- **Safe multi-device editing** — every save carries a version stamp; if another device saved in between, the stale write is rejected and that client reloads the latest data instead of silently overwriting it
 - **Favicon display** — fetches and caches each site's favicon locally (no third-party calls; works for internal/homelab hosts)
 - **Persistent state** — collapsed folders, folder order, theme, accent, mode, view, density, and sort are saved to `localStorage` and synced via `config.json`
 - **Self-hosted & portable** — all data lives in a single `links.json` file; easy to back up or move
@@ -179,6 +182,8 @@ services:
       - ./config:/data/config
     # environment:
     #   - BEACON_PASSWORD=change-me   # optional; otherwise set a password on first load
+    #   - HEALTH_CHECK_HOURS=6        # hours between automatic link health sweeps (0 disables)
+    #   - BACKUP_HOURS=24             # hours between automatic backups to ./data/backups (0 disables)
     restart: unless-stopped
     deploy:
       resources:
@@ -270,6 +275,11 @@ Find your Tailscale IP in the Tailscale app or by running `tailscale ip` in a te
 ## Backing Up
 
 Just copy `data/links.json` — that's everything.
+
+MSP Beacon also backs itself up automatically: once a day (configurable with `BACKUP_HOURS`)
+the server writes a snapshot of your links and settings to `data/backups/`, keeping the two
+newest copies. Any of those files can be restored in-app via Settings → Restore, or grabbed
+straight off the disk.
 
 ---
 
