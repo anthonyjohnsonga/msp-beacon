@@ -111,8 +111,8 @@
     <div class="field"><label>Folder</label>
       <select id="mFolder" style="width:100%"></select>
     </div>
-    <div class="field"><label>New folder path <span style="font-size:10px;color:var(--text2);text-transform:none;letter-spacing:0">(optional — use / to nest, e.g. Work / Clients)</span></label>
-      <input type="text" id="mNewFolder" placeholder="New folder path…" autocomplete="off">
+    <div class="field"><label>New folder <span style="font-size:10px;color:var(--text2);text-transform:none;letter-spacing:0">(optional — created inside the folder selected above; use / for deeper nesting)</span></label>
+      <input type="text" id="mNewFolder" placeholder="New folder…" autocomplete="off">
     </div>
     <div class="field"><label>Tags (comma separated)</label>
       <div style="position:relative">
@@ -151,7 +151,7 @@
       <div class="field"><label>Put all imports in folder (optional)</label>
         <div style="display:flex;gap:8px">
           <select id="impFolder" style="flex:1"><option value="">No folder</option></select>
-          <input type="text" id="impNewFolder" placeholder="New folder…" style="flex:1">
+          <input type="text" id="impNewFolder" placeholder="New folder (inside selection)…" style="flex:1">
         </div>
       </div>
       <div class="field"><label>Add tags to all imports (optional)</label>

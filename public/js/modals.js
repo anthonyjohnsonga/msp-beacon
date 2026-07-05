@@ -23,8 +23,8 @@ export function openModal(id) {
   document.getElementById('mDesc').value = l ? l.desc : '';
   document.getElementById('mTags').value = l ? (l.tags || []).join(', ') : '';
   document.getElementById('mNewFolder').value = '';
-  // Folder dropdown lists every existing folder path (any depth); a new nested
-  // path can be typed in mNewFolder using "/" separators.
+  // Folder dropdown lists every existing folder path (any depth); a new folder
+  // typed in mNewFolder is created under the selected one ("/" adds levels).
   const mf = document.getElementById('mFolder');
   const cur = l ? pathKey(linkPath(l)) : '';
   const opts = ['<option value="">No folder</option>'];
@@ -60,14 +60,19 @@ export async function fetchPageTitle() {
   wrap.classList.remove('fetching');
 }
 
-// The link's folder path from the modal: a typed "A / B" new path wins, else the
-// selected existing folder (pathKey), else [] (no folder).
+// The link's folder path from the modal: the selected existing folder (if any)
+// plus any typed new segments nested under it ("A / B" = two new levels). No
+// selection roots the typed path at the top level; nothing typed keeps the
+// selection as-is; neither = [] (no folder).
 function modalFolderPath() {
-  const np = document.getElementById('mNewFolder').value.trim();
-  if (np) return np.split('/').map(s => s.trim()).filter(Boolean).slice(0, MAX_FOLDER_DEPTH);
+  let base = [];
   const sel = document.getElementById('mFolder').value;
-  if (!sel) return [];
-  try { return JSON.parse(sel); } catch { return []; }
+  if (sel) { try { const p = JSON.parse(sel); if (Array.isArray(p)) base = p; } catch {} }
+  const np = document.getElementById('mNewFolder').value.trim();
+  if (!np) return base;
+  const full = [...base, ...np.split('/').map(s => s.trim()).filter(Boolean)];
+  if (full.length > MAX_FOLDER_DEPTH) showToast(`Folders are capped at ${MAX_FOLDER_DEPTH} levels — deeper levels were dropped`, true);
+  return full.slice(0, MAX_FOLDER_DEPTH);
 }
 
 export function saveLink() {

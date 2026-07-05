@@ -56,14 +56,16 @@ function showPreview() {
     </div>`).join('');
 }
 export function toggleAll(v) { parsedBookmarks.forEach((_, i) => { const c = document.getElementById('imp_' + i); if (c) c.checked = v; }); }
-// Import destination: a typed "A / B" new path wins, else the selected existing
-// folder (pathKey), else [] — imported folders nest UNDER this target.
+// Import destination: the selected existing folder (if any) plus any typed new
+// segments nested under it ("A / B" = two new levels) — imported folders nest
+// UNDER this target. doImport() caps the combined depth.
 function importTargetPath() {
-  const np = document.getElementById('impNewFolder').value.trim();
-  if (np) return np.split('/').map(s => s.trim()).filter(Boolean);
+  let base = [];
   const sel = document.getElementById('impFolder').value;
-  if (!sel) return [];
-  try { return JSON.parse(sel); } catch { return []; }
+  if (sel) { try { const p = JSON.parse(sel); if (Array.isArray(p)) base = p; } catch {} }
+  const np = document.getElementById('impNewFolder').value.trim();
+  if (!np) return base;
+  return [...base, ...np.split('/').map(s => s.trim()).filter(Boolean)];
 }
 export function doImport() {
   const target = importTargetPath();
