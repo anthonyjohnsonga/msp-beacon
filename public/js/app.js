@@ -29,11 +29,13 @@ import {
   widgetRemove, widgetToggle,
   renderHome, takeHomeFolderFilter, exitHomeMode, dashboardEditMode, dashboard,
   setDashboard, sanitizeDashboard, migrateDashboard, persistDashboard,
+  setLastHomeStatusAt,
 } from './dashboard.js';
 // Re-export the moved names that other modules still import from './app.js', so
 // those modules don't change (app.js stays the facade).
 export { renderHome, dashboardEditMode, persistDashboard };
-export { setLastHomeStatusAt, openFolderFromHome, reorderFavorite, ensureDashboard } from './dashboard.js';
+export { setLastHomeStatusAt };
+export { openFolderFromHome, reorderFavorite, ensureDashboard } from './dashboard.js';
 // Manager grid/list/folder renderer (extracted to render.js). render + toggleFavorites
 // are inline-handler/bridge names and render is used throughout app.js; re-export
 // render + visibleIds so other modules' './app.js' imports are unchanged.
@@ -355,14 +357,21 @@ function purgeTrash() {
 
 async function loadLinks() {
   try {
-    const [linksRes, cfgRes] = await Promise.all([
+    const [linksRes, cfgRes, healthRes] = await Promise.all([
       fetch('/api/links'),
-      fetch('/api/config').catch(() => null)
+      fetch('/api/config').catch(() => null),
+      fetch('/api/link-health').catch(() => null)
     ]);
     if (linksRes.status === 401) { handleUnauthorized(); return; }
     linksVersion = linksRes.headers.get('X-Links-Version');
     const data = await linksRes.json();
     links = Array.isArray(data) ? data : [];
+    // Seed statuses from the server's automatic health sweep, so dots /
+    // is:broken / Stats are fresh without pressing "Check links".
+    if (healthRes && healthRes.ok) {
+      const h = await healthRes.json().catch(() => null);
+      if (h && h.statuses) { Object.assign(linkStatus, h.statuses); setLastHomeStatusAt(h.checkedAt || 0); }
+    }
     if (cfgRes && cfgRes.ok) applyServerConfig(await cfgRes.json());
     migrateDashboard();
     migrateFolders();

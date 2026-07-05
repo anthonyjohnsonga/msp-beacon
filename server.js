@@ -676,6 +676,121 @@ app.delete('/api/wallpaper', async (req, res) => {
   res.json({ ok: true });
 });
 
+// Reachability-check the given links (HEAD, GET fallback on 405), 10 at a time.
+// Returns { id: 'ok' | 'broken' | 'timeout' }. Used by the on-demand
+// /api/check-links endpoint and the automatic background sweep.
+async function checkLinkTargets(targets) {
+  async function checkOne(link) {
+    const parsed = parseHttpUrl(link.url);
+    if (!parsed) return [link.id, 'broken'];
+    const mod = parsed.protocol === 'https:' ? https : http;
+    const options = {
+      hostname: parsed.hostname,
+      port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
+      path: parsed.pathname + parsed.search,
+      method: 'HEAD',
+      timeout: 5000,
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; MSP-Beacon/1.0)' }
+    };
+
+    async function attempt(method) {
+      return new Promise((resolve) => {
+        const opts = { ...options, method };
+        const req = mod.request(opts, (incoming) => {
+          incoming.resume();
+          const sc = incoming.statusCode;
+          if (method === 'HEAD' && sc === 405) {
+            resolve('retry-get');
+          } else if (sc >= 200 && sc < 400) {
+            resolve('ok');
+          } else {
+            resolve('broken');
+          }
+        });
+        req.on('timeout', () => { req.destroy(); resolve('timeout'); });
+        req.on('error', () => resolve('broken'));
+        req.end();
+      });
+    }
+
+    const result = await attempt('HEAD');
+    if (result === 'retry-get') return [link.id, await attempt('GET')];
+    return [link.id, result];
+  }
+
+  const results = {};
+  const CONCURRENCY = 10;
+  for (let i = 0; i < targets.length; i += CONCURRENCY) {
+    const batch = targets.slice(i, i + CONCURRENCY);
+    const batchResults = await Promise.all(batch.map(checkOne));
+    batchResults.forEach(([id, status]) => { results[id] = status; });
+  }
+  return results;
+}
+
+// --- Automatic link health checks --------------------------------------------
+// A background sweep re-checks every active link every HEALTH_CHECK_HOURS hours
+// (default 6, 0 disables) so status dots / is:broken / Stats are fresh without
+// anyone pressing "Check links". Results live in an in-memory cache served by
+// GET /api/link-health and persist to /data/health.json across restarts.
+// Manual /api/check-links results merge into the same cache.
+const HEALTH_FILE = path.join('/data', 'health.json');
+const HEALTH_CHECK_HOURS = (() => {
+  const v = parseFloat(process.env.HEALTH_CHECK_HOURS);
+  return Number.isFinite(v) && v >= 0 ? v : 6;
+})();
+let healthCache = { statuses: {}, checkedAt: 0 };
+let healthWriteQueue = Promise.resolve();
+let healthSweepRunning = false;
+
+async function loadHealthCache() {
+  try {
+    const data = JSON.parse(await fsp.readFile(HEALTH_FILE, 'utf8'));
+    if (data && data.statuses && typeof data.statuses === 'object') {
+      healthCache = { statuses: data.statuses, checkedAt: data.checkedAt || 0 };
+      console.log(`Health cache loaded: ${Object.keys(healthCache.statuses).length} status(es)`);
+    }
+  } catch (e) {
+    if (e.code !== 'ENOENT') console.error('Failed to read health cache:', e);
+  }
+}
+function persistHealthCache() {
+  healthWriteQueue = healthWriteQueue.then(async () => {
+    await fsp.mkdir(path.dirname(HEALTH_FILE), { recursive: true });
+    const tmp = path.join(path.dirname(HEALTH_FILE), `.health-${Date.now()}.json`);
+    await fsp.writeFile(tmp, JSON.stringify(healthCache), 'utf8');
+    await fsp.rename(tmp, HEALTH_FILE);
+  }).catch(e => console.error('Failed to write health cache:', e));
+}
+function mergeHealthResults(results) {
+  Object.assign(healthCache.statuses, results);
+  healthCache.checkedAt = Date.now();
+  persistHealthCache();
+}
+async function sweepLinkHealth() {
+  if (healthSweepRunning) return;
+  healthSweepRunning = true;
+  try {
+    const all = await readLinks();
+    const targets = all.filter(l => !l.archived && !l.deleted && /^https?:\/\//i.test(l.url));
+    // Drop statuses for links that no longer exist (or got archived/trashed).
+    const valid = new Set(targets.map(l => l.id));
+    for (const id of Object.keys(healthCache.statuses)) if (!valid.has(id)) delete healthCache.statuses[id];
+    const results = await checkLinkTargets(targets);
+    mergeHealthResults(results);
+    const issues = Object.values(results).filter(s => s !== 'ok').length;
+    console.log(`Health sweep: ${targets.length} link(s) checked, ${issues} with issues`);
+  } catch (e) {
+    console.error('Health sweep failed:', e);
+  } finally {
+    healthSweepRunning = false;
+  }
+}
+
+app.get('/api/link-health', (req, res) => {
+  res.json(healthCache);
+});
+
 app.get('/api/check-links', async (req, res) => {
   try {
     const all = await readLinks();
@@ -684,53 +799,8 @@ app.get('/api/check-links', async (req, res) => {
       const ids = new Set(req.query.ids.split(',').map(s => s.trim()).filter(Boolean));
       targets = all.filter(l => ids.has(l.id));
     }
-
-    async function checkOne(link) {
-      const parsed = parseHttpUrl(link.url);
-      if (!parsed) return [link.id, 'broken'];
-      const mod = parsed.protocol === 'https:' ? https : http;
-      const options = {
-        hostname: parsed.hostname,
-        port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
-        path: parsed.pathname + parsed.search,
-        method: 'HEAD',
-        timeout: 5000,
-        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; MSP-Beacon/1.0)' }
-      };
-
-      async function attempt(method) {
-        return new Promise((resolve) => {
-          const opts = { ...options, method };
-          const req = mod.request(opts, (incoming) => {
-            incoming.resume();
-            const sc = incoming.statusCode;
-            if (method === 'HEAD' && sc === 405) {
-              resolve('retry-get');
-            } else if (sc >= 200 && sc < 400) {
-              resolve('ok');
-            } else {
-              resolve('broken');
-            }
-          });
-          req.on('timeout', () => { req.destroy(); resolve('timeout'); });
-          req.on('error', () => resolve('broken'));
-          req.end();
-        });
-      }
-
-      const result = await attempt('HEAD');
-      if (result === 'retry-get') return [link.id, await attempt('GET')];
-      return [link.id, result];
-    }
-
-    const results = {};
-    const CONCURRENCY = 10;
-    for (let i = 0; i < targets.length; i += CONCURRENCY) {
-      const batch = targets.slice(i, i + CONCURRENCY);
-      const batchResults = await Promise.all(batch.map(checkOne));
-      batchResults.forEach(([id, status]) => { results[id] = status; });
-    }
-
+    const results = await checkLinkTargets(targets);
+    mergeHealthResults(results);
     res.json(results);
   } catch (e) {
     console.error('GET /api/check-links error:', e);
@@ -980,11 +1050,19 @@ app.get('/api/content-status', (req, res) => {
 // first request after a restart doesn't hit an empty allowlist (403s on valid
 // feeds) or an empty search index. Both helpers swallow their own errors, so
 // the server still starts if a load fails.
-Promise.all([loadContentIndex(), loadAllowedFeeds(), initAuth()]).finally(() => {
+Promise.all([loadContentIndex(), loadAllowedFeeds(), initAuth(), loadHealthCache()]).finally(() => {
   app.listen(PORT, () => {
     console.log(`MSP Beacon running on http://0.0.0.0:${PORT}`);
     console.log(`Data file: ${DATA_FILE}`);
     console.log(`Config file: ${CONFIG_FILE}`);
     console.log(`Auth: ${authError ? 'LOCKED — auth file unreadable, fix /data/auth.json' : authConfigured() ? 'password set' : 'OPEN — no password set yet'}`);
+    if (HEALTH_CHECK_HOURS > 0) {
+      // First sweep shortly after boot (let the container settle), then steady.
+      setTimeout(sweepLinkHealth, 2 * 60 * 1000);
+      setInterval(sweepLinkHealth, HEALTH_CHECK_HOURS * 60 * 60 * 1000);
+      console.log(`Link health: automatic sweep every ${HEALTH_CHECK_HOURS}h`);
+    } else {
+      console.log('Link health: automatic sweep disabled (HEALTH_CHECK_HOURS=0)');
+    }
   });
 });

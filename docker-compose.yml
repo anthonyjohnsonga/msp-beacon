@@ -11,6 +11,8 @@ services:
     #   # Optional: preset the app password. If unset, you'll be prompted to
     #   # create one on first load. The password also persists in ./data/auth.json.
     #   - BEACON_PASSWORD=change-me
+    #   # Optional: hours between automatic link health sweeps (default 6, 0 disables).
+    #   - HEALTH_CHECK_HOURS=6
     restart: unless-stopped
     deploy:
       resources:
