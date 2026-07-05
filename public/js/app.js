@@ -200,11 +200,10 @@ let userNavigated = false;
 export let dashboardMigrations = JSON.parse(localStorage.getItem('msp-dashboard-migrations') || '[]');
 
 // One-time: give every link a nested-folder `path` array. Legacy links only
-// carry the flat folder/subfolder pair, so derive path from them; folder/
-// subfolder stay as mirrors of the first two segments during the transition to
-// the path model so not-yet-converted folder code keeps working. Tracked in
-// dashboardMigrations (runs once per user, synced via config) like the dashboard
-// migration above.
+// carry the flat folder/subfolder pair, so derive path from them. (The mirror
+// fields are retired — loadLinks strips them from migrated records, and
+// setLinkLocation deletes them on write.) Tracked in dashboardMigrations (runs
+// once per user, synced via config) like the dashboard migration above.
 function migrateFolders() {
   if (dashboardMigrations.includes('folders-nested-v1')) return;
   dashboardMigrations.push('folders-nested-v1');
@@ -244,8 +243,10 @@ function migrateFolders() {
 // (first two path segments) so any not-yet-converted code keeps working.
 export function setLinkLocation(l, path) {
   l.path = (path || []).slice(0, MAX_FOLDER_DEPTH);
-  l.folder = l.path[0] || '';
-  l.subfolder = l.path[1] || null;
+  // The legacy folder/subfolder mirrors are retired — l.path is canonical.
+  // linkPath() still falls back to them for records from old backups.
+  delete l.folder;
+  delete l.subfolder;
 }
 
 // ============================================================================
@@ -375,6 +376,11 @@ async function loadLinks() {
     if (cfgRes && cfgRes.ok) applyServerConfig(await cfgRes.json());
     migrateDashboard();
     migrateFolders();
+    // Strip the retired folder/subfolder mirrors from migrated records (path is
+    // canonical); the slimmer records persist whenever the user next saves — no
+    // forced write on load. linkPath() still reads mirrors on any record that
+    // lacks a path (e.g. a restored pre-nested-folders backup).
+    links.forEach(l => { if (Array.isArray(l.path)) { delete l.folder; delete l.subfolder; } });
     purgeTrash();
     render();
     updateTrashBadge();

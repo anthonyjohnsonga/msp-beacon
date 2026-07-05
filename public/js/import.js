@@ -69,7 +69,7 @@ export function doImport() {
     if (!cb || !cb.checked) return;
     if (eu.has(b.url.toLowerCase())) { skipped++; return; }
     const path = [...target, ...b.path].slice(0, MAX_FOLDER_DEPTH);
-    links.unshift({ id: Date.now().toString(36) + Math.random().toString(36).slice(2) + i, url: b.url, title: b.title, desc: '', folder: path[0] || '', subfolder: path[1] || null, path, tags: [...et] });
+    links.unshift({ id: Date.now().toString(36) + Math.random().toString(36).slice(2) + i, url: b.url, title: b.title, desc: '', path, tags: [...et] });
     eu.add(b.url.toLowerCase()); added++;
   });
   save(); closeImport(); render();

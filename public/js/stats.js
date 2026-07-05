@@ -6,7 +6,7 @@
 // through the app.js setter after a scan so the homepage status dots stay fresh.
 // ============================================================================
 
-import { esc, isWebUrl } from './utils.js';
+import { esc, isWebUrl, linkPath } from './utils.js';
 import { showToast } from './toast.js';
 import { confirmDialog } from './dialog.js';
 import { links, linkStatus, openLink, allFolders, getTagColor, save, setLastHomeStatusAt } from './app.js';
@@ -121,9 +121,9 @@ export function renderStats() {
   const archivedCount = links.filter(l => l.archived && !l.deleted).length;
 
   const folders = allFolders();
-  const noFolderCount = active.filter(l => !l.folder).length;
+  const noFolderCount = active.filter(l => !linkPath(l).length).length;
   const folderRows = folders.map(f => {
-    const count = active.filter(l => l.folder === f).length;
+    const count = active.filter(l => linkPath(l)[0] === f).length;
     return `<div class="stat-row">
       <i class="ti ti-folder" style="font-size:13px;color:var(--g4);flex-shrink:0"></i>
       <span class="stat-row-label">${esc(f)}</span>

@@ -54,7 +54,7 @@ export function render() {
     if (l.deleted) return false;   // trashed links never show in any list
     if (wantArchived) { if (!l.archived) return false; }
     else if (l.archived) return false;
-    if (ff && l.folder !== ff) return false;
+    if (ff && linkPath(l)[0] !== ff) return false;
     if (tf && !(l.tags || []).some(t => t.toLowerCase() === tf.toLowerCase())) return false;
     if (stf === 'readlater' && !l.readLater) return false;
     for (const flag of parsed.flags) { if (flag !== 'archived' && !linkMatchesFlag(l, flag)) return false; }

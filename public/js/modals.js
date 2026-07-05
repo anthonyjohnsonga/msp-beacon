@@ -10,7 +10,7 @@
 import { esc, linkPath } from './utils.js';
 import { showToast } from './toast.js';
 import { alertDialog } from './dialog.js';
-import { links, save, render, captureSnapshot } from './app.js';
+import { links, save, render, captureSnapshot, setLinkLocation } from './app.js';
 import { createFolderPicker } from './folderpicker.js';
 
 // Which link is currently being edited (null = adding a new link).
@@ -65,8 +65,6 @@ export function saveLink() {
   const title = document.getElementById('mTitle').value.trim();
   if (!url || !title) { alertDialog('URL and title are required.', { title: 'Add link' }); return; }
   const path = modalFolderPath();
-  const folder = path[0] || '';
-  const subfolder = path[1] || null;
   const tags = document.getElementById('mTags').value.split(',').map(t => t.trim()).filter(Boolean);
   const desc = document.getElementById('mDesc').value.trim();
   if (!editId) {
@@ -82,12 +80,15 @@ export function saveLink() {
     const i = links.findIndex(l => l.id === editId);
     if (i > -1) {
       const urlChanged = links[i].url !== url;
-      links[i] = { ...links[i], url, title, desc, folder, subfolder, path, tags };
+      links[i] = { ...links[i], url, title, desc, tags };
+      setLinkLocation(links[i], path);
       if (urlChanged) captureSnapshot(editId, url);
     }
   } else {
     const newId = Date.now().toString(36) + Math.random().toString(36).slice(2);
-    links.unshift({ id: newId, url, title, desc, folder, subfolder, path, tags });
+    const l = { id: newId, url, title, desc, tags };
+    setLinkLocation(l, path);
+    links.unshift(l);
     captureSnapshot(newId, url);
   }
   const wasEditing = !!editId;
@@ -98,12 +99,12 @@ export function addLinkAnyway() {
   const url = document.getElementById('mUrl').value.trim();
   const title = document.getElementById('mTitle').value.trim();
   const path = modalFolderPath();
-  const folder = path[0] || '';
-  const subfolder = path[1] || null;
   const tags = document.getElementById('mTags').value.split(',').map(t => t.trim()).filter(Boolean);
   const desc = document.getElementById('mDesc').value.trim();
   const newId = Date.now().toString(36) + Math.random().toString(36).slice(2);
-  links.unshift({ id: newId, url, title, desc, folder, subfolder, path, tags });
+  const l = { id: newId, url, title, desc, tags };
+  setLinkLocation(l, path);
+  links.unshift(l);
   captureSnapshot(newId, url);
   save(); closeModal(); render();
   showToast('Link saved');
