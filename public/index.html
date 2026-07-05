@@ -22,7 +22,7 @@
     <div class="saving-indicator" id="saveStatus"></div>
     <button class="btn" id="homeBtn" onclick="goHome()" title="Home"><i class="ti ti-home"></i></button>
     <button class="btn" id="managerBtn" onclick="goManager()" title="Manager view"><i class="ti ti-layout-grid"></i></button>
-    <button class="btn" id="editDashBtn" onclick="toggleDashboardEdit()" title="Edit dashboard" style="display:none"><i class="ti ti-layout-dashboard"></i></button>
+    <button class="btn" id="editDashBtn" onclick="toggleDashboardEdit()" title="Edit dashboard" style="display:none"><i class="ti ti-pencil"></i></button>
     <button class="btn btn-primary" id="headerAddBtn" onclick="openModal()" title="Add link" style="display:none"><i class="ti ti-plus"></i> Add link</button>
     <div class="settings-wrap">
       <button class="btn" id="settingsBtn" onclick="toggleSettings(event)"><i class="ti ti-settings"></i> Settings</button>
@@ -30,7 +30,7 @@
         <div class="settings-group">
           <div class="settings-group-label">View</div>
           <button class="settings-item" id="defaultViewItem" onclick="toggleDefaultView()"><i class="ti ti-home"></i> Start on <span id="defaultViewLabel" style="margin-left:auto;color:var(--accent-text);font-size:12px"></span></button>
-          <button class="settings-item" onclick="toggleDashboardEdit()"><i class="ti ti-layout-dashboard"></i> Edit dashboard</button>
+          <button class="settings-item" onclick="toggleDashboardEdit()"><i class="ti ti-pencil"></i> Edit dashboard</button>
           <button class="settings-item" onclick="closeSettings();collapseAll()"><i class="ti ti-chevrons-up"></i> Collapse all</button>
           <button class="settings-item" onclick="closeSettings();expandAll()"><i class="ti ti-chevrons-down"></i> Expand all</button>
         </div>
@@ -130,7 +130,7 @@
         <div class="tag-suggest" id="tagSuggest"></div>
       </div>
     </div>
-    <div id="dupWarning" style="display:none;background:rgba(245,166,35,.08);border:0.5px solid rgba(245,166,35,.35);border-radius:8px;padding:10px 12px;font-size:13px;display:none;align-items:center;gap:8px;flex-wrap:wrap">
+    <div id="dupWarning" style="display:none;background:rgba(245,166,35,.08);border:1px solid rgba(245,166,35,.35);border-radius:8px;padding:10px 12px;font-size:13px;display:none;align-items:center;gap:8px;flex-wrap:wrap">
       <i class="ti ti-alert-triangle" style="color:#F5A623;flex-shrink:0"></i>
       <span id="dupWarningMsg" style="flex:1;min-width:0;color:var(--text0)"></span>
       <button class="btn btn-primary" style="height:28px;padding:0 10px;font-size:12px" onclick="addLinkAnyway()">Add anyway</button>

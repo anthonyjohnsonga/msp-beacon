@@ -314,7 +314,7 @@ export function renderHome() {
 
   let html = `<div class="home${dashboardEditMode ? ' editing' : ''}">`;
   if (dashboardEditMode) {
-    html += `<div class="dashboard-edit-banner"><i class="ti ti-layout-dashboard"></i><span>Editing dashboard — drag to reorder, toggle the eye to show/hide.</span><button class="btn btn-primary" onclick="toggleDashboardEdit()"><i class="ti ti-check"></i> Done</button></div>`;
+    html += `<div class="dashboard-edit-banner"><i class="ti ti-pencil"></i><span>Editing dashboard — drag to reorder, toggle the eye to show/hide.</span><button class="btn btn-primary" onclick="toggleDashboardEdit()"><i class="ti ti-check"></i> Done</button></div>`;
   }
   html += list.map(w => renderWidget(w, data)).join('');
   if (dashboardEditMode) {

@@ -28,7 +28,7 @@ export const THEMES = {
 // text/icons on neutral backgrounds: the pale end reads well on dark, the dark
 // end on light. var() references keep them live across applyTheme() changes.
 const MODES = {
-  dark:  { bg0:'#0d1117', bg1:'#161b22', bg2:'#1c2128', bg3:'#21262d', text0:'#e6edf3', text1:'#8b949e', text2:'#6e7681', border0:'#30363d', overlay:'rgba(255,255,255,.07)', stripe:'rgba(255,255,255,.02)', ring:'rgba(255,255,255,.2)', 'accent-text':'var(--g2)', 'accent-label':'var(--g3)', 'accent-icon':'var(--g3)' },
+  dark:  { bg0:'#0d1117', bg1:'#161b22', bg2:'#1c2128', bg3:'#21262d', text0:'#e6edf3', text1:'#8b949e', text2:'#7d8590', border0:'#30363d', overlay:'rgba(255,255,255,.07)', stripe:'rgba(255,255,255,.02)', ring:'rgba(255,255,255,.2)', 'accent-text':'var(--g2)', 'accent-label':'var(--g3)', 'accent-icon':'var(--g3)' },
   light: { bg0:'#f6f8fa', bg1:'#ffffff', bg2:'#eef1f4', bg3:'#e3e7ec', text0:'#1f2328', text1:'#57606a', text2:'#7a828c', border0:'#d0d7de', overlay:'rgba(0,0,0,.06)', stripe:'rgba(0,0,0,.025)', ring:'rgba(0,0,0,.15)', 'accent-text':'var(--g5)', 'accent-label':'var(--g5)', 'accent-icon':'var(--g4)' },
 };
 
