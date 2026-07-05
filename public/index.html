@@ -99,7 +99,20 @@
     <button class="btn" id="selectBtn" onclick="toggleSelectMode()" title="Select"><i class="ti ti-checkbox"></i></button>
     <button class="btn btn-primary" onclick="openModal()"><i class="ti ti-plus"></i> Add link</button>
   </div>
-  <div id="content"></div>
+  <div id="content">
+    <!-- First-paint skeleton: on screen until the first render()/renderHome()
+         overwrites #content, so slow loads show structure instead of a blank page. -->
+    <div class="skeleton-wrap">
+      <div class="skeleton" style="width:190px;height:42px;margin:36px auto 12px"></div>
+      <div class="skeleton" style="width:min(560px,82%);height:46px;margin:0 auto 36px"></div>
+      <div class="skeleton-grid">
+        <div class="skeleton skeleton-tile"></div><div class="skeleton skeleton-tile"></div>
+        <div class="skeleton skeleton-tile"></div><div class="skeleton skeleton-tile"></div>
+        <div class="skeleton skeleton-tile"></div><div class="skeleton skeleton-tile"></div>
+        <div class="skeleton skeleton-tile"></div><div class="skeleton skeleton-tile"></div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <div id="modalBg" class="modal-bg" style="display:none" onclick="if(event.target===this)closeModal()">

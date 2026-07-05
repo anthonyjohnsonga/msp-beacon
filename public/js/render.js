@@ -19,6 +19,7 @@ import { renderHome, takeHomeFolderFilter } from './dashboard.js';
 import {
   links, linkStatus, currentMode, collapsedFolders, allFolders, allTags,
   getOrderedFolders, getFolderColor, getFolderIcon, tagHtml, applyHomeBg, updateFilterBadge,
+  bootLoaded,
 } from './app.js';
 
 // State owned here. visibleIds is read cross-module (health.js, selection.js) via
@@ -31,6 +32,10 @@ let contentOnlyIds = new Set();    // matched via page text only (no title/url/t
 // MAIN RENDER — GRID / LIST / FOLDERS
 // ============================================================================
 export function render() {
+  // Until the first data load lands, keep the boot skeleton (index.html
+  // #content) on screen — the setMode() call at boot would otherwise wipe it
+  // with a misleading empty view. loadLinks flips bootLoaded before rendering.
+  if (!bootLoaded) return;
   applyHomeBg();
   if (currentMode === 'home') { renderHome(); return; }
   const q = document.getElementById('search').value.toLowerCase();

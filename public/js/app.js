@@ -356,6 +356,23 @@ function purgeTrash() {
   if (kept.length !== links.length) { links = kept; save(); }
 }
 
+// False until the first successful data load. Gates render() (render.js) so
+// the boot skeleton in index.html survives the empty pre-data render from
+// setMode() at boot, and lets a failed first load show an error + Retry
+// instead of shimmering forever. Once true, a background reload failure (e.g.
+// the 409 conflict path) must NOT wipe the working view.
+export let bootLoaded = false;
+function showLoadError() {
+  if (bootLoaded) return;
+  const c = document.getElementById('content');
+  if (!c) return;
+  c.innerHTML = `<div class="empty"><i class="ti ti-plug-x"></i>Couldn't reach the server.<div><button class="btn" id="retryLoadBtn" style="margin:16px auto 0"><i class="ti ti-refresh"></i> Retry</button></div></div>`;
+  document.getElementById('retryLoadBtn').addEventListener('click', e => {
+    e.currentTarget.disabled = true;
+    loadLinks();
+  });
+}
+
 async function loadLinks() {
   try {
     const [linksRes, cfgRes, healthRes] = await Promise.all([
@@ -382,11 +399,13 @@ async function loadLinks() {
     // lacks a path (e.g. a restored pre-nested-folders backup).
     links.forEach(l => { if (Array.isArray(l.path)) { delete l.folder; delete l.subfolder; } });
     purgeTrash();
+    bootLoaded = true;  // before render() — it no-ops while this is false
     render();
     updateTrashBadge();
   } catch(e) {
     console.error('Failed to load links', e);
     showToast('Failed to load links from server', true);
+    showLoadError();
   }
 }
 
