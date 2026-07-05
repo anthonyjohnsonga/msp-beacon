@@ -5,11 +5,14 @@
 // Nested bookmark folders become a link path array (capped at MAX_FOLDER_DEPTH).
 // ============================================================================
 
-import { esc, getDomain, pathKey, MAX_FOLDER_DEPTH } from './utils.js';
+import { esc, getDomain, MAX_FOLDER_DEPTH } from './utils.js';
 import { showToast } from './toast.js';
-import { links, save, render, allFolderPaths } from './app.js';
+import { links, save, render } from './app.js';
+import { createFolderPicker } from './folderpicker.js';
 
 let parsedBookmarks = [];
+// Destination-folder combobox (created on first open; lives for the session).
+let importPicker = null;
 
 export function openImport() {
   parsedBookmarks = [];
@@ -18,12 +21,8 @@ export function openImport() {
   document.getElementById('dropZone').style.display = '';
   document.getElementById('fileIn').value = '';
   document.getElementById('impTags').value = '';
-  document.getElementById('impNewFolder').value = '';
-  const fs = document.getElementById('impFolder');
-  const opts = ['<option value="">No folder</option>'];
-  allFolderPaths().map(k => JSON.parse(k)).sort((a, b) => a.join(' ').localeCompare(b.join(' ')))
-    .forEach(p => opts.push(`<option value="${esc(pathKey(p))}">${esc(p.join(' / '))}</option>`));
-  fs.innerHTML = opts.join('');
+  if (!importPicker) importPicker = createFolderPicker(document.getElementById('impFolderPicker'));
+  importPicker.setPath([]);
   document.getElementById('importBg').style.display = 'flex';
 }
 export function closeImport() { document.getElementById('importBg').style.display = 'none'; }
@@ -56,17 +55,9 @@ function showPreview() {
     </div>`).join('');
 }
 export function toggleAll(v) { parsedBookmarks.forEach((_, i) => { const c = document.getElementById('imp_' + i); if (c) c.checked = v; }); }
-// Import destination: the selected existing folder (if any) plus any typed new
-// segments nested under it ("A / B" = two new levels) — imported folders nest
-// UNDER this target. doImport() caps the combined depth.
-function importTargetPath() {
-  let base = [];
-  const sel = document.getElementById('impFolder').value;
-  if (sel) { try { const p = JSON.parse(sel); if (Array.isArray(p)) base = p; } catch {} }
-  const np = document.getElementById('impNewFolder').value.trim();
-  if (!np) return base;
-  return [...base, ...np.split('/').map(s => s.trim()).filter(Boolean)];
-}
+// Import destination from the combobox — imported folders nest UNDER this
+// target. doImport() caps the combined depth.
+function importTargetPath() { return importPicker ? importPicker.getPath() : []; }
 export function doImport() {
   const target = importTargetPath();
   const et = document.getElementById('impTags').value.split(',').map(t => t.trim()).filter(Boolean);

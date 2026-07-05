@@ -81,6 +81,27 @@ select:focus { outline: none; border-color: var(--g4); }
 .tag-suggest-item { display: flex; align-items: center; gap: 8px; padding: 7px 12px; cursor: pointer; font-size: 13px; color: var(--text1); }
 .tag-suggest-item i { font-size: 13px; flex-shrink: 0; }
 .tag-suggest-item:hover, .tag-suggest-item.active { background: var(--bg3); color: var(--text0); }
+/* Folder picker (searchable combobox: input ⇄ breadcrumb chip + dropdown) */
+.folder-picker { position: relative; }
+.folder-picker .fp-input { width: 100%; }
+.fp-chip { display: inline-flex; align-items: center; gap: 7px; max-width: 100%; padding: 7px 8px 7px 10px; background: var(--bg2); border: 0.5px solid var(--g4); border-radius: 8px; cursor: pointer; font-size: 13px; color: var(--text0); font-family: inherit; }
+.fp-chip i { font-size: 14px; flex-shrink: 0; }
+.fp-chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fp-x { display: flex; color: var(--text2); padding: 2px; border-radius: 4px; flex-shrink: 0; }
+.fp-x:hover { color: #fff; background: var(--g5); }
+.fp-list { position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: var(--bg1); border: 1px solid var(--g5); border-radius: 8px; z-index: 70; box-shadow: 0 8px 24px rgba(0,0,0,.4); display: none; flex-direction: column; overflow-y: auto; max-height: 224px; }
+.fp-list.open { display: flex; }
+.fp-item { display: flex; align-items: center; gap: 8px; padding: 7px 12px; cursor: pointer; font-size: 13px; color: var(--text1); }
+.fp-item i { font-size: 14px; flex-shrink: 0; }
+.fp-item:hover, .fp-item.active { background: var(--bg3); color: var(--text0); }
+.fp-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fp-crumb { color: var(--text2); }
+.fp-nest { display: flex; color: var(--text2); padding: 2px 4px; border-radius: 4px; opacity: 0; flex-shrink: 0; }
+.fp-item:hover .fp-nest, .fp-item.active .fp-nest { opacity: 1; }
+.fp-nest:hover { color: var(--text0); background: var(--g5); }
+.fp-create { border-top: 1px solid rgba(var(--g5-rgb), .4); color: var(--g2); }
+.fp-create i { color: var(--g2); }
+.fp-hint { font-size: 11px; color: var(--text2); padding: 5px 12px 7px; border-top: 1px solid rgba(var(--g5-rgb), .35); }
 .folder-badge { font-size: 11px; padding: 3px 8px; border-radius: 20px; background: rgba(var(--g5-rgb),.25); color: var(--g2); border: 0.5px solid var(--g5); margin-left: auto; display: flex; align-items: center; gap: 4px; }
 .card-actions { position: absolute; top: 8px; right: 8px; display: none; gap: 4px; }
 .card:hover .card-actions { display: flex; }

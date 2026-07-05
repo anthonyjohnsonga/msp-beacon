@@ -7,12 +7,15 @@
 // app.js since they read allTags/getTagColor there.
 // ============================================================================
 
-import { esc, pathKey, linkPath, MAX_FOLDER_DEPTH } from './utils.js';
+import { esc, linkPath } from './utils.js';
 import { showToast } from './toast.js';
-import { links, save, render, allFolderPaths, captureSnapshot } from './app.js';
+import { links, save, render, captureSnapshot } from './app.js';
+import { createFolderPicker } from './folderpicker.js';
 
 // Which link is currently being edited (null = adding a new link).
 let editId = null;
+// Folder combobox (created on first open; lives for the session).
+let folderPicker = null;
 
 export function openModal(id) {
   editId = id || null;
@@ -22,15 +25,8 @@ export function openModal(id) {
   document.getElementById('mTitle').value = l ? l.title : '';
   document.getElementById('mDesc').value = l ? l.desc : '';
   document.getElementById('mTags').value = l ? (l.tags || []).join(', ') : '';
-  document.getElementById('mNewFolder').value = '';
-  // Folder dropdown lists every existing folder path (any depth); a new folder
-  // typed in mNewFolder is created under the selected one ("/" adds levels).
-  const mf = document.getElementById('mFolder');
-  const cur = l ? pathKey(linkPath(l)) : '';
-  const opts = ['<option value="">No folder</option>'];
-  allFolderPaths().map(k => JSON.parse(k)).sort((a, b) => a.join(' ').localeCompare(b.join(' ')))
-    .forEach(p => { const key = pathKey(p); opts.push(`<option value="${esc(key)}"${key === cur ? ' selected' : ''}>${esc(p.join(' / '))}</option>`); });
-  mf.innerHTML = opts.join('');
+  if (!folderPicker) folderPicker = createFolderPicker(document.getElementById('mFolderPicker'));
+  folderPicker.setPath(l ? linkPath(l) : []);
   document.getElementById('dupWarning').style.display = 'none';
   document.getElementById('modalBg').style.display = 'flex';
   setTimeout(() => document.getElementById('mUrl').focus(), 50);
@@ -60,20 +56,8 @@ export async function fetchPageTitle() {
   wrap.classList.remove('fetching');
 }
 
-// The link's folder path from the modal: the selected existing folder (if any)
-// plus any typed new segments nested under it ("A / B" = two new levels). No
-// selection roots the typed path at the top level; nothing typed keeps the
-// selection as-is; neither = [] (no folder).
-function modalFolderPath() {
-  let base = [];
-  const sel = document.getElementById('mFolder').value;
-  if (sel) { try { const p = JSON.parse(sel); if (Array.isArray(p)) base = p; } catch {} }
-  const np = document.getElementById('mNewFolder').value.trim();
-  if (!np) return base;
-  const full = [...base, ...np.split('/').map(s => s.trim()).filter(Boolean)];
-  if (full.length > MAX_FOLDER_DEPTH) showToast(`Folders are capped at ${MAX_FOLDER_DEPTH} levels — deeper levels were dropped`, true);
-  return full.slice(0, MAX_FOLDER_DEPTH);
-}
+// The link's folder path, straight from the combobox ([] = no folder).
+function modalFolderPath() { return folderPicker ? folderPicker.getPath() : []; }
 
 export function saveLink() {
   const url = document.getElementById('mUrl').value.trim();
