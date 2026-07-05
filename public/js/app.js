@@ -47,6 +47,9 @@ export { visibleIds } from './render.js';
 export let links = [];
 export let linkStatus = {};
 let saveTimer = null;
+// Server-issued links version (X-Links-Version); echoed back on save so the
+// server can reject a stale write (another device saved first) with a 409.
+let linksVersion = null;
 // Nested-folder metadata, all keyed by pathKey(path) (every level, any depth):
 //   collapsedFolders — Set of collapsed folder pathKeys (localStorage only)
 //   folderColors     — { pathKey: hex }
@@ -356,6 +359,7 @@ async function loadLinks() {
       fetch('/api/config').catch(() => null)
     ]);
     if (linksRes.status === 401) { handleUnauthorized(); return; }
+    linksVersion = linksRes.headers.get('X-Links-Version');
     const data = await linksRes.json();
     links = Array.isArray(data) ? data : [];
     if (cfgRes && cfgRes.ok) applyServerConfig(await cfgRes.json());
@@ -376,13 +380,24 @@ export async function save() {
     const status = document.getElementById('saveStatus');
     status.innerHTML = '<i class="ti ti-loader" style="animation:spin 1s linear infinite"></i> Saving…';
     try {
+      const headers = { 'Content-Type': 'application/json' };
+      // Echo the version we loaded so the server can spot a save from another
+      // device/tab in between (409 = don't clobber it).
+      if (linksVersion) headers['X-Links-Version'] = linksVersion;
       const res = await fetch('/api/links', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(links)
       });
       if (res.status === 401) { status.innerHTML = ''; handleUnauthorized(); return; }
+      if (res.status === 409) {
+        status.innerHTML = '';
+        showToast('Changed on another device — loaded the latest copy. Your last change was not saved.', true);
+        await loadLinks();
+        return;
+      }
       if (!res.ok) throw new Error('Server error ' + res.status);
+      linksVersion = res.headers.get('X-Links-Version') || linksVersion;
       status.innerHTML = '<i class="ti ti-circle-check" style="color:var(--g3)"></i> Saved';
       setTimeout(() => status.innerHTML = '', 2000);
     } catch(e) {

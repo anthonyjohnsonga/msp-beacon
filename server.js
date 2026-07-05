@@ -62,6 +62,13 @@ app.use(express.static(path.join(__dirname, 'public')));
 let writeQueue = Promise.resolve();
 let configWriteQueue = Promise.resolve();
 
+// Links write-conflict guard: bumped on every links write; GET hands it to the
+// client, which echoes it back on POST. A mismatch means another device/tab
+// saved in between → 409 instead of silently overwriting their change.
+// In-memory only: a server restart mints a fresh value, which at worst costs
+// each open client one spurious 409 + reload.
+let linksVersion = Date.now();
+
 async function readLinks() {
   try {
     const raw = await fsp.readFile(DATA_FILE, 'utf8');
@@ -293,7 +300,9 @@ app.use((req, res, next) => {
 
 app.get('/api/links', async (req, res) => {
   try {
-    res.json(await readLinks());
+    const links = await readLinks();
+    res.set('X-Links-Version', String(linksVersion));
+    res.json(links);
   } catch (e) {
     console.error('GET /api/links error:', e);
     res.status(500).json({ error: 'Failed to read links' });
@@ -305,25 +314,30 @@ app.post('/api/links', (req, res) => {
   if (!Array.isArray(links)) return res.status(400).json({ error: 'Expected an array' });
   const invalid = links.find(l => !isValidLink(l));
   if (invalid) return res.status(400).json({ error: 'Invalid link object in array' });
+  const clientVersion = req.get('X-Links-Version'); // absent from pre-1.0.27 clients → accept (legacy)
 
-  const writePromise = writeLinks(links);
-  writeQueue = writeQueue.then(() => writePromise).catch(() => {});
-
-  writePromise
-    .then(() => {
-      res.json({ ok: true });
-      // Best-effort GC of orphaned snapshots. Most saves (favorite toggle,
-      // reorder, edit) delete no links, so only scan the snapshot dir when an
-      // indexed snapshot is actually missing from the saved set.
-      const validIds = new Set(links.map(l => safeId(l.id)));
-      let orphaned = false;
-      for (const id of contentIndex.keys()) { if (!validIds.has(id)) { orphaned = true; break; } }
-      if (orphaned) pruneSnapshots(validIds);
-    })
-    .catch(e => {
-      console.error('Write failed:', e);
-      res.status(500).json({ error: 'Failed to save links' });
-    });
+  // The version check and the write run INSIDE the queue so check-and-write is
+  // atomic — two concurrent saves can't both pass the check and both write.
+  writeQueue = writeQueue.then(async () => {
+    if (clientVersion !== undefined && clientVersion !== String(linksVersion)) {
+      res.status(409).json({ error: 'Links changed on another device', version: linksVersion });
+      return;
+    }
+    await writeLinks(links);
+    linksVersion = Math.max(linksVersion + 1, Date.now());
+    res.set('X-Links-Version', String(linksVersion));
+    res.json({ ok: true });
+    // Best-effort GC of orphaned snapshots. Most saves (favorite toggle,
+    // reorder, edit) delete no links, so only scan the snapshot dir when an
+    // indexed snapshot is actually missing from the saved set.
+    const validIds = new Set(links.map(l => safeId(l.id)));
+    let orphaned = false;
+    for (const id of contentIndex.keys()) { if (!validIds.has(id)) { orphaned = true; break; } }
+    if (orphaned) pruneSnapshots(validIds);
+  }).catch(e => {
+    console.error('Write failed:', e);
+    if (!res.headersSent) res.status(500).json({ error: 'Failed to save links' });
+  });
 });
 
 app.get('/api/config', async (req, res) => {
