@@ -13,6 +13,9 @@ services:
     #   - BEACON_PASSWORD=change-me
     #   # Optional: hours between automatic link health sweeps (default 6, 0 disables).
     #   - HEALTH_CHECK_HOURS=6
+    #   # Optional: hours between automatic backups to ./data/backups (default 24,
+    #   # 0 disables). Once 4 copies exist, the oldest are pruned so the 2 newest remain.
+    #   - BACKUP_HOURS=24
     restart: unless-stopped
     deploy:
       resources:

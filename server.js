@@ -406,6 +406,64 @@ app.post('/api/restore', express.json({ limit: '10mb' }), async (req, res) => {
   }
 });
 
+// --- Automatic backups ---------------------------------------------------------
+// A rotating server-side snapshot of links.json + config.json (same JSON shape
+// as GET /api/backup, so any file in /data/backups can be uploaded through the
+// normal Restore flow). Runs every BACKUP_HOURS hours (default 24, 0 disables),
+// first pass shortly after boot; skipped when neither data file changed since
+// the newest backup, so restarts don't churn copies. Rotation (per Anthony):
+// once BACKUP_PRUNE_AT copies exist, prune down to the BACKUP_KEEP newest —
+// the folder always holds between 2 and 4 backups. auth.json is deliberately
+// NOT included (matches the manual backup).
+const BACKUP_DIR = path.join('/data', 'backups');
+const BACKUP_HOURS = (() => {
+  const v = parseFloat(process.env.BACKUP_HOURS);
+  return Number.isFinite(v) && v >= 0 ? v : 24;
+})();
+const BACKUP_PRUNE_AT = 4, BACKUP_KEEP = 2;
+
+// Filename timestamps are ISO with ':'/'.' swapped for '-', so a plain sort is
+// chronological.
+async function listAutoBackups() {
+  try {
+    return (await fsp.readdir(BACKUP_DIR)).filter(n => /^auto-backup-.*\.json$/.test(n)).sort();
+  } catch (e) {
+    if (e.code === 'ENOENT') return [];
+    throw e;
+  }
+}
+
+async function runAutoBackup() {
+  try {
+    const files = await listAutoBackups();
+    const newest = files[files.length - 1];
+    if (newest) {
+      const backupTime = (await fsp.stat(path.join(BACKUP_DIR, newest))).mtimeMs;
+      let changed = false;
+      for (const f of [DATA_FILE, CONFIG_FILE]) {
+        try { if ((await fsp.stat(f)).mtimeMs > backupTime) { changed = true; break; } } catch { /* missing file = nothing to back up */ }
+      }
+      if (!changed) { console.log(`Auto-backup: no changes since ${newest} — skipped`); return; }
+    }
+    const [links, config] = await Promise.all([readLinks(), readConfig()]);
+    const backup = { version: '1.0', exportedAt: new Date().toISOString(), links, config };
+    await fsp.mkdir(BACKUP_DIR, { recursive: true });
+    const name = `auto-backup-${backup.exportedAt.replace(/[:.]/g, '-')}.json`;
+    const tmp = path.join(BACKUP_DIR, `.backup-${Date.now()}.json`);
+    await fsp.writeFile(tmp, JSON.stringify(backup, null, 2), 'utf8');
+    await fsp.rename(tmp, path.join(BACKUP_DIR, name));
+    console.log(`Auto-backup written: ${name} (${links.length} links)`);
+    const after = await listAutoBackups();
+    if (after.length >= BACKUP_PRUNE_AT) {
+      const prune = after.slice(0, after.length - BACKUP_KEEP);
+      for (const old of prune) await fsp.unlink(path.join(BACKUP_DIR, old));
+      console.log(`Auto-backup: reached ${after.length} copies — pruned ${prune.length}, kept ${BACKUP_KEEP}`);
+    }
+  } catch (e) {
+    console.error('Auto-backup failed:', e);
+  }
+}
+
 app.get('/api/fetch-title', async (req, res) => {
   const rawUrl = req.query.url;
   if (!rawUrl) return res.json({ title: '' });
@@ -1063,6 +1121,13 @@ Promise.all([loadContentIndex(), loadAllowedFeeds(), initAuth(), loadHealthCache
       console.log(`Link health: automatic sweep every ${HEALTH_CHECK_HOURS}h`);
     } else {
       console.log('Link health: automatic sweep disabled (HEALTH_CHECK_HOURS=0)');
+    }
+    if (BACKUP_HOURS > 0) {
+      setTimeout(runAutoBackup, 3 * 60 * 1000);
+      setInterval(runAutoBackup, BACKUP_HOURS * 60 * 60 * 1000);
+      console.log(`Auto-backup: every ${BACKUP_HOURS}h to ${BACKUP_DIR} (prune to ${BACKUP_KEEP} at ${BACKUP_PRUNE_AT})`);
+    } else {
+      console.log('Auto-backup: disabled (BACKUP_HOURS=0)');
     }
   });
 });
