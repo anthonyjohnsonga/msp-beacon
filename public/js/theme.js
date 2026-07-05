@@ -41,9 +41,12 @@ function resolveMode(m) {
 export function applyMode(mode, save = true) {
   ui.mode = mode;
   localStorage.setItem('msp-mode', mode);
-  const m = MODES[resolveMode(mode)] || MODES.dark;
+  const resolved = resolveMode(mode);
+  const m = MODES[resolved] || MODES.dark;
   const r = document.documentElement.style;
   Object.entries(m).forEach(([k, v]) => r.setProperty('--' + k, v));
+  // Native scrollbars, <select> popups, etc. follow the app's mode.
+  r.setProperty('color-scheme', resolved === 'light' ? 'light' : 'dark');
   document.querySelectorAll('.mode-btn[data-mode]').forEach(el => el.classList.toggle('active', el.dataset.mode === mode));
   if (save) saveConfig();
 }

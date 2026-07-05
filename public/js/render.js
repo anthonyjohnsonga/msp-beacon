@@ -189,7 +189,7 @@ function cardHtml(l) {
       ${folderBadgeHtml(l)}
     </div>`;
   const top = `<div class="card-top"><div class="favicon">${fi}</div>
-      <div style="min-width:0"><div class="card-title">${esc(l.title)}</div><div class="card-url">${esc(getDomain(l.url))}</div>${l.lastVisited ? `<div style="font-size:11px;color:var(--text2);margin-top:1px">${timeAgo(l.lastVisited)}</div>` : ''}</div>
+      <div style="min-width:0"><div class="card-title" title="${esc(l.title)}">${esc(l.title)}</div><div class="card-url">${esc(getDomain(l.url))}</div>${l.lastVisited ? `<div style="font-size:11px;color:var(--text2);margin-top:1px">${timeAgo(l.lastVisited)}</div>` : ''}</div>
     </div>`;
   const statusBadge = (linkStatus[l.id] === 'broken' || linkStatus[l.id] === 'timeout')
     ? `<div class="status-badge" title="${linkStatus[l.id] === 'timeout' ? 'Link timed out' : 'Link appears broken'}"><i class="ti ti-alert-triangle"></i></div>`
@@ -231,7 +231,7 @@ function cardListHtml(l) {
       <div class="card-check${checked ? ' checked' : ''}" style="position:static;flex-shrink:0"><i class="ti ti-check"></i></div>
       <div class="favicon">${fi}</div>
       ${statusBadge}
-      <span class="card-row-title">${esc(l.title)}</span>
+      <span class="card-row-title" title="${esc(l.title)}">${esc(l.title)}</span>
       <span class="card-row-domain">${esc(getDomain(l.url))}</span>
       <div class="card-row-tags">${(l.tags || []).map(tagHtml).join('')}</div>
       ${folderBadgeHtml(l, 'margin-left:0')}
@@ -240,7 +240,7 @@ function cardListHtml(l) {
   return `<div class="card-row" data-id="${esc(l.id)}" data-url="${esc(l.url)}"${cardBorderStyle(l)}>
     <div class="favicon">${fi}</div>
     ${statusBadge}
-    <span class="card-row-title">${esc(l.title)}</span>
+    <span class="card-row-title" title="${esc(l.title)}">${esc(l.title)}</span>
     <span class="card-row-domain">${esc(getDomain(l.url))}</span>
     ${l.lastVisited ? `<span style="font-size:11px;color:var(--text2);flex-shrink:0">${timeAgo(l.lastVisited)}</span>` : ''}
     <div class="card-row-tags">${(l.tags || []).map(tagHtml).join('')}</div>
