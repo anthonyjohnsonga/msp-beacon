@@ -3,6 +3,7 @@ import { ui } from './state.js';
 import { applyDensity, cycleDensity, idOrder, sortLinks } from './view.js';
 import { applyMode, applyTheme, previewCustomAccent, setCustomAccent, THEMES } from './theme.js';
 import { showToast, showUndoToast } from './toast.js';
+import { confirmDialog } from './dialog.js';
 import { openImport, closeImport, handleDrop, handleFile, toggleAll, doImport } from './import.js';
 import { toggleFolder, collapseAll, expandAll, renameFolder, deleteFolder, startFolderRename, closeFolderMove } from './folders.js';
 import { openFolderColorPicker, openTagColorPicker, selectPickerColor, resetPickerColor, closeFolderColorPicker, openFolderIconPicker, selectFolderIcon, closeFolderIconPicker } from './pickers.js';
@@ -899,10 +900,10 @@ export function openLink(id, url) {
 // Open every (non-archived, non-trashed) link in a folder and its sub-folders in
 // new tabs, bumping visits like openLink. Confirms first when there are a lot, so
 // a stray click can't fling open dozens of tabs.
-export function openAllInFolder(path) {
+export async function openAllInFolder(path) {
   const matches = links.filter(l => !l.archived && !l.deleted && pathStartsWith(linkPath(l), path));
   if (!matches.length) { showToast('No links in this folder'); return; }
-  if (matches.length > 12 && !confirm(`Open all ${matches.length} links in new tabs?`)) return;
+  if (matches.length > 12 && !(await confirmDialog(`This opens ${matches.length} new tabs.`, { title: 'Open all links?', okText: 'Open all' }))) return;
   const now = Date.now();
   matches.forEach(l => { l.visits = (l.visits || 0) + 1; l.lastVisited = now; });
   save();

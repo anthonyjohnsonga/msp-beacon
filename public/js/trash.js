@@ -9,6 +9,7 @@
 
 import { esc, getDomain, timeAgo } from './utils.js';
 import { showToast } from './toast.js';
+import { confirmDialog } from './dialog.js';
 import { links, setLinks, save, render } from './app.js';
 
 function restoreFromTrash(id) {
@@ -20,18 +21,18 @@ function restoreFromTrash(id) {
   showToast('Link restored');
 }
 
-function deleteForever(id) {
-  if (!confirm('Permanently delete this link? This cannot be undone.')) return;
+async function deleteForever(id) {
+  if (!(await confirmDialog('This cannot be undone.', { title: 'Permanently delete this link?', okText: 'Delete forever', danger: true }))) return;
   setLinks(links.filter(l => l.id !== id));
   save(); renderTrash();
   updateTrashBadge();
   showToast('Link permanently deleted');
 }
 
-export function emptyTrash() {
+export async function emptyTrash() {
   const n = links.filter(l => l.deleted).length;
   if (!n) return;
-  if (!confirm(`Permanently delete ${n} link${n > 1 ? 's' : ''} in the trash? This cannot be undone.`)) return;
+  if (!(await confirmDialog('This cannot be undone.', { title: `Permanently delete ${n} link${n > 1 ? 's' : ''} in the trash?`, okText: 'Empty trash', danger: true }))) return;
   setLinks(links.filter(l => !l.deleted));
   save(); renderTrash();
   updateTrashBadge();

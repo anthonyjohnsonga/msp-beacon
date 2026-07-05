@@ -7,6 +7,7 @@
 
 import { esc, getDomain } from './utils.js';
 import { showToast } from './toast.js';
+import { confirmDialog } from './dialog.js';
 import { links, setLinks, pendingDelete, setPendingDelete, commitPendingMove, save, render } from './app.js';
 
 export function archiveLink(id) {
@@ -28,8 +29,8 @@ function unarchiveLink(id) {
   showToast('Link restored');
 }
 
-function permanentDeleteLink(id) {
-  if (!confirm('Permanently delete this link? This cannot be undone.')) return;
+async function permanentDeleteLink(id) {
+  if (!(await confirmDialog('This cannot be undone.', { title: 'Permanently delete this link?', okText: 'Delete forever', danger: true }))) return;
   setLinks(links.filter(l => l.id !== id));
   save(); renderArchive();
   updateArchiveBadge();

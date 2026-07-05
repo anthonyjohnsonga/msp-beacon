@@ -15,6 +15,7 @@ import {
 import { renameFolder, deleteFolder } from './folders.js';
 import { openTagColorPicker } from './pickers.js';
 import { showToast } from './toast.js';
+import { confirmDialog } from './dialog.js';
 
 // --- Folder manager ---------------------------------------------------------
 export function openFolderManager() {
@@ -79,8 +80,8 @@ function fmgrStartRename(btn) {
     if (e.key === 'Escape') { committed = true; renderFolderManager(); }
   });
 }
-function fmgrDeleteRow(btn) {
-  deleteFolder(btn.dataset.key);
+async function fmgrDeleteRow(btn) {
+  await deleteFolder(btn.dataset.key); // async: waits out the confirm dialog
   renderFolderManager();
 }
 
@@ -101,9 +102,9 @@ function renameTag(oldName, newName) {
   }
   save(); render();
 }
-function deleteTag(name) {
+async function deleteTag(name) {
   const count = links.filter(l => !l.archived && !l.deleted && (l.tags || []).includes(name)).length;
-  if (!confirm(`Delete tag "${name}"? It will be removed from ${count} link${count !== 1 ? 's' : ''}.`)) return;
+  if (!(await confirmDialog(`It will be removed from ${count} link${count !== 1 ? 's' : ''}.`, { title: `Delete tag "${name}"?`, okText: 'Delete', danger: true }))) return;
   links.forEach(l => { if (l.tags) l.tags = l.tags.filter(t => t !== name); });
   if (tagColors[name] !== undefined) {
     delete tagColors[name];
@@ -140,8 +141,8 @@ function renderTagManager() {
   }).join('');
   content.querySelectorAll('[data-tagcolor]').forEach(btn => btn.addEventListener('click', e => { e.stopPropagation(); openTagColorPicker(btn.dataset.tagcolor, btn); }));
   content.querySelectorAll('[title="Rename"]').forEach(btn => btn.addEventListener('click', () => tmgrStartRename(btn)));
-  content.querySelectorAll('[title="Delete"]').forEach(btn => btn.addEventListener('click', () => {
-    deleteTag(btn.dataset.tag);
+  content.querySelectorAll('[title="Delete"]').forEach(btn => btn.addEventListener('click', async () => {
+    await deleteTag(btn.dataset.tag); // async: waits out the confirm dialog
     renderTagManager();
   }));
 }

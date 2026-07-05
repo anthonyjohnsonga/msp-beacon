@@ -8,6 +8,7 @@
 
 import { esc, isWebUrl } from './utils.js';
 import { showToast } from './toast.js';
+import { confirmDialog } from './dialog.js';
 import { links, linkStatus, openLink, allFolders, getTagColor, save, setLastHomeStatusAt } from './app.js';
 
 let statsNeverExpanded = false;
@@ -97,8 +98,8 @@ function updateHealthSection() {
   if (el) el.innerHTML = renderHealthSection();
 }
 
-export function resetStats() {
-  if (!confirm('Reset all visit counts to zero?')) return;
+export async function resetStats() {
+  if (!(await confirmDialog('Every link’s visit count goes back to zero.', { title: 'Reset all visit counts?', okText: 'Reset', danger: true }))) return;
   links.forEach(l => { l.visits = 0; });
   save();
   renderStats();

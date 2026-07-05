@@ -14,6 +14,7 @@ import {
 } from './app.js';
 import { esc, pathKey, linkPath, MAX_FOLDER_DEPTH } from './utils.js';
 import { showToast } from './toast.js';
+import { confirmDialog } from './dialog.js';
 
 const parseKey = k => { try { return JSON.parse(k); } catch { return null; } };
 
@@ -90,14 +91,14 @@ export function renameFolder(key, newName) {
   save(); saveConfig(); render();
 }
 
-export function deleteFolder(key) {
+export async function deleteFolder(key) {
   const path = parseKey(key);
   if (!path || !path.length) return;
   const idx = path.length - 1;
   const parent = path.slice(0, idx);
   const count = links.filter(l => !l.archived && !l.deleted && pathStartsWith(linkPath(l), path)).length;
   const dest = parent.length ? `"${parent.join(' / ')}"` : 'the top level';
-  if (!confirm(`Delete folder "${path[idx]}"? ${count} link${count !== 1 ? 's' : ''} (and any sub-folders) will move up to ${dest}.`)) return;
+  if (!(await confirmDialog(`${count} link${count !== 1 ? 's' : ''} (and any sub-folders) will move up to ${dest}.`, { title: `Delete folder "${path[idx]}"?`, okText: 'Delete', danger: true }))) return;
   // Splice this level out of every descendant link's path (promote up one level).
   links.forEach(l => {
     const p = linkPath(l);

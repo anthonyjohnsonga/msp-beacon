@@ -7,6 +7,7 @@
 
 import { closeSettings } from './app.js';
 import { showToast } from './toast.js';
+import { confirmDialog } from './dialog.js';
 
 export function backupData() {
   closeSettings();
@@ -28,7 +29,7 @@ export async function handleRestoreFile(input) {
   try { text = await file.text(); backup = JSON.parse(text); } catch { showToast('Invalid backup file'); return; }
   if (!backup.links || !Array.isArray(backup.links)) { showToast('Invalid backup file'); return; }
   const date = backup.exportedAt ? new Date(backup.exportedAt).toLocaleString() : 'unknown date';
-  if (!confirm(`Restore ${backup.links.length} links from backup dated ${date}?\n\nThis will replace all current links and settings.`)) return;
+  if (!(await confirmDialog(`This will replace all current links and settings with the backup dated ${date}.`, { title: `Restore ${backup.links.length} links from backup?`, okText: 'Restore', danger: true }))) return;
   try {
     const res = await fetch('/api/restore', {
       method: 'POST',

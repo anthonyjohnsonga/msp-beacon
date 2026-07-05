@@ -50,6 +50,8 @@ select:focus { outline: none; border-color: var(--g4); }
 .btn:hover { background: var(--bg3); border-color: var(--g5); }
 .btn-primary { background: var(--g5); color: #fff; border-color: var(--g6); }
 .btn-primary:hover { background: var(--g6); }
+.btn-danger { background: #E24B4A; color: #fff; border-color: #b91c1c; }
+.btn-danger:hover { background: #c93b3a; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--card-min-width, 220px), 1fr)); gap: var(--card-gap, 12px); padding-bottom: 1.5rem; }
 .link-list { display: flex; flex-direction: column; gap: var(--row-gap, 2px); padding-bottom: 1.5rem; }
 .card-row { background: var(--bg1); border: 0.5px solid var(--border0); border-radius: 8px; padding: var(--row-padding, 8px 12px); cursor: pointer; transition: border-color .15s; display: flex; align-items: center; gap: 10px; position: relative; min-width: 0; }
@@ -124,6 +126,11 @@ select:focus { outline: none; border-color: var(--g4); }
 .folder-rename-btn:hover { color: var(--g2); background: var(--overlay); }
 .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: flex; align-items: center; justify-content: center; z-index: 100; }
 .modal { background: var(--bg1); border-radius: 12px; border: 1px solid var(--g5); padding: 1.25rem; width: min(460px, 92vw); display: flex; flex-direction: column; gap: 12px; max-height: 90vh; overflow-y: auto; }
+/* Confirm/alert dialog (dialog.js) — sits above the other modals */
+.dialog-bg { z-index: 200; }
+.dialog-box { width: min(400px, 92vw); }
+.dialog-title { font-size: 15px; font-weight: 600; color: var(--text0); }
+.dialog-msg { font-size: 13.5px; color: var(--text1); line-height: 1.5; white-space: pre-line; }
 .modal-header { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--g6); padding-bottom: 10px; }
 .modal-header i { font-size: 18px; color: var(--g3); }
 .modal h3 { font-size: 16px; font-weight: 500; color: var(--g2); }

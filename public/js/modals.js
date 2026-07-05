@@ -9,6 +9,7 @@
 
 import { esc, linkPath } from './utils.js';
 import { showToast } from './toast.js';
+import { alertDialog } from './dialog.js';
 import { links, save, render, captureSnapshot } from './app.js';
 import { createFolderPicker } from './folderpicker.js';
 
@@ -62,7 +63,7 @@ function modalFolderPath() { return folderPicker ? folderPicker.getPath() : []; 
 export function saveLink() {
   const url = document.getElementById('mUrl').value.trim();
   const title = document.getElementById('mTitle').value.trim();
-  if (!url || !title) { alert('URL and title are required.'); return; }
+  if (!url || !title) { alertDialog('URL and title are required.', { title: 'Add link' }); return; }
   const path = modalFolderPath();
   const folder = path[0] || '';
   const subfolder = path[1] || null;

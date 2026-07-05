@@ -7,6 +7,7 @@
 
 import { esc, getDomain, MAX_FOLDER_DEPTH } from './utils.js';
 import { showToast } from './toast.js';
+import { alertDialog } from './dialog.js';
 import { links, save, render } from './app.js';
 import { createFolderPicker } from './folderpicker.js';
 
@@ -40,7 +41,7 @@ function parseBookmarks(html) {
     }
   }
   walk(doc.querySelector('DL'), []);
-  if (!res.length) { alert('No bookmarks found. Make sure this is a valid browser bookmark export.'); return; }
+  if (!res.length) { alertDialog('No bookmarks found. Make sure this is a valid browser bookmark export.', { title: 'Import' }); return; }
   parsedBookmarks = res; showPreview();
 }
 function showPreview() {
