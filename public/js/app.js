@@ -409,37 +409,59 @@ async function loadLinks() {
   }
 }
 
+let savePending = false; // a debounced save is queued but not yet sent
+
 export async function save() {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(async () => {
-    const status = document.getElementById('saveStatus');
-    status.innerHTML = '<i class="ti ti-loader" style="animation:spin 1s linear infinite"></i> Saving…';
-    try {
-      const headers = { 'Content-Type': 'application/json' };
-      // Echo the version we loaded so the server can spot a save from another
-      // device/tab in between (409 = don't clobber it).
-      if (linksVersion) headers['X-Links-Version'] = linksVersion;
-      const res = await fetch('/api/links', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(links)
-      });
-      if (res.status === 401) { status.innerHTML = ''; handleUnauthorized(); return; }
-      if (res.status === 409) {
-        status.innerHTML = '';
-        showToast('Changed on another device — loaded the latest copy. Your last change was not saved.', true);
-        await loadLinks();
-        return;
-      }
-      if (!res.ok) throw new Error('Server error ' + res.status);
-      linksVersion = res.headers.get('X-Links-Version') || linksVersion;
-      status.innerHTML = '<i class="ti ti-circle-check" style="color:var(--accent-icon)"></i> Saved';
-      setTimeout(() => status.innerHTML = '', 2000);
-    } catch(e) {
-      status.innerHTML = '<i class="ti ti-alert-circle" style="color:#E24B4A"></i> Save failed';
-    }
-  }, 400);
+  savePending = true;
+  saveTimer = setTimeout(doSave, 400);
 }
+
+async function doSave(flush = false) {
+  savePending = false;
+  const status = document.getElementById('saveStatus');
+  status.innerHTML = '<i class="ti ti-loader" style="animation:spin 1s linear infinite"></i> Saving…';
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    // Echo the version we loaded so the server can spot a save from another
+    // device/tab in between (409 = don't clobber it).
+    if (linksVersion) headers['X-Links-Version'] = linksVersion;
+    const res = await fetch('/api/links', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(links),
+      // On pagehide the request must outlive the page. Best-effort: browsers
+      // cap keepalive bodies (~64KB), so a very large collection may still
+      // drop — but without it the save is lost every time.
+      keepalive: flush
+    });
+    if (res.status === 401) { status.innerHTML = ''; handleUnauthorized(); return; }
+    if (res.status === 409) {
+      status.innerHTML = '';
+      showToast('Changed on another device — loaded the latest copy. Your last change was not saved.', true);
+      await loadLinks();
+      return;
+    }
+    if (!res.ok) throw new Error('Server error ' + res.status);
+    linksVersion = res.headers.get('X-Links-Version') || linksVersion;
+    status.innerHTML = '<i class="ti ti-circle-check" style="color:var(--accent-icon)"></i> Saved';
+    setTimeout(() => status.innerHTML = '', 2000);
+  } catch(e) {
+    status.innerHTML = '<i class="ti ti-alert-circle" style="color:#E24B4A"></i> Save failed';
+  }
+}
+
+// Flush a still-debounced save when the page goes away (tab close, navigation,
+// mobile app switch) — otherwise an edit made <400ms before closing is lost.
+function flushPendingSave() {
+  if (!savePending) return;
+  clearTimeout(saveTimer);
+  doSave(true);
+}
+window.addEventListener('pagehide', flushPendingSave);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') flushPendingSave();
+});
 
 export let pendingDelete = null;
 export let pendingMove = null;

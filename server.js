@@ -178,22 +178,26 @@ async function initAuth() {
   authState = { secret: data.secret, passHash: data.passHash || null };
 }
 
-function hashPassword(pw) {
+// Async scrypt — the sync variant blocks the event loop ~100ms per call, which
+// stalls every other request during a login attempt.
+const scryptAsync = (pw, salt) => new Promise((resolve, reject) =>
+  crypto.scrypt(pw, salt, 64, (err, buf) => err ? reject(err) : resolve(buf)));
+async function hashPassword(pw) {
   const salt = crypto.randomBytes(16).toString('hex');
-  return `${salt}:${crypto.scryptSync(pw, salt, 64).toString('hex')}`;
+  return `${salt}:${(await scryptAsync(pw, salt)).toString('hex')}`;
 }
-function verifyPassword(pw, stored) {
+async function verifyPassword(pw, stored) {
   if (!stored || !stored.includes(':')) return false;
   const [salt, hash] = stored.split(':');
   const expected = Buffer.from(hash, 'hex');
   let actual;
-  try { actual = crypto.scryptSync(pw, salt, 64); } catch { return false; }
+  try { actual = await scryptAsync(pw, salt); } catch { return false; }
   return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
 }
 function authConfigured() {
   return !!process.env.BEACON_PASSWORD || !!authState.passHash;
 }
-function checkPassword(pw) {
+async function checkPassword(pw) {
   if (typeof pw !== 'string' || !pw) return false;
   if (process.env.BEACON_PASSWORD) {
     const a = Buffer.from(pw), b = Buffer.from(process.env.BEACON_PASSWORD);
@@ -271,7 +275,7 @@ app.post('/api/setup', async (req, res) => {
   try {
     const data = await readAuth();
     if (!data.secret) data.secret = crypto.randomBytes(32).toString('hex');
-    data.passHash = hashPassword(pw);
+    data.passHash = await hashPassword(pw);
     data.createdAt = data.createdAt || new Date().toISOString();
     await writeAuth(data);
     authState = { secret: data.secret, passHash: data.passHash };
@@ -282,10 +286,10 @@ app.post('/api/setup', async (req, res) => {
     res.status(500).json({ error: 'Failed to set password' });
   }
 });
-app.post('/api/login', (req, res) => {
+app.post('/api/login', async (req, res) => {
   if (!authConfigured()) return res.status(400).json({ error: 'No password set' });
   if (rateLimited(req)) return res.status(429).json({ error: 'Too many attempts — try again later' });
-  if (!checkPassword(req.body && req.body.password)) return res.status(401).json({ error: 'Incorrect password' });
+  if (!(await checkPassword(req.body && req.body.password))) return res.status(401).json({ error: 'Incorrect password' });
   setSessionCookie(req, res);
   res.json({ ok: true });
 });
@@ -309,12 +313,12 @@ app.post('/api/change-password', async (req, res) => {
   if (!authState.passHash) return res.status(400).json({ error: 'No password set' });
   if (rateLimited(req)) return res.status(429).json({ error: 'Too many attempts — try again later' });
   const { currentPassword, newPassword } = req.body || {};
-  if (!checkPassword(currentPassword)) return res.status(401).json({ error: 'Current password is incorrect' });
+  if (!(await checkPassword(currentPassword))) return res.status(401).json({ error: 'Current password is incorrect' });
   if (typeof newPassword !== 'string' || newPassword.length < 8) return res.status(400).json({ error: 'New password must be at least 8 characters' });
   try {
     const data = await readAuth();
     data.secret = crypto.randomBytes(32).toString('hex'); // invalidate every existing session
-    data.passHash = hashPassword(newPassword);
+    data.passHash = await hashPassword(newPassword);
     await writeAuth(data);
     authState = { secret: data.secret, passHash: data.passHash };
     setSessionCookie(req, res);
@@ -1038,8 +1042,9 @@ function decodeHtmlEntities(str) {
     .replace(/&quot;/g, '"')
     .replace(/&apos;/g, "'")
     .replace(/&#39;/g, "'")
-    .replace(/&#(\d+);/g, (_, n) => { try { return String.fromCharCode(Number(n)); } catch { return ' '; } })
-    .replace(/&#x([0-9a-f]+);/gi, (_, h) => { try { return String.fromCharCode(parseInt(h, 16)); } catch { return ' '; } });
+    // fromCodePoint, not fromCharCode — astral entities (emoji, &#128512;) need it.
+    .replace(/&#(\d+);/g, (_, n) => { try { return String.fromCodePoint(Number(n)); } catch { return ' '; } })
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => { try { return String.fromCodePoint(parseInt(h, 16)); } catch { return ' '; } });
 }
 
 function extractText(html) {
