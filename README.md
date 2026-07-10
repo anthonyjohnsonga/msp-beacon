@@ -46,7 +46,7 @@ move between machines, or host on a file share.
 - **Add, edit, delete links** — save any URL with a title, description, nested folder path, and tags
 - **Auto-fetch page title** — blurring the URL field fetches the page title automatically; falls back to `og:title` and `meta[name=title]` if `<title>` is missing
 - **Copy URL** — one-click copy button on every card
-- **Duplicate URL warning** — inline warning when adding a URL that already exists, with an "Add anyway" option
+- **Duplicate URL warning** — inline warning when adding a URL you've already saved, matched on a normalized form (http/https, `www.`, `#fragments`, tracking params like `utm_*`, query order, and trailing slashes are all ignored) and naming the folder the existing link lives in, with an "Add anyway" option
 - **Undo delete** — single and bulk deletes can be undone within 5 seconds via a toast notification
 - **Archive** — archive links to tuck them out of the main view without deleting; browse and restore them from Settings → Archive
 - **Favorites** — star any link to pin it to a collapsible Favorites section at the top
@@ -94,11 +94,13 @@ move between machines, or host on a file share.
 ### Homepage / Dashboard
 
 <details>
-<summary>Show 7 features</summary>
+<summary>Show 9 features</summary>
 
 - **Home dashboard** — a start page with a live clock, time-of-day greeting, a prominent search box, and quick-access tiles for your links and folders
 - **Customizable widget layout** — click **Edit dashboard** (header button or Settings → View) to drag the widgets (Clock, Search, Favorites, Recent, Most visited, Recently added, Folders, Latest) into any order and show/hide each one. Your layout saves to your config and syncs across devices
 - **Link group widgets** — add your own widgets that hold a titled set of hand-picked app/link tiles, separate from your saved bookmarks — an app-launcher feel for your homelab services
+- **Weather widget** — current conditions, today's high/low, wind, and a two-day forecast, powered by [Open-Meteo](https://open-meteo.com) (free, no API key; proxied and cached by your server, so the browser never talks to a third party). Search for your city once to set it up, toggle °F/°C in the widget header
+- **Big clock widget** — a large centered clock with seconds and the full date, for a classic start-page look
 - **Live status dots** — each homepage tile shows a colored dot reflecting the link's most recent health-check result
 - **RSS / Atom feeds** — add feeds under Settings → Manage feeds to get a "Latest" headlines widget on the homepage
 - **Custom homepage background** — set a backdrop from a built-in gradient, an image URL, or your own uploaded image (stored locally on your server, no third-party calls), with dim and blur sliders to keep everything readable
@@ -222,6 +224,11 @@ On first load, MSP Beacon prompts you to **create a password** that gates the wh
 password hash is stored in `./data/auth.json` (kept out of backups). After that, every device
 must log in. You can change the prompt by setting `BEACON_PASSWORD` in `docker-compose.yml`
 instead — handy for fresh deploys.
+
+You can change the password any time from **Settings → Account → Change password** (it asks
+for the current password first). Changing it signs out every other device — useful if a
+session cookie ever leaks — while the device that made the change stays signed in. When the
+password is managed by `BEACON_PASSWORD`, change it in `docker-compose.yml` instead.
 
 > [!NOTE]
 > The login cookie is `HttpOnly` + `SameSite=Strict`. The `Secure` flag is only added when you
