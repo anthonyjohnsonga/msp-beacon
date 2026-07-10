@@ -15,7 +15,7 @@ import { checkLinks, checkUncheckedLinks } from './health.js';
 import { openStats, closeStats, openStatLink, scanLinksForStats, renderStats, resetStats, toggleStatsNever } from './stats.js';
 import { setupDragListeners } from './drag.js';
 import { parseSearch, linkMatchesFlag, contentMatchIds, contentMatchQuery, onSearchInput, clearSearch, saveSearchTerm, showSearchHistory, hideSearchHistory } from './search.js';
-import { openModal, closeModal, autoTitle, fetchPageTitle, saveLink, addLinkAnyway } from './modals.js';
+import { openModal, closeModal, autoTitle, fetchPageTitle, saveLink, addLinkAnyway, checkDupLive } from './modals.js';
 import { backupData, openRestore, handleRestoreFile } from './backup.js';
 import { openTrash, closeTrash, emptyTrash, updateTrashBadge } from './trash.js';
 import { ensureAuth, handleUnauthorized, logout } from './auth.js';
@@ -990,7 +990,7 @@ export async function openAllInFolder(path) {
 // ============================================================================
 Object.assign(window, {
   addFeed, addLinkAnyway, addLinkGroup, addNote, addSectionWidget, applyMode, applyTheme,
-  autoTitle, backupData, bulkAddTag, bulkArchive, bulkDelete, checkLinks,
+  autoTitle, backupData, bulkAddTag, bulkArchive, bulkDelete, checkDupLive, checkLinks,
   checkUncheckedLinks, clearSearch, clearSelection, closeArchive, closeFeedManager, closeFolderManager,
   closeFolderMove, closeImport, closeModal, closeSettings, closeShortcuts, closeStats, closeTagManager, closeTrash,
   closeTheme, collapseAll, confirmBulkMove, cycleDensity, deleteFolder, doImport,

@@ -119,7 +119,7 @@
 <div id="modalBg" class="modal-bg" style="display:none" onclick="if(event.target===this)closeModal()">
   <div class="modal" role="dialog" aria-modal="true">
     <div class="modal-header"><i class="ti ti-link"></i><h3 id="modalTitle">Add link</h3></div>
-    <div class="field"><label>URL</label><input type="text" id="mUrl" placeholder="https://…" oninput="autoTitle()" onblur="fetchPageTitle()"></div>
+    <div class="field"><label>URL</label><input type="text" id="mUrl" placeholder="https://…" oninput="autoTitle();checkDupLive()" onblur="fetchPageTitle()"></div>
     <div class="field"><label>Title</label><div class="title-wrap" id="titleWrap"><input type="text" id="mTitle" placeholder="Site name"><i class="ti ti-loader title-spinner" id="titleSpinner"></i></div></div>
     <div class="field"><label>Description</label><textarea id="mDesc" placeholder="What is this?"></textarea></div>
     <div class="field"><label>Folder <span style="font-size:10px;color:var(--text2);text-transform:none;letter-spacing:0">(type to search or create — use / for nesting)</span></label>

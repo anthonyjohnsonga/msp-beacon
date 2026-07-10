@@ -60,6 +60,34 @@ export async function fetchPageTitle() {
 // The link's folder path, straight from the combobox ([] = no folder).
 function modalFolderPath() { return folderPicker ? folderPicker.getPath() : []; }
 
+// Normalized match (urlKey), so http/https, www., tracking params, query
+// order, #fragments, and trailing slashes don't sneak a duplicate past.
+function findDup(url) {
+  const key = urlKey(url);
+  return links.find(l => !l.archived && !l.deleted && urlKey(l.url) === key);
+}
+function showDupWarning(dup) {
+  const where = linkPath(dup).join(' / ');
+  document.getElementById('dupWarningMsg').innerHTML =
+    `Already saved as <strong>${esc(dup.title)}</strong>${where ? ` in <strong>${esc(where)}</strong>` : ''}`;
+  document.getElementById('dupWarning').style.display = 'flex';
+}
+
+// Live duplicate check while typing/pasting into the URL field (debounced —
+// urlKey() walks every link). Only when adding: the save path doesn't dup-check
+// edits, so the live check matching it keeps the two consistent.
+let dupCheckTimer = null;
+export function checkDupLive() {
+  clearTimeout(dupCheckTimer);
+  dupCheckTimer = setTimeout(() => {
+    if (editId || document.getElementById('modalBg').style.display === 'none') return;
+    const url = document.getElementById('mUrl').value.trim();
+    const dup = url ? findDup(url) : null;
+    if (dup) showDupWarning(dup);
+    else document.getElementById('dupWarning').style.display = 'none';
+  }, 250);
+}
+
 export function saveLink() {
   const url = document.getElementById('mUrl').value.trim();
   const title = document.getElementById('mTitle').value.trim();
@@ -68,15 +96,9 @@ export function saveLink() {
   const tags = document.getElementById('mTags').value.split(',').map(t => t.trim()).filter(Boolean);
   const desc = document.getElementById('mDesc').value.trim();
   if (!editId) {
-    // Normalized match (urlKey), so http/https, www., tracking params, query
-    // order, #fragments, and trailing slashes don't sneak a duplicate past.
-    const key = urlKey(url);
-    const dup = links.find(l => !l.archived && !l.deleted && urlKey(l.url) === key);
+    const dup = findDup(url);
     if (dup) {
-      const where = linkPath(dup).join(' / ');
-      document.getElementById('dupWarningMsg').innerHTML =
-        `Already saved as <strong>${esc(dup.title)}</strong>${where ? ` in <strong>${esc(where)}</strong>` : ''}`;
-      document.getElementById('dupWarning').style.display = 'flex';
+      showDupWarning(dup);
       return;
     }
   }
@@ -102,6 +124,9 @@ export function saveLink() {
 export function addLinkAnyway() {
   const url = document.getElementById('mUrl').value.trim();
   const title = document.getElementById('mTitle').value.trim();
+  // Reachable before saveLink's validation now that the dup warning (and its
+  // Add-anyway button) appears live while typing the URL.
+  if (!url || !title) { alertDialog('URL and title are required.', { title: 'Add link' }); return; }
   const path = modalFolderPath();
   const tags = document.getElementById('mTags').value.split(',').map(t => t.trim()).filter(Boolean);
   const desc = document.getElementById('mDesc').value.trim();
