@@ -312,7 +312,7 @@ function widgetInner(w, data) {
       // dead block); configured → live container filled by loadHomeWeather().
       const body = located
         ? `<div class="home-weather" id="homeWeather"><div class="home-feed-msg"><i class="ti ti-loader" style="animation:spin 1s linear infinite"></i> Loading weather…</div></div>`
-        : `<div class="lg-add-form"><input class="lg-add-url" id="weatherSearchInput" type="text" placeholder="Search city — e.g. Atlanta" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();weatherSearchSubmit()}"><button class="btn" onclick="weatherSearchSubmit()"><i class="ti ti-search"></i> Search</button></div><div class="weather-results" id="weatherResults"></div>`;
+        : `<div class="lg-add-form"><input class="lg-add-url" id="weatherSearchInput" type="text" placeholder="Search city or ZIP — e.g. Atlanta or 30301" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();weatherSearchSubmit()}"><button class="btn" onclick="weatherSearchSubmit()"><i class="ti ti-search"></i> Search</button></div><div class="weather-results" id="weatherResults"></div>`;
       return `<div class="home-section"><div class="home-section-head"><i class="ti ti-cloud" style="font-size:14px;color:var(--accent-icon)"></i><span class="home-section-title">${esc(located && w.place ? w.place : 'Weather')}</span>${unitBtn}${locBtn}</div>${body}</div>`;
     }
     default: return '';

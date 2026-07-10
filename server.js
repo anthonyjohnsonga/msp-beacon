@@ -34,7 +34,9 @@ function isPrivateIP(ip) {
 //     /api/snapshot) and allowlisted feeds (/api/rss) DELIBERATELY fetch
 //     private/homelab IPs — that's the point of a self-hosted dashboard.
 // /api/weather + /api/geocode are outside both tiers: the server builds those
-// URLs itself against fixed Open-Meteo hosts, so no user-controlled target.
+// URLs itself against fixed hosts (Open-Meteo, and zippopotam.us for US zip
+// lookups — the zip path segment is regex-constrained to 5 digits), so no
+// user-controlled target.
 // Change the policy here, not at each call site.
 function parseHttpUrl(str) {
   let u;
@@ -1077,6 +1079,22 @@ app.get('/api/weather', async (req, res) => {
 app.get('/api/geocode', async (req, res) => {
   const q = String(req.query.q || '').trim().slice(0, 80);
   if (q.length < 2) return res.json({ results: [] });
+  // US ZIP fast path — Open-Meteo's postcode matching returns the city centroid
+  // and ranks foreign postcodes above US zips (06010 → Badajoz, Spain before
+  // Bristol, CT). Zippopotam gives the zip's own place + coordinates. An
+  // unknown zip (404 → null) falls through to the name search below, which
+  // still resolves 5-digit foreign postcodes (e.g. German PLZ).
+  const zip = q.match(/^(\d{5})(?:-\d{4})?$/);
+  if (zip) {
+    const page = await httpGetBuffer('https://api.zippopotam.us/us/' + zip[1], 3, 64 * 1024, 'application/json');
+    let raw = null;
+    try { raw = page && JSON.parse(page.buf.toString('utf8')); } catch { /* fall through to name search */ }
+    const results = ((raw && Array.isArray(raw.places)) ? raw.places : []).map(p => ({
+      name: p['place name'], admin1: p['state'] || '', country: raw['country'] || 'United States',
+      lat: Number(p['latitude']), lon: Number(p['longitude']),
+    })).filter(r => r.name && Number.isFinite(r.lat) && Number.isFinite(r.lon)).slice(0, 6);
+    if (results.length) return res.json({ results });
+  }
   const url = 'https://geocoding-api.open-meteo.com/v1/search?count=6&language=en&format=json&name=' + encodeURIComponent(q);
   const page = await httpGetBuffer(url, 3, 256 * 1024, 'application/json');
   let raw = null;
