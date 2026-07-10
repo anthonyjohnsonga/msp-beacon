@@ -56,7 +56,9 @@ const RSS_FETCH_MAX = 2 * 1024 * 1024; // 2MB cap on a fetched feed
 const RSS_TTL = 15 * 60 * 1000; // serve cached feed for 15 min before refetching
 const RSS_ITEMS_MAX = 30; // keep up to 30 items per feed
 
-app.use(express.json({ limit: '1mb' }));
+// 10mb matches what /api/restore accepts — a lower cap here would let you
+// restore a backup too big to ever re-save (every edit would 413).
+app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 let writeQueue = Promise.resolve();
@@ -386,7 +388,7 @@ app.get('/api/backup', async (req, res) => {
   }
 });
 
-app.post('/api/restore', express.json({ limit: '10mb' }), async (req, res) => {
+app.post('/api/restore', async (req, res) => {
   const backup = req.body;
   if (!backup || typeof backup !== 'object' || !Array.isArray(backup.links)) {
     return res.status(400).json({ error: 'Invalid backup file' });
