@@ -16,5 +16,6 @@ EXPOSE 3000
 
 USER node
 
-HEALTHCHECK CMD wget -qO- http://localhost:3000/api/links || exit 1
+# /api/me sits above the auth gate — /api/links would 401 (unhealthy) once a password is set
+HEALTHCHECK CMD wget -qO- http://localhost:3000/api/me || exit 1
 CMD ["node", "server.js"]
