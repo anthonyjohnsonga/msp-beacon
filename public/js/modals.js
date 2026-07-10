@@ -7,7 +7,7 @@
 // app.js since they read allTags/getTagColor there.
 // ============================================================================
 
-import { esc, linkPath } from './utils.js';
+import { esc, linkPath, urlKey } from './utils.js';
 import { showToast } from './toast.js';
 import { alertDialog } from './dialog.js';
 import { links, save, render, captureSnapshot, setLinkLocation } from './app.js';
@@ -68,11 +68,15 @@ export function saveLink() {
   const tags = document.getElementById('mTags').value.split(',').map(t => t.trim()).filter(Boolean);
   const desc = document.getElementById('mDesc').value.trim();
   if (!editId) {
-    const dup = links.find(l => !l.archived && !l.deleted && l.url.trim().toLowerCase() === url.toLowerCase());
+    // Normalized match (urlKey), so http/https, www., tracking params, query
+    // order, #fragments, and trailing slashes don't sneak a duplicate past.
+    const key = urlKey(url);
+    const dup = links.find(l => !l.archived && !l.deleted && urlKey(l.url) === key);
     if (dup) {
-      const w = document.getElementById('dupWarning');
-      document.getElementById('dupWarningMsg').innerHTML = `A link with this URL already exists — <strong>${esc(dup.title)}</strong>`;
-      w.style.display = 'flex';
+      const where = linkPath(dup).join(' / ');
+      document.getElementById('dupWarningMsg').innerHTML =
+        `Already saved as <strong>${esc(dup.title)}</strong>${where ? ` in <strong>${esc(where)}</strong>` : ''}`;
+      document.getElementById('dupWarning').style.display = 'flex';
       return;
     }
   }

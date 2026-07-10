@@ -25,6 +25,24 @@ export function linkPath(l) {
   return [l.folder, l.subfolder].filter(Boolean);
 }
 
+// Canonical comparison key for duplicate detection — NOT a fetchable URL.
+// Unifies the differences that almost never distinguish two bookmarks: case,
+// http vs https, a www. prefix, the #fragment, tracking params (utm_*, fbclid,
+// gclid, msclkid), query-param order, and a trailing slash. Non-http(s) or
+// unparseable input falls back to plain trim+lowercase (the old exact match).
+const TRACKING_PARAM = /^(utm_|fbclid$|gclid$|msclkid$)/i;
+export function urlKey(u) {
+  const s = String(u || '').trim();
+  let p;
+  try { p = new URL(s); } catch { return s.toLowerCase(); }
+  if (p.protocol !== 'http:' && p.protocol !== 'https:') return s.toLowerCase();
+  const host = p.hostname.replace(/^www\./i, '');
+  const params = [...p.searchParams].filter(([k]) => !TRACKING_PARAM.test(k))
+    .sort((a, b) => a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]));
+  const q = params.length ? '?' + params.map(([k, v]) => `${k}=${v}`).join('&') : '';
+  return (host + (p.port ? ':' + p.port : '') + p.pathname.replace(/\/+$/, '') + q).toLowerCase();
+}
+
 export function hexToRgb(hex) {
   if (!isHexColor(hex)) return '29,158,117';
   const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
