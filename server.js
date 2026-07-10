@@ -382,16 +382,17 @@ app.post('/api/config', (req, res) => {
     return res.status(400).json({ error: 'Expected an object' });
   }
 
-  syncAllowedFeeds(cfg);
-  const writePromise = writeConfig(cfg);
-  configWriteQueue = configWriteQueue.then(() => writePromise).catch(() => {});
-
-  writePromise
-    .then(() => res.json({ ok: true }))
-    .catch(e => {
-      console.error('POST /api/config error:', e);
-      res.status(500).json({ error: 'Failed to save config' });
-    });
+  // Allowlist sync + write both run INSIDE the queue (same pattern as the links
+  // queue) so two concurrent saves can't interleave writes or leave the RSS
+  // allowlist reflecting the config that lost the race.
+  configWriteQueue = configWriteQueue.then(async () => {
+    syncAllowedFeeds(cfg);
+    await writeConfig(cfg);
+    res.json({ ok: true });
+  }).catch(e => {
+    console.error('POST /api/config error:', e);
+    if (!res.headersSent) res.status(500).json({ error: 'Failed to save config' });
+  });
 });
 
 app.get('/api/backup', async (req, res) => {
