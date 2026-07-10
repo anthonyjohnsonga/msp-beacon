@@ -300,6 +300,31 @@ app.use((req, res, next) => {
   res.status(401).json({ error: 'Authentication required' });
 });
 
+// Change password — deliberately BELOW the gate (needs a valid session) and
+// re-verifies the current password. Rotates the HMAC secret so every OTHER
+// device's session cookie dies instantly — the recovery path if a cookie ever
+// leaks. The caller gets a fresh cookie under the new secret.
+app.post('/api/change-password', async (req, res) => {
+  if (process.env.BEACON_PASSWORD) return res.status(400).json({ error: 'Password is managed by the BEACON_PASSWORD environment variable' });
+  if (!authState.passHash) return res.status(400).json({ error: 'No password set' });
+  if (rateLimited(req)) return res.status(429).json({ error: 'Too many attempts — try again later' });
+  const { currentPassword, newPassword } = req.body || {};
+  if (!checkPassword(currentPassword)) return res.status(401).json({ error: 'Current password is incorrect' });
+  if (typeof newPassword !== 'string' || newPassword.length < 8) return res.status(400).json({ error: 'New password must be at least 8 characters' });
+  try {
+    const data = await readAuth();
+    data.secret = crypto.randomBytes(32).toString('hex'); // invalidate every existing session
+    data.passHash = hashPassword(newPassword);
+    await writeAuth(data);
+    authState = { secret: data.secret, passHash: data.passHash };
+    setSessionCookie(req, res);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('POST /api/change-password error:', e);
+    res.status(500).json({ error: 'Failed to change password' });
+  }
+});
+
 app.get('/api/links', async (req, res) => {
   try {
     const links = await readLinks();
