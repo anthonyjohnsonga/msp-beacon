@@ -354,6 +354,24 @@ select:focus { outline: none; border-color: var(--g4); }
 .home-note { width: 100%; min-height: 90px; resize: vertical; padding: 10px 12px; font-family: inherit; font-size: 13px; line-height: 1.5; color: var(--text0); background: var(--bg1); border: 1px solid var(--g5); border-radius: 10px; box-sizing: border-box; }
 .home-note:focus { outline: none; border-color: var(--g4); }
 .home-note::placeholder { color: var(--text2); }
+.home-bigclock { text-align: center; padding: 14px 0 4px; }
+.bigclock-time { font-size: 64px; font-weight: 300; color: var(--text0); letter-spacing: 1px; line-height: 1; font-variant-numeric: tabular-nums; }
+.bigclock-sec { font-size: 28px; font-weight: 300; color: var(--text2); font-variant-numeric: tabular-nums; }
+.bigclock-ampm { font-size: 22px; font-weight: 400; color: var(--text2); margin-left: 10px; }
+.bigclock-date { margin-top: 8px; font-size: 14px; color: var(--text2); }
+.home-weather { display: flex; flex-direction: column; gap: 10px; }
+.weather-now { display: flex; align-items: center; gap: 14px; }
+.weather-icon { font-size: 44px; color: var(--accent-icon); flex-shrink: 0; }
+.weather-temp { font-size: 40px; font-weight: 300; color: var(--text0); line-height: 1; font-variant-numeric: tabular-nums; }
+.weather-meta { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.weather-cond { font-size: 14px; color: var(--text0); }
+.weather-hl { font-size: 13px; color: var(--text2); display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.weather-days { display: flex; gap: 18px; flex-wrap: wrap; }
+.weather-day { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text2); font-variant-numeric: tabular-nums; }
+.weather-day i { color: var(--accent-icon); font-size: 15px; }
+.weather-day-name { font-weight: 600; }
+.weather-results { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.weather-results .btn { justify-content: flex-start; height: 32px; font-size: 13px; }
 .ctx-menu { position: fixed; z-index: 400; background: var(--bg1); border: 1px solid var(--g5); border-radius: 10px; padding: 4px; min-width: 172px; box-shadow: 0 8px 24px rgba(0,0,0,.4); display: none; flex-direction: column; }
 .ctx-menu.open { display: flex; }
 .ctx-item { display: flex; align-items: center; gap: 9px; padding: 8px 12px; border-radius: 7px; font-size: 13px; color: var(--text0); cursor: pointer; background: none; border: none; font-family: inherit; width: 100%; text-align: left; white-space: nowrap; }

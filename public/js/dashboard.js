@@ -34,20 +34,26 @@ export function setLastHomeStatusAt(v) { lastHomeStatusAt = v; }
 // tiles. The layout persists in config.json (key: dashboard) + localStorage, so
 // it backs up and syncs like every other setting. Existing users with no saved
 // layout fall back to DEFAULT_DASHBOARD — i.e. today's exact section order.
-const SECTION_WIDGETS = ['clock', 'search', 'favorites', 'readlater', 'recent', 'most-visited', 'recently-added', 'folders', 'latest'];
+// SECTION_WIDGETS = every addable singleton section type (drives the Add-widget
+// chips + sanitize acceptance). DEFAULT_WIDGETS = the subset new/unconfigured
+// layouts start with — bigclock/weather are deliberately opt-in, not default.
+const SECTION_WIDGETS = ['clock', 'search', 'favorites', 'readlater', 'recent', 'most-visited', 'recently-added', 'folders', 'latest', 'bigclock', 'weather'];
+const DEFAULT_WIDGETS = ['clock', 'search', 'favorites', 'readlater', 'recent', 'most-visited', 'recently-added', 'folders', 'latest'];
 const WIDGET_LABELS = {
   clock: 'Clock & greeting', search: 'Search box', favorites: 'Favorites',
   readlater: 'Read later', recent: 'Recent', 'most-visited': 'Most visited',
   'recently-added': 'Recently added', folders: 'Folders', latest: 'Latest (RSS)',
+  bigclock: 'Big clock', weather: 'Weather',
   linkgroup: 'Link group', notes: 'Note'
 };
 const WIDGET_ICONS = {
   clock: 'ti-clock', search: 'ti-search', favorites: 'ti-star-filled',
   readlater: 'ti-bookmark', recent: 'ti-history', 'most-visited': 'ti-flame',
   'recently-added': 'ti-clock-plus', folders: 'ti-folders', latest: 'ti-rss',
+  bigclock: 'ti-clock-hour-3', weather: 'ti-cloud',
   linkgroup: 'ti-apps', notes: 'ti-note'
 };
-const DEFAULT_DASHBOARD = SECTION_WIDGETS.map(type => ({ id: type, type, enabled: true }));
+const DEFAULT_DASHBOARD = DEFAULT_WIDGETS.map(type => ({ id: type, type, enabled: true }));
 const LINKGROUP_MAX_ITEMS = 50;
 const NOTE_MAX_LEN = 10000;
 export let dashboard = JSON.parse(localStorage.getItem('msp-dashboard') || 'null');
@@ -100,7 +106,21 @@ function sanitizeDashboard(arr) {
     if (!w || typeof w !== 'object') continue;
     const type = w.type;
     const enabled = w.enabled !== false;
-    if (SECTION_WIDGETS.includes(type)) {
+    if (type === 'weather') {
+      // Section singleton like the generic branch, but it carries location/unit
+      // config that must survive sanitize. Coordinates are validated numbers or
+      // null (= not configured yet); place is display-only text (esc'd at render).
+      if (seenSection.has(type)) continue;
+      seenSection.add(type);
+      const lat = Number(w.lat), lon = Number(w.lon);
+      const located = Number.isFinite(lat) && Math.abs(lat) <= 90 && Number.isFinite(lon) && Math.abs(lon) <= 180;
+      out.push({
+        id: 'weather', type, enabled,
+        lat: located ? lat : null, lon: located ? lon : null,
+        place: (typeof w.place === 'string' ? w.place : '').slice(0, 60),
+        unit: w.unit === 'f' ? 'f' : 'c',
+      });
+    } else if (SECTION_WIDGETS.includes(type)) {
       if (seenSection.has(type)) continue; // one of each section
       seenSection.add(type);
       out.push({ id: type, type, enabled });
@@ -140,14 +160,23 @@ function greeting() {
 }
 function updateClock() {
   const t = document.getElementById('homeTime');
-  if (!t) { clearInterval(homeClockTimer); homeClockTimer = null; return; }
+  const bt = document.getElementById('bigClockTime');
+  if (!t && !bt) { clearInterval(homeClockTimer); homeClockTimer = null; return; }
   const now = new Date();
   let h = now.getHours(); const m = now.getMinutes();
   const ampm = h >= 12 ? 'PM' : 'AM';
   h = h % 12; if (h === 0) h = 12;
-  t.textContent = `${h}:${String(m).padStart(2, '0')} ${ampm}`;
-  const g = document.getElementById('homeGreeting');
-  if (g) g.textContent = greeting();
+  if (t) {
+    t.textContent = `${h}:${String(m).padStart(2, '0')} ${ampm}`;
+    const g = document.getElementById('homeGreeting');
+    if (g) g.textContent = greeting();
+  }
+  if (bt) {
+    const s = now.getSeconds();
+    bt.innerHTML = `${h}:${String(m).padStart(2, '0')}<span class="bigclock-sec">:${String(s).padStart(2, '0')}</span><span class="bigclock-ampm">${ampm}</span>`;
+    const bd = document.getElementById('bigClockDate');
+    if (bd) bd.textContent = now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+  }
 }
 
 function homeTileHtml(l, draggable) {
@@ -270,6 +299,22 @@ function widgetInner(w, data) {
       // a sticky note. Text saves on blur; no re-render so focus/caret survive.
       return `<div class="home-section"><div class="home-section-head"><i class="ti ti-note" style="font-size:14px;color:var(--accent-icon)"></i><span class="home-section-title">${esc(w.title || 'Note')}</span></div><textarea class="home-note" placeholder="Write a note…" maxlength="${NOTE_MAX_LEN}" onblur="noteSave('${w.id}',this)">${esc(w.text || '')}</textarea></div>`;
     }
+    case 'bigclock':
+      return `<div class="home-section home-bigclock"><div class="bigclock-time" id="bigClockTime"></div><div class="bigclock-date" id="bigClockDate"></div></div>`;
+    case 'weather': {
+      // Disabled-in-edit-mode shows a static preview (same lesson as 'latest' —
+      // never render the live container that loadHomeWeather() won't fill).
+      if (!w.enabled) return sectionShell('Weather', 'ti-cloud', '<div class="home-widget-empty">Weather</div>');
+      const located = Number.isFinite(w.lat) && Number.isFinite(w.lon);
+      const unitBtn = located ? `<button class="home-section-all" onclick="weatherToggleUnit()" title="Switch °F / °C">°${w.unit === 'f' ? 'F' : 'C'}</button>` : '';
+      const locBtn = (edit && located) ? `<button class="home-section-all" onclick="weatherChangeLocation()"><i class="ti ti-map-pin"></i> change</button>` : '';
+      // Unconfigured → inline city search (any mode, or the widget would be a
+      // dead block); configured → live container filled by loadHomeWeather().
+      const body = located
+        ? `<div class="home-weather" id="homeWeather"><div class="home-feed-msg"><i class="ti ti-loader" style="animation:spin 1s linear infinite"></i> Loading weather…</div></div>`
+        : `<div class="lg-add-form"><input class="lg-add-url" id="weatherSearchInput" type="text" placeholder="Search city — e.g. Atlanta" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();weatherSearchSubmit()}"><button class="btn" onclick="weatherSearchSubmit()"><i class="ti ti-search"></i> Search</button></div><div class="weather-results" id="weatherResults"></div>`;
+      return `<div class="home-section"><div class="home-section-head"><i class="ti ti-cloud" style="font-size:14px;color:var(--accent-icon)"></i><span class="home-section-title">${esc(located && w.place ? w.place : 'Weather')}</span>${unitBtn}${locBtn}</div>${body}</div>`;
+    }
     default: return '';
   }
 }
@@ -330,6 +375,8 @@ export function renderHome() {
   clearInterval(homeClockTimer);
   homeClockTimer = setInterval(updateClock, 1000);
   if (rssFeeds.length && list.some(w => w.type === 'latest' && w.enabled)) loadHomeFeeds();
+  const ww = list.find(w => w.type === 'weather' && w.enabled);
+  if (ww && Number.isFinite(ww.lat) && Number.isFinite(ww.lon)) loadHomeWeather(ww);
   loadHomeStatus();
   updateArchiveBadge();
   updateTrashBadge();
@@ -365,7 +412,9 @@ function addSectionWidget(type) {
   if (!SECTION_WIDGETS.includes(type)) return;
   const d = ensureDashboard();
   if (d.some(w => w.type === type)) return;
-  d.push({ id: type, type, enabled: true });
+  const w = { id: type, type, enabled: true };
+  if (type === 'weather') Object.assign(w, { lat: null, lon: null, place: '', unit: 'f' });
+  d.push(w);
   persistDashboard(); render();
 }
 function addLinkGroup() {
@@ -477,6 +526,103 @@ async function loadHomeFeeds() {
 
 function openFeedItem(url) { window.open(url, '_blank', 'noopener'); }
 
+// --- Weather widget ----------------------------------------------------------
+// Data comes from /api/weather (server-side Open-Meteo proxy, cached 15 min).
+// The widget object carries {lat, lon, place, unit}; temps arrive in °C and are
+// converted for display only.
+let weatherLoadToken = 0;
+let weatherSearchResults = []; // last /api/geocode results; picked by index so
+                               // no place-name text is inlined into onclick
+
+// WMO weather codes → Tabler icon + label (all names verified in 3.6.0).
+const WEATHER_CODES = [
+  [[0], 'ti-sun', 'Clear'],
+  [[1], 'ti-sun-high', 'Mostly clear'],
+  [[2], 'ti-cloud', 'Partly cloudy'],
+  [[3], 'ti-cloud', 'Overcast'],
+  [[45, 48], 'ti-mist', 'Fog'],
+  [[51, 53, 55, 56, 57], 'ti-cloud-rain', 'Drizzle'],
+  [[61, 63, 65, 66, 67, 80, 81, 82], 'ti-cloud-rain', 'Rain'],
+  [[71, 73, 75, 77, 85, 86], 'ti-cloud-snow', 'Snow'],
+  [[95, 96, 99], 'ti-cloud-storm', 'Thunderstorm'],
+];
+function weatherIconLabel(code) {
+  for (const [codes, icon, label] of WEATHER_CODES) if (codes.includes(code)) return [icon, label];
+  return ['ti-cloud', ''];
+}
+
+function weatherWidget() { return ensureDashboard().find(x => x.type === 'weather'); }
+
+async function loadHomeWeather(w) {
+  const token = ++weatherLoadToken;
+  let data = null;
+  try {
+    const r = await fetch(`/api/weather?lat=${w.lat}&lon=${w.lon}`);
+    if (r.ok) data = await r.json();
+  } catch { /* rendered as unavailable below */ }
+  if (token !== weatherLoadToken) return; // a newer load superseded us
+  const el = document.getElementById('homeWeather');
+  if (!el) return;
+  if (!data || !data.current) { el.innerHTML = '<div class="home-feed-msg">Weather unavailable right now.</div>'; return; }
+  const unit = w.unit === 'f' ? 'f' : 'c';
+  const deg = c => (c == null ? '–' : Math.round(unit === 'f' ? c * 9 / 5 + 32 : c) + '°');
+  const wind = data.current.wind == null ? '' : ` · <i class="ti ti-wind"></i> ${Math.round(unit === 'f' ? data.current.wind * 0.621371 : data.current.wind)} ${unit === 'f' ? 'mph' : 'km/h'}`;
+  const [icon, label] = weatherIconLabel(data.current.code);
+  const today = data.daily[0] || {};
+  const days = data.daily.slice(1, 3).map(d => {
+    const [di] = weatherIconLabel(d.code);
+    const name = new Date(d.date + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short' });
+    return `<div class="weather-day"><span class="weather-day-name">${esc(name)}</span><i class="ti ${di}"></i><span>${deg(d.max)} / ${deg(d.min)}</span></div>`;
+  }).join('');
+  el.innerHTML = `
+    <div class="weather-now">
+      <i class="ti ${icon} weather-icon"></i>
+      <div class="weather-temp">${deg(data.current.temp)}</div>
+      <div class="weather-meta">
+        <div class="weather-cond">${esc(label)}</div>
+        <div class="weather-hl">H ${deg(today.max)} · L ${deg(today.min)}${wind}</div>
+      </div>
+    </div>
+    ${days ? `<div class="weather-days">${days}</div>` : ''}`;
+}
+
+async function weatherSearchSubmit() {
+  const input = document.getElementById('weatherSearchInput');
+  const box = document.getElementById('weatherResults');
+  const q = (input ? input.value : '').trim();
+  if (q.length < 2 || !box) return;
+  box.innerHTML = '<div class="home-feed-msg"><i class="ti ti-loader" style="animation:spin 1s linear infinite"></i> Searching…</div>';
+  let results = [];
+  try {
+    const r = await fetch('/api/geocode?q=' + encodeURIComponent(q));
+    if (r.ok) results = (await r.json()).results || [];
+  } catch { /* empty list message below */ }
+  weatherSearchResults = results;
+  if (!results.length) { box.innerHTML = '<div class="home-feed-msg">No places found.</div>'; return; }
+  box.innerHTML = results.map((r, i) =>
+    `<button class="btn weather-result" onclick="weatherPickLocation(${i})"><i class="ti ti-map-pin"></i> ${esc([r.name, r.admin1, r.country].filter(Boolean).join(', '))}</button>`).join('');
+}
+function weatherPickLocation(i) {
+  const r = weatherSearchResults[i];
+  const w = weatherWidget();
+  if (!r || !w) return;
+  w.lat = Number(r.lat); w.lon = Number(r.lon);
+  w.place = String(r.name || '').slice(0, 60);
+  persistDashboard(); render();
+}
+function weatherToggleUnit() {
+  const w = weatherWidget();
+  if (!w) return;
+  w.unit = w.unit === 'f' ? 'c' : 'f';
+  persistDashboard(); render();
+}
+function weatherChangeLocation() {
+  const w = weatherWidget();
+  if (!w) return;
+  w.lat = null; w.lon = null;
+  persistDashboard(); render(); // back to the city-search state
+}
+
 // Live up/down dots on homepage link tiles, reusing /api/check-links.
 function statusDotClass(id) {
   const s = linkStatus[id];
@@ -522,5 +668,6 @@ async function loadHomeStatus() {
 export {
   addLinkGroup, addNote, addSectionWidget, homeSearchInput, homeShowAll, lgAddSubmit,
   lgStartRename, linkgroupRemoveItem, noteSave, openFeedItem, toggleDashboardEdit,
+  weatherChangeLocation, weatherPickLocation, weatherSearchSubmit, weatherToggleUnit,
   widgetRemove, widgetToggle, sanitizeDashboard, migrateDashboard,
 };

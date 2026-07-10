@@ -26,6 +26,7 @@ import { ensureAuth, handleUnauthorized, logout } from './auth.js';
 import {
   addLinkGroup, addNote, addSectionWidget, homeSearchInput, homeShowAll, lgAddSubmit,
   lgStartRename, linkgroupRemoveItem, noteSave, openFeedItem, toggleDashboardEdit,
+  weatherChangeLocation, weatherPickLocation, weatherSearchSubmit, weatherToggleUnit,
   widgetRemove, widgetToggle,
   renderHome, takeHomeFolderFilter, exitHomeMode, dashboardEditMode, dashboard,
   setDashboard, sanitizeDashboard, migrateDashboard, persistDashboard,
@@ -1005,7 +1006,9 @@ Object.assign(window, {
   startFolderRename, toggleAll, toggleDashboardEdit, toggleDefaultView, toggleFavorites,
   toggleStatsNever,
   toggleFilter, toggleFolder, toggleSelectMode, toggleSettings, toggleView,
-  undoAction, updateFilterBadge, uploadWallpaper, widgetRemove, widgetToggle,
+  undoAction, updateFilterBadge, uploadWallpaper,
+  weatherChangeLocation, weatherPickLocation, weatherSearchSubmit, weatherToggleUnit,
+  widgetRemove, widgetToggle,
 });
 
 // ============================================================================

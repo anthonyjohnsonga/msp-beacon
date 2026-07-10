@@ -33,6 +33,8 @@ function isPrivateIP(ip) {
 //   • Trusted, user-saved targets (/api/favicon, /api/check-links,
 //     /api/snapshot) and allowlisted feeds (/api/rss) DELIBERATELY fetch
 //     private/homelab IPs — that's the point of a self-hosted dashboard.
+// /api/weather + /api/geocode are outside both tiers: the server builds those
+// URLs itself against fixed Open-Meteo hosts, so no user-controlled target.
 // Change the policy here, not at each call site.
 function parseHttpUrl(str) {
   let u;
@@ -1019,6 +1021,72 @@ app.get('/api/rss', async (req, res) => {
   if (!allowedFeedUrls.has(url)) return res.status(403).json({ error: 'feed not configured' });
   const feed = await getFeed(url);
   res.json({ url, title: feed.title, items: feed.items, error: feed.error });
+});
+
+// --- Weather widget (Open-Meteo proxy) ----------------------------------------
+// Serves the homepage weather widget from api.open-meteo.com (free, keyless) and
+// its city search from geocoding-api.open-meteo.com. The server constructs both
+// URLs itself — no user-controlled fetch target (see the outbound-fetch policy up
+// top). Responses are trimmed to what the widget renders and cached in memory.
+
+const WEATHER_TTL = 15 * 60 * 1000; // Open-Meteo updates roughly every 15 min
+const weatherCache = new Map(); // 'lat,lon' (2dp) -> { data, fetchedAt }
+
+app.get('/api/weather', async (req, res) => {
+  const lat = Number(req.query.lat), lon = Number(req.query.lon);
+  if (!Number.isFinite(lat) || Math.abs(lat) > 90 || !Number.isFinite(lon) || Math.abs(lon) > 180) {
+    return res.status(400).json({ error: 'invalid coordinates' });
+  }
+  const key = `${lat.toFixed(2)},${lon.toFixed(2)}`;
+  const cached = weatherCache.get(key);
+  if (cached && Date.now() - cached.fetchedAt < WEATHER_TTL) return res.json(cached.data);
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}`
+    + '&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m'
+    + '&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=3';
+  const page = await httpGetBuffer(url, 3, 256 * 1024, 'application/json');
+  let raw = null;
+  try { raw = page && JSON.parse(page.buf.toString('utf8')); } catch { /* treated as unavailable below */ }
+  if (!raw || !raw.current || !raw.daily) {
+    // Serve a stale copy over an error if we have one — same spirit as the RSS cache.
+    if (cached) return res.json(cached.data);
+    return res.status(502).json({ error: 'weather unavailable' });
+  }
+  const data = {
+    current: {
+      temp: raw.current.temperature_2m,
+      humidity: raw.current.relative_humidity_2m,
+      wind: raw.current.wind_speed_10m,
+      code: raw.current.weather_code,
+    },
+    daily: (raw.daily.time || []).map((date, i) => ({
+      date,
+      code: (raw.daily.weather_code || [])[i],
+      max: (raw.daily.temperature_2m_max || [])[i],
+      min: (raw.daily.temperature_2m_min || [])[i],
+    })),
+  };
+  // Bound the cache: sweep expired entries once it grows past a handful of
+  // locations (one home instance realistically uses one or two).
+  if (weatherCache.size > 50) {
+    for (const [k, v] of weatherCache) if (Date.now() - v.fetchedAt > WEATHER_TTL) weatherCache.delete(k);
+  }
+  weatherCache.set(key, { data, fetchedAt: Date.now() });
+  res.json(data);
+});
+
+app.get('/api/geocode', async (req, res) => {
+  const q = String(req.query.q || '').trim().slice(0, 80);
+  if (q.length < 2) return res.json({ results: [] });
+  const url = 'https://geocoding-api.open-meteo.com/v1/search?count=6&language=en&format=json&name=' + encodeURIComponent(q);
+  const page = await httpGetBuffer(url, 3, 256 * 1024, 'application/json');
+  let raw = null;
+  try { raw = page && JSON.parse(page.buf.toString('utf8')); } catch { /* treated as unavailable below */ }
+  if (!raw) return res.status(502).json({ error: 'geocoding unavailable' });
+  const results = (raw.results || []).map(r => ({
+    name: r.name, admin1: r.admin1 || '', country: r.country || '',
+    lat: r.latitude, lon: r.longitude,
+  }));
+  res.json({ results });
 });
 
 // --- Full-text content search ------------------------------------------------
