@@ -14,7 +14,7 @@ import { archiveLink, openArchive, closeArchive, updateArchiveBadge } from './ar
 import { checkLinks, checkUncheckedLinks } from './health.js';
 import { openStats, closeStats, openStatLink, scanLinksForStats, renderStats, resetStats, toggleStatsNever } from './stats.js';
 import { setupDragListeners } from './drag.js';
-import { parseSearch, linkMatchesFlag, contentMatchIds, contentMatchQuery, onSearchInput, clearSearch, saveSearchTerm, showSearchHistory, hideSearchHistory } from './search.js';
+import { onSearchInput, clearSearch, saveSearchTerm, showSearchHistory, hideSearchHistory } from './search.js';
 import { openModal, closeModal, autoTitle, fetchPageTitle, saveLink, addLinkAnyway, checkDupLive } from './modals.js';
 import { backupData, openRestore, handleRestoreFile } from './backup.js';
 import { openTrash, closeTrash, emptyTrash, updateTrashBadge } from './trash.js';
