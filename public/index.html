@@ -74,7 +74,7 @@
   <div class="toolbar">
     <div class="search-wrap">
       <i class="ti ti-search search-icon"></i>
-      <input type="text" id="search" placeholder="Search… try tag: folder: is:broken (press /)" title="Operators: tag:name, folder:name, is:favorite, is:readlater, is:broken, is:online, is:untagged, is:archived. Quote multi-word values, e.g. folder:&quot;My Stuff&quot;." oninput="onSearchInput(this.value)" onfocus="showSearchHistory()" onblur="saveSearchTerm(this.value);setTimeout(hideSearchHistory,150)">
+      <input type="text" id="search" placeholder="Search… try tag: folder: is:broken -exclude OR (press /)" title="Operators: tag:name, folder:name, is:favorite, is:readlater, is:broken, is:online, is:untagged, is:archived. Boolean: -term (or !term) excludes; uppercase OR between words matches either (azure OR aws). Quote multi-word values, e.g. folder:&quot;My Stuff&quot; or -&quot;read later&quot;." oninput="onSearchInput(this.value)" onfocus="showSearchHistory()" onblur="saveSearchTerm(this.value);setTimeout(hideSearchHistory,150)">
       <button class="search-clear" id="searchClear" style="display:none" onclick="clearSearch()"><i class="ti ti-x"></i></button>
       <div class="search-history" id="searchHistory"></div>
     </div>

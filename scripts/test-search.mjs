@@ -166,7 +166,22 @@ async function main() {
     r = await D.eval(`window.__doSearch('zzqqxx')`);
     check('garbage query → 0 results, no crash', r.ids.length === 0, r.ids);
 
-    // 7. Clearing the query restores the full fixture.
+    // 7. Exclusion operator: "azure -billing" drops the link with "billing".
+    r = await D.eval(`window.__doSearch('azure -billing')`);
+    check('exclude: -billing drops the Billing Portal link', !r.ids.includes('zz01aaaa'), r.ids);
+    check('exclude: other azure links remain', r.ids.includes('zz02aaaa') && r.ids.includes('zz03aaaa'), r.ids);
+
+    // 8. OR operator: matches either alternative.
+    r = await D.eval(`window.__doSearch('kubernetes OR github')`);
+    check('OR: matches either alternative', r.ids.includes('zz04aaaa') && r.ids.includes('zz06aaaa'), r.ids);
+    check('OR: unrelated links excluded', !r.ids.includes('zz05aaaa'), r.ids);
+
+    // 9. Pure-exclusion query: everything EXCEPT links matching the term.
+    r = await D.eval(`window.__doSearch('-azure')`);
+    check('pure-exclude: azure links removed', !['zz01aaaa','zz02aaaa','zz03aaaa'].some(id => r.ids.includes(id)), r.ids);
+    check('pure-exclude: non-azure links kept', ['zz04aaaa','zz05aaaa','zz06aaaa'].every(id => r.ids.includes(id)), r.ids);
+
+    // 10. Clearing the query restores the full fixture.
     r = await D.eval(`window.__doSearch('')`);
     check('empty query shows all fixture links', FIXTURE.every(l => r.ids.includes(l.id)), r.ids);
 

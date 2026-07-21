@@ -23,6 +23,8 @@ let contentSearchTimer = null;
 let contentSearchToken = 0;        // guards against out-of-order /api/search-content responses
 
 // Search operators: tag:, folder:, is:<flag>. Quoted values supported (folder:"My Stuff").
+// Boolean free-text operators: a leading - (or !) EXCLUDES a term (azure -billing),
+// and an uppercase OR between terms makes them alternatives (azure OR aws).
 // Anything not matching an operator stays free text (title/url/desc/tag + page-content search).
 const SEARCH_FLAG_ALIASES = {
   favorite: 'favorite', fav: 'favorite', star: 'favorite', starred: 'favorite',
@@ -32,33 +34,61 @@ const SEARCH_FLAG_ALIASES = {
   untagged: 'untagged', notags: 'untagged',
   archived: 'archived', archive: 'archived',
 };
+// Free-text positives are parsed into conjunctive normal form: `clauses` is a list
+// of OR-groups, ALL of which must match (AND), each group needing ANY one of its
+// terms (OR). Plain space-separated terms become one single-term clause each
+// (pure AND, as before); `OR` merges the two terms it sits between into one group.
+// `exclude` holds terms that must NOT appear anywhere. `terms` is the flat list of
+// positives (for highlighting + page-content search); `text` is those joined.
 export function parseSearch(raw) {
-  const tags = [], folders = [], flags = [], terms = [];
+  const tags = [], folders = [], flags = [], clauses = [], exclude = [];
+  let orPending = false; // when set, the next positive term joins the previous clause
   const tokens = (raw || '').match(/(?:[^\s"]+|"[^"]*")+/g) || [];
   for (const tok of tokens) {
+    if (tok === 'OR' || tok === '|') { if (clauses.length) orPending = true; continue; }
     const m = tok.match(/^([a-z]+):(.*)$/i);
     if (m) {
       const key = m[1].toLowerCase();
       const val = m[2].replace(/"/g, '').trim().toLowerCase();
-      if (key === 'tag' && val) { tags.push(val); continue; }
-      if (key === 'folder' && val) { folders.push(val); continue; }
-      if (key === 'is' && SEARCH_FLAG_ALIASES[val]) { flags.push(SEARCH_FLAG_ALIASES[val]); continue; }
+      if (key === 'tag' && val) { tags.push(val); orPending = false; continue; }
+      if (key === 'folder' && val) { folders.push(val); orPending = false; continue; }
+      if (key === 'is' && SEARCH_FLAG_ALIASES[val]) { flags.push(SEARCH_FLAG_ALIASES[val]); orPending = false; continue; }
+    }
+    if ((tok[0] === '-' || tok[0] === '!') && tok.length > 1) { // exclusion
+      const ex = tok.slice(1).replace(/"/g, '').toLowerCase();
+      if (ex) exclude.push(ex);
+      orPending = false;
+      continue;
     }
     const t = tok.replace(/"/g, '').toLowerCase();
-    if (t) terms.push(t);
+    if (!t) continue;
+    if (orPending && clauses.length) clauses[clauses.length - 1].push(t);
+    else clauses.push([t]);
+    orPending = false;
   }
-  return { tags, folders, flags, text: terms.join(' ').trim(), terms };
+  const terms = clauses.flat();
+  return { tags, folders, flags, clauses, exclude, terms, text: terms.join(' ').trim() };
+}
+// True if `term` appears in any of the link's searchable metadata fields. Used for
+// exclusion (-term), which removes a link from every match source.
+export function linkMatchesTerm(l, term) {
+  if (!term) return false;
+  return (l.title || '').toLowerCase().includes(term)
+    || (l.url || '').toLowerCase().includes(term)
+    || (l.desc || '').toLowerCase().includes(term)
+    || linkPath(l).join(' ').toLowerCase().includes(term)
+    || (l.tags || []).join(' ').toLowerCase().includes(term);
 }
 
-// Relevance ranking for the free-text portion of a query. Each term must appear
-// in at least one field (AND across terms, OR across fields) or the whole link
-// is rejected — so word order no longer matters, unlike the old single
-// concatenated-substring test. A term scores by the highest-weight field it hits,
-// with a bonus when it starts a word (prefix) and when the full multi-word phrase
-// appears contiguously in a high-value field. Higher score = more relevant.
+// Relevance ranking for the free-text positives. `clauses` is CNF (AND of
+// OR-groups): every clause must contribute a match (else the link is rejected),
+// and a clause scores by its best-matching alternative. A term scores by the
+// highest-weight field it hits, plus a word-start bonus; a whole multi-word
+// phrase in a high-value field earns an extra bonus. Exclusions are handled by
+// the caller (linkMatchesTerm) so this stays purely about positives.
 const FIELD_WEIGHTS = { title: 10, tags: 6, folder: 4, url: 2, desc: 2 };
-export function scoreTextMatch(l, terms, phrase) {
-  if (!terms || !terms.length) return 0;
+export function scoreTextMatch(l, clauses, phrase) {
+  if (!clauses || !clauses.length) return 0;
   const fields = {
     title: (l.title || '').toLowerCase(),
     tags: (l.tags || []).join(' ').toLowerCase(),
@@ -67,19 +97,21 @@ export function scoreTextMatch(l, terms, phrase) {
     desc: (l.desc || '').toLowerCase(),
   };
   let score = 0;
-  for (const term of terms) {
-    let best = 0;
-    for (const f in FIELD_WEIGHTS) {
-      const idx = fields[f].indexOf(term);
-      if (idx === -1) continue;
-      let s = FIELD_WEIGHTS[f];
-      if (idx === 0 || /\W/.test(fields[f][idx - 1])) s += FIELD_WEIGHTS[f] * 0.5; // word-start bonus
-      if (s > best) best = s;
+  for (const clause of clauses) {
+    let clauseBest = 0;
+    for (const term of clause) { // OR: take the best-scoring alternative
+      for (const f in FIELD_WEIGHTS) {
+        const idx = fields[f].indexOf(term);
+        if (idx === -1) continue;
+        let s = FIELD_WEIGHTS[f];
+        if (idx === 0 || /\W/.test(fields[f][idx - 1])) s += FIELD_WEIGHTS[f] * 0.5; // word-start bonus
+        if (s > clauseBest) clauseBest = s;
+      }
     }
-    if (best === 0) return 0; // term matched no field → AND fails, reject the link
-    score += best;
+    if (clauseBest === 0) return 0; // this clause matched nothing → AND-of-clauses fails
+    score += clauseBest;
   }
-  if (phrase && terms.length > 1) { // reward exact multi-word phrase hits
+  if (phrase) { // reward an exact multi-word phrase hit (pure-AND queries only)
     if (fields.title.includes(phrase)) score += 15;
     else if (fields.tags.includes(phrase) || fields.folder.includes(phrase)) score += 6;
   }

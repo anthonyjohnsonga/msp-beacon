@@ -11,7 +11,7 @@
 import { esc, linkPath, pathKey, isWebUrl, hexToRgb, getFavicon, getDomain, timeAgo, highlight } from './utils.js';
 import { ui } from './state.js';
 import { sortLinks } from './view.js';
-import { parseSearch, linkMatchesFlag, contentMatchIds, contentMatchQuery, contentMatchSnippets, scoreTextMatch, fuzzyScoreTextMatch } from './search.js';
+import { parseSearch, linkMatchesFlag, linkMatchesTerm, contentMatchIds, contentMatchQuery, contentMatchSnippets, scoreTextMatch, fuzzyScoreTextMatch } from './search.js';
 import { selectMode, selectedIds } from './selection.js';
 import { updateArchiveBadge } from './archive.js';
 import { updateTrashBadge } from './trash.js';
@@ -41,7 +41,9 @@ export function render() {
   if (!bootLoaded) return;
   applyHomeBg();
   if (currentMode === 'home') { renderHome(); return; }
-  const q = document.getElementById('search').value.toLowerCase();
+  // Keep the raw (non-lowercased) value so parseSearch can detect the uppercase
+  // OR operator; parseSearch lowercases each term itself.
+  const q = document.getElementById('search').value;
   const clearBtn = document.getElementById('searchClear');
   if (clearBtn) clearBtn.style.display = q ? '' : 'none';
   let ff = document.getElementById('folderFilter').value;
@@ -77,8 +79,14 @@ export function render() {
       const segs = linkPath(l).map(s => s.toLowerCase());
       if (!parsed.folders.some(fd => segs.some(s => s.includes(fd)))) return false;
     }
-    if (parsed.terms.length) {
-      const metaScore = scoreTextMatch(l, parsed.terms, parsed.text);
+    if (parsed.terms.length || parsed.exclude.length) {
+      // Exclusion (-term) removes the link from every match source: metadata,
+      // page-content, and (by never entering textRejects) the fuzzy fallback.
+      if (parsed.exclude.some(t => linkMatchesTerm(l, t))) return false;
+      if (!parsed.clauses.length) return true; // pure-exclusion query: keep whatever survived
+      // Phrase bonus only for plain multi-word AND queries (no OR grouping).
+      const phrase = (parsed.clauses.length === parsed.terms.length && parsed.terms.length > 1) ? parsed.text : null;
+      const metaScore = scoreTextMatch(l, parsed.clauses, phrase);
       const contentMatch = contentActive && contentMatchIds.has(l.id);
       if (!metaScore && !contentMatch) { textRejects.push(l); return false; }
       if (!metaScore && contentMatch) contentOnlyIds.add(l.id);
