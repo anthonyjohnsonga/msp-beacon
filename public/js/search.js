@@ -46,6 +46,8 @@ export function parseSearch(raw) {
   const tokens = (raw || '').match(/(?:[^\s"]+|"[^"]*")+/g) || [];
   for (const tok of tokens) {
     if (tok === 'OR' || tok === '|') { if (clauses.length) orPending = true; continue; }
+    if (tok === '-' || tok === '!') { orPending = false; continue; } // a bare operator char (mid-typing) is not a term
+
     const m = tok.match(/^([a-z]+):(.*)$/i);
     if (m) {
       const key = m[1].toLowerCase();
