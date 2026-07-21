@@ -11,7 +11,7 @@
 import { esc, linkPath, pathKey, isWebUrl, hexToRgb, getFavicon, getDomain, timeAgo, highlight } from './utils.js';
 import { ui } from './state.js';
 import { sortLinks } from './view.js';
-import { parseSearch, linkMatchesFlag, contentMatchIds, contentMatchQuery, contentMatchSnippets, scoreTextMatch } from './search.js';
+import { parseSearch, linkMatchesFlag, contentMatchIds, contentMatchQuery, contentMatchSnippets, scoreTextMatch, fuzzyScoreTextMatch } from './search.js';
 import { selectMode, selectedIds } from './selection.js';
 import { updateArchiveBadge } from './archive.js';
 import { updateTrashBadge } from './trash.js';
@@ -28,6 +28,8 @@ export let visibleIds = [];
 let favoritesCollapsed = JSON.parse(localStorage.getItem('msp-fav-collapsed') || 'false');
 let contentOnlyIds = new Set();    // matched via page text only (no title/url/tag hit) — for the badge
 let highlightTerms = [];           // active free-text terms, for <mark> highlighting in card markup
+const FUZZY_TRIGGER = 3;           // run the typo-tolerant fallback only when strict matching yields fewer than this
+const FUZZY_LIMIT = 25;            // cap how many fuzzy matches we surface, to keep noise down
 
 // ============================================================================
 // MAIN RENDER — GRID / LIST / FOLDERS
@@ -58,6 +60,7 @@ export function render() {
   const contentActive = parsed.text && contentMatchQuery === parsed.text;
   contentOnlyIds = new Set();
   const scoreById = new Map(); // link id → relevance score, for ranking text-query results
+  const textRejects = [];      // links that pass every non-text filter but miss the text — fuzzy fallback pool
   let fil = links.filter(l => {
     if (l.deleted) return false;   // trashed links never show in any list
     if (wantArchived) { if (!l.archived) return false; }
@@ -77,12 +80,30 @@ export function render() {
     if (parsed.terms.length) {
       const metaScore = scoreTextMatch(l, parsed.terms, parsed.text);
       const contentMatch = contentActive && contentMatchIds.has(l.id);
-      if (!metaScore && !contentMatch) return false;
+      if (!metaScore && !contentMatch) { textRejects.push(l); return false; }
       if (!metaScore && contentMatch) contentOnlyIds.add(l.id);
       scoreById.set(l.id, metaScore || 1); // content-only hits rank below any metadata hit
     }
     return true;
   });
+  // Typo tolerance: when strict matching found little, widen the net with fuzzy
+  // (edit-distance) hits from the reject pool. Scored far below every strict
+  // result so exact matches always come first, and capped to keep noise down.
+  // Never runs for empty queries or ones that already matched well.
+  let fuzzyActive = false;
+  if (parsed.terms.length && fil.length < FUZZY_TRIGGER) {
+    const fuzzy = [];
+    for (const l of textRejects) {
+      const s = fuzzyScoreTextMatch(l, parsed.terms);
+      if (s > 0) fuzzy.push([l, s]);
+    }
+    fuzzy.sort((a, b) => b[1] - a[1]);
+    for (const [l, s] of fuzzy.slice(0, FUZZY_LIMIT)) {
+      scoreById.set(l.id, -1000 + s); // always below strict results (which score ≥ 1)
+      fil.push(l);
+      fuzzyActive = true;
+    }
+  }
   fil = sortLinks(fil);
   // Rank text-query results by relevance; the chosen sort order breaks ties
   // (Array.sort is stable, so it survives underneath the score sort).
@@ -102,13 +123,18 @@ export function render() {
       </div>`;
     }
   }
+  // Shown when results are approximate — the strict query matched too little and
+  // we fell back to fuzzy (typo-tolerant) matches.
+  const searchHint = fuzzyActive
+    ? `<div class="search-hint"><i class="ti ti-wand"></i> No exact matches — showing close matches.</div>`
+    : '';
   if (!fil.length) {
     c.innerHTML = healthHint + `<div class="empty"><i class="ti ti-bookmarks"></i>${links.length ? 'No results match your filters.' : 'No links yet — click <strong>Add link</strong> or <strong>Import</strong> to get started.'}</div>`;
     return;
   }
   const cardFn = ui.view === 'list' ? cardListHtml : cardHtml;
   const wrap = items => ui.view === 'list' ? `<div class="link-list">${items.map(cardFn).join('')}</div>` : `<div class="grid">${items.map(cardFn).join('')}</div>`;
-  if (ff || q || tf || stf) { c.innerHTML = healthHint + wrap(fil); return; }
+  if (ff || q || tf || stf) { c.innerHTML = healthHint + searchHint + wrap(fil); return; }
   const tree = buildFolderTree(fil);
   const root = tree.get(pathKey([])) || { direct: [], children: new Set() };
   let html = '';

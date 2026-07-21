@@ -85,6 +85,70 @@ export function scoreTextMatch(l, terms, phrase) {
   }
   return score;
 }
+
+// Levenshtein edit distance, bailing out early once the running minimum exceeds
+// `max` (returns max+1 in that case). Used only by the fuzzy fallback below.
+function editDistance(a, b, max) {
+  const al = a.length, bl = b.length;
+  if (Math.abs(al - bl) > max) return max + 1;
+  let prev = new Array(bl + 1);
+  for (let j = 0; j <= bl; j++) prev[j] = j;
+  for (let i = 1; i <= al; i++) {
+    const cur = [i];
+    let best = i;
+    const ac = a.charCodeAt(i - 1);
+    for (let j = 1; j <= bl; j++) {
+      const cost = ac === b.charCodeAt(j - 1) ? 0 : 1;
+      const v = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
+      cur[j] = v;
+      if (v < best) best = v;
+    }
+    if (best > max) return max + 1; // whole row over budget → give up
+    prev = cur;
+  }
+  return prev[bl];
+}
+
+// How many edits a term of a given length may tolerate. Short terms demand an
+// exact word (fuzzing 2-3 chars matches almost anything); longer ones allow more.
+function fuzzTolerance(len) { return len <= 3 ? 0 : len <= 5 ? 1 : 2; }
+
+// Typo-tolerant fallback scorer. Like scoreTextMatch but each term may match a
+// field WORD within an edit-distance budget instead of exactly. AND semantics
+// still hold (every term must fuzzy-match somewhere). Callers rank these below
+// every strict result — this only runs when strict matching found too little.
+const FUZZY_FIELDS = [['title', 10], ['tags', 6], ['folder', 4], ['url', 2], ['desc', 2]];
+export function fuzzyScoreTextMatch(l, terms) {
+  if (!terms || !terms.length) return 0;
+  const raw = {
+    title: (l.title || '').toLowerCase(),
+    tags: (l.tags || []).join(' ').toLowerCase(),
+    folder: linkPath(l).join(' ').toLowerCase(),
+    url: (l.url || '').toLowerCase(),
+    desc: (l.desc || '').toLowerCase(),
+  };
+  const words = {};
+  for (const [f] of FUZZY_FIELDS) words[f] = raw[f].split(/[^a-z0-9]+/i).filter(Boolean);
+  let score = 0;
+  for (const term of terms) {
+    const tol = fuzzTolerance(term.length);
+    let best = 0;
+    for (const [f, w] of FUZZY_FIELDS) {
+      for (const word of words[f]) {
+        if (Math.abs(word.length - term.length) > tol) continue;
+        const d = editDistance(term, word, tol);
+        if (d <= tol) {
+          const s = w * (1 - d / (tol + 1)); // closer match → higher score
+          if (s > best) best = s;
+          if (d === 0) break;
+        }
+      }
+    }
+    if (best === 0) return 0; // this term fuzzy-matched nothing → AND fails
+    score += best;
+  }
+  return score;
+}
 export function linkMatchesFlag(l, flag) {
   switch (flag) {
     case 'favorite': return !!l.favorite;
