@@ -76,11 +76,13 @@ move between machines, or host on a file share.
 ### Search & Filter
 
 <details>
-<summary>Show 7 features</summary>
+<summary>Show 9 features</summary>
 
 - **Search** — real-time search across title, URL, description, folder, and tags (press `/` or `Ctrl+K`)
-- **Search operators** — narrow results with `tag:`, `folder:`, and `is:` filters right in the search box: `is:favorite`, `is:readlater`, `is:broken`, `is:online`, `is:untagged`, `is:archived`. Combine them with free text (`tag:dev grafana`) and quote multi-word values (`folder:"My Stuff"`)
-- **Full-text content search** — optionally index the page text behind your links (Settings → Index page content); search then matches words found *on the page*, not just the title and URL
+- **Relevance ranking & highlighting** — results are ranked by relevance (a match in the title outranks one buried in a URL or the page text), your matched terms are highlighted right on the cards, and multi-word queries match regardless of word order (`billing azure` finds "Azure Billing")
+- **Search operators** — narrow results with `tag:`, `folder:`, and `is:` filters right in the search box: `is:favorite`, `is:readlater`, `is:broken`, `is:online`, `is:untagged`, `is:archived`. Exclude a term with `-` or `!` (`azure -billing`), match either of two with an uppercase `OR` (`azure OR aws`), combine with free text (`tag:dev grafana`), and quote multi-word values (`folder:"My Stuff"`)
+- **Typo tolerance** — if nothing matches closely, search falls back to fuzzy matching (so `kubernets` still finds "Kubernetes") and flags the results as approximate
+- **Full-text content search** — optionally index the page text behind your links (Settings → Index page content); search then matches words found *on the page* (each word matched independently, not just as a phrase) and shows a short excerpt of where the term was found
 - **Search history** — recent searches drop down under the search box for quick re-use
 - **Filter button** — folder filter, tag filter, and sort consolidated into a single toolbar button with an active-count badge
 - **Click a tag to filter** — click any tag chip on a card to instantly filter to that tag (or right-click for more options)
@@ -89,7 +91,7 @@ move between machines, or host on a file share.
 </details>
 
 > [!TIP]
-> Combine search operators to slice your links fast. For example, `tag:dev folder:"Home Lab" is:online grafana` matches online links tagged `dev`, in the `Home Lab` folder, whose text contains `grafana`. Quote multi-word values, and stack `is:` filters like `is:favorite`, `is:readlater`, `is:broken`, `is:untagged`, or `is:archived`.
+> Combine search operators to slice your links fast. For example, `tag:dev folder:"Home Lab" is:online grafana` matches online links tagged `dev`, in the `Home Lab` folder, whose text contains `grafana`. Use `-term` to exclude (`grafana -deprecated`), an uppercase `OR` to match either (`grafana OR prometheus`), quote multi-word values, and stack `is:` filters like `is:favorite`, `is:readlater`, `is:broken`, `is:untagged`, or `is:archived`.
 
 ### Homepage / Dashboard
 
