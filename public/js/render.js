@@ -11,7 +11,7 @@
 import { esc, linkPath, pathKey, isWebUrl, hexToRgb, getFavicon, getDomain, timeAgo } from './utils.js';
 import { ui } from './state.js';
 import { sortLinks } from './view.js';
-import { parseSearch, linkMatchesFlag, contentMatchIds, contentMatchQuery } from './search.js';
+import { parseSearch, linkMatchesFlag, contentMatchIds, contentMatchQuery, scoreTextMatch } from './search.js';
 import { selectMode, selectedIds } from './selection.js';
 import { updateArchiveBadge } from './archive.js';
 import { updateTrashBadge } from './trash.js';
@@ -55,6 +55,7 @@ export function render() {
   const wantArchived = parsed.flags.includes('archived');
   const contentActive = parsed.text && contentMatchQuery === parsed.text;
   contentOnlyIds = new Set();
+  const scoreById = new Map(); // link id → relevance score, for ranking text-query results
   let fil = links.filter(l => {
     if (l.deleted) return false;   // trashed links never show in any list
     if (wantArchived) { if (!l.archived) return false; }
@@ -71,15 +72,19 @@ export function render() {
       const segs = linkPath(l).map(s => s.toLowerCase());
       if (!parsed.folders.some(fd => segs.some(s => s.includes(fd)))) return false;
     }
-    if (parsed.text) {
-      const textMatch = (l.title+l.url+l.desc+linkPath(l).join(' ')+(l.tags||[]).join(' ')).toLowerCase().includes(parsed.text);
+    if (parsed.terms.length) {
+      const metaScore = scoreTextMatch(l, parsed.terms, parsed.text);
       const contentMatch = contentActive && contentMatchIds.has(l.id);
-      if (!textMatch && !contentMatch) return false;
-      if (!textMatch && contentMatch) contentOnlyIds.add(l.id);
+      if (!metaScore && !contentMatch) return false;
+      if (!metaScore && contentMatch) contentOnlyIds.add(l.id);
+      scoreById.set(l.id, metaScore || 1); // content-only hits rank below any metadata hit
     }
     return true;
   });
   fil = sortLinks(fil);
+  // Rank text-query results by relevance; the chosen sort order breaks ties
+  // (Array.sort is stable, so it survives underneath the score sort).
+  if (parsed.terms.length) fil.sort((a, b) => (scoreById.get(b.id) || 0) - (scoreById.get(a.id) || 0));
   visibleIds = fil.map(l => l.id);
   const c = document.getElementById('content');
   // When filtering by health status, warn if some links haven't been checked yet — their

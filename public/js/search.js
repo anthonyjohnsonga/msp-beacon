@@ -8,7 +8,7 @@
 // ============================================================================
 
 import { render, linkStatus } from './app.js';
-import { esc } from './utils.js';
+import { esc, linkPath } from './utils.js';
 
 let searchHistory = JSON.parse(localStorage.getItem('msp-search-history') || '[]');
 let searchDebounceTimer = null;
@@ -43,9 +43,46 @@ export function parseSearch(raw) {
       if (key === 'folder' && val) { folders.push(val); continue; }
       if (key === 'is' && SEARCH_FLAG_ALIASES[val]) { flags.push(SEARCH_FLAG_ALIASES[val]); continue; }
     }
-    terms.push(tok.replace(/"/g, '').toLowerCase());
+    const t = tok.replace(/"/g, '').toLowerCase();
+    if (t) terms.push(t);
   }
-  return { tags, folders, flags, text: terms.join(' ').trim() };
+  return { tags, folders, flags, text: terms.join(' ').trim(), terms };
+}
+
+// Relevance ranking for the free-text portion of a query. Each term must appear
+// in at least one field (AND across terms, OR across fields) or the whole link
+// is rejected — so word order no longer matters, unlike the old single
+// concatenated-substring test. A term scores by the highest-weight field it hits,
+// with a bonus when it starts a word (prefix) and when the full multi-word phrase
+// appears contiguously in a high-value field. Higher score = more relevant.
+const FIELD_WEIGHTS = { title: 10, tags: 6, folder: 4, url: 2, desc: 2 };
+export function scoreTextMatch(l, terms, phrase) {
+  if (!terms || !terms.length) return 0;
+  const fields = {
+    title: (l.title || '').toLowerCase(),
+    tags: (l.tags || []).join(' ').toLowerCase(),
+    folder: linkPath(l).join(' ').toLowerCase(),
+    url: (l.url || '').toLowerCase(),
+    desc: (l.desc || '').toLowerCase(),
+  };
+  let score = 0;
+  for (const term of terms) {
+    let best = 0;
+    for (const f in FIELD_WEIGHTS) {
+      const idx = fields[f].indexOf(term);
+      if (idx === -1) continue;
+      let s = FIELD_WEIGHTS[f];
+      if (idx === 0 || /\W/.test(fields[f][idx - 1])) s += FIELD_WEIGHTS[f] * 0.5; // word-start bonus
+      if (s > best) best = s;
+    }
+    if (best === 0) return 0; // term matched no field → AND fails, reject the link
+    score += best;
+  }
+  if (phrase && terms.length > 1) { // reward exact multi-word phrase hits
+    if (fields.title.includes(phrase)) score += 15;
+    else if (fields.tags.includes(phrase) || fields.folder.includes(phrase)) score += 6;
+  }
+  return score;
 }
 export function linkMatchesFlag(l, flag) {
   switch (flag) {
