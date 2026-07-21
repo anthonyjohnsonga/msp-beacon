@@ -18,6 +18,7 @@ function debouncedRender() { clearTimeout(searchDebounceTimer); searchDebounceTi
 // content matches into the normal search results.
 export let contentMatchIds = new Set();   // link ids whose page text matches the current query
 export let contentMatchQuery = '';        // query that contentMatchIds corresponds to
+export let contentMatchSnippets = {};     // id -> a short text window around the first page-text hit
 let contentSearchTimer = null;
 let contentSearchToken = 0;        // guards against out-of-order /api/search-content responses
 
@@ -103,13 +104,14 @@ export function onSearchInput(v) {
 async function updateContentMatches(q) {
   const token = ++contentSearchToken; // any newer call (incl. a clear) supersedes us
   q = (q || '').trim().toLowerCase();
-  if (q.length < 2) { contentMatchIds = new Set(); contentMatchQuery = ''; render(); return; }
+  if (q.length < 2) { contentMatchIds = new Set(); contentMatchSnippets = {}; contentMatchQuery = ''; render(); return; }
   try {
     const res = await fetch('/api/search-content?q=' + encodeURIComponent(q));
     if (!res.ok) return;
     const data = await res.json();
     if (token !== contentSearchToken) return; // a newer query/clear superseded us
     contentMatchIds = new Set(data.ids || []);
+    contentMatchSnippets = data.snippets || {};
     contentMatchQuery = q;
     render();
   } catch { /* offline / no index — silently fall back to title/url search */ }

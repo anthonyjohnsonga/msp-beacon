@@ -6,6 +6,25 @@
 export function getFavicon(u) { try { new URL(u); return '/api/favicon?url=' + encodeURIComponent(u); } catch { return null; } }
 export function getDomain(u) { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return u; } }
 export function esc(s) { if (!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+// Escape-then-highlight: HTML-escapes `text` and wraps any occurrence of the
+// given search terms in <mark>. Terms are matched case-insensitively; longer
+// terms win over shorter overlapping ones. Returns safe HTML (each slice is
+// escaped individually, so the <mark> tags are the only markup introduced).
+export function highlight(text, terms) {
+  const s = String(text || '');
+  if (!s || !terms || !terms.length) return esc(s);
+  const pat = terms.filter(Boolean).map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .sort((a, b) => b.length - a.length).join('|');
+  if (!pat) return esc(s);
+  const re = new RegExp(`(${pat})`, 'gi');
+  let out = '', last = 0, m;
+  while ((m = re.exec(s))) {
+    out += esc(s.slice(last, m.index)) + '<mark>' + esc(m[0]) + '</mark>';
+    last = m.index + m[0].length;
+    if (re.lastIndex === m.index) re.lastIndex++; // guard against zero-length matches
+  }
+  return out + esc(s.slice(last));
+}
 export function isHexColor(c) { return typeof c === 'string' && /^#[0-9A-Fa-f]{6}$/.test(c); }
 // A link whose URL is http(s) — i.e. reachable/checkable on the web.
 export function isWebUrl(u) { return /^https?:\/\//i.test(u); }

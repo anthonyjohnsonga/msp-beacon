@@ -1209,14 +1209,44 @@ app.post('/api/snapshot', async (req, res) => {
   }
 });
 
-app.get('/api/search-content', (req, res) => {
+// Build a one-line excerpt around the first occurrence of `q` (lowercased) in
+// `text`, trimmed to word boundaries with ellipses. `text` keeps its original
+// case for display; matching is case-insensitive.
+const SNIPPET_RADIUS = 90;
+function makeSnippet(text, q) {
+  const i = text.toLowerCase().indexOf(q);
+  if (i === -1) return '';
+  let start = Math.max(0, i - SNIPPET_RADIUS);
+  let end = Math.min(text.length, i + q.length + SNIPPET_RADIUS);
+  if (start > 0) { const sp = text.indexOf(' ', start); if (sp !== -1 && sp < i) start = sp + 1; }
+  if (end < text.length) { const sp = text.lastIndexOf(' ', end); if (sp > i + q.length) end = sp; }
+  let snip = text.slice(start, end).replace(/\s+/g, ' ').trim();
+  if (start > 0) snip = '…' + snip;
+  if (end < text.length) snip += '…';
+  return snip;
+}
+
+const SNIPPET_LIMIT = 60; // cap snapshot reads per query; more than enough for the visible page
+
+app.get('/api/search-content', async (req, res) => {
   const q = String(req.query.q || '').trim().toLowerCase();
-  if (q.length < 2) return res.json({ ids: [] });
+  if (q.length < 2) return res.json({ ids: [], snippets: {} });
   const ids = [];
   for (const [id, text] of contentIndex) {
     if (text.includes(q)) ids.push(id);
   }
-  res.json({ ids });
+  // Snippets come from the original-case snapshot on disk (the in-memory index is
+  // lowercased for matching). Read only the first SNIPPET_LIMIT matches; fall
+  // back to the lowercased index text if a file can't be read.
+  const snippets = {};
+  await Promise.all(ids.slice(0, SNIPPET_LIMIT).map(async id => {
+    let text;
+    try { text = await fsp.readFile(path.join(SNAPSHOT_DIR, id + '.txt'), 'utf8'); }
+    catch { text = contentIndex.get(id) || ''; }
+    const snip = makeSnippet(text, q);
+    if (snip) snippets[id] = snip;
+  }));
+  res.json({ ids, snippets });
 });
 
 app.get('/api/content-status', (req, res) => {

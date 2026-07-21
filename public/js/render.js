@@ -8,10 +8,10 @@
 // Inline handlers in the template strings below are bridged in app.js, guarded by
 // `npm run check`.
 // ============================================================================
-import { esc, linkPath, pathKey, isWebUrl, hexToRgb, getFavicon, getDomain, timeAgo } from './utils.js';
+import { esc, linkPath, pathKey, isWebUrl, hexToRgb, getFavicon, getDomain, timeAgo, highlight } from './utils.js';
 import { ui } from './state.js';
 import { sortLinks } from './view.js';
-import { parseSearch, linkMatchesFlag, contentMatchIds, contentMatchQuery, scoreTextMatch } from './search.js';
+import { parseSearch, linkMatchesFlag, contentMatchIds, contentMatchQuery, contentMatchSnippets, scoreTextMatch } from './search.js';
 import { selectMode, selectedIds } from './selection.js';
 import { updateArchiveBadge } from './archive.js';
 import { updateTrashBadge } from './trash.js';
@@ -27,6 +27,7 @@ import {
 export let visibleIds = [];
 let favoritesCollapsed = JSON.parse(localStorage.getItem('msp-fav-collapsed') || 'false');
 let contentOnlyIds = new Set();    // matched via page text only (no title/url/tag hit) — for the badge
+let highlightTerms = [];           // active free-text terms, for <mark> highlighting in card markup
 
 // ============================================================================
 // MAIN RENDER — GRID / LIST / FOLDERS
@@ -52,6 +53,7 @@ export function render() {
   if (sortEl) sortEl.value = ui.sort;
   updateFilterBadge();
   const parsed = parseSearch(q);
+  highlightTerms = parsed.terms;
   const wantArchived = parsed.flags.includes('archived');
   const contentActive = parsed.text && contentMatchQuery === parsed.text;
   contentOnlyIds = new Set();
@@ -170,7 +172,18 @@ function renderFolderSection(tree, path, wrap) {
 }
 
 function contentBadge(id) {
-  return contentOnlyIds.has(id) ? `<span class="content-badge" title="Matched in the page text"><i class="ti ti-file-search"></i> in page</span>` : '';
+  if (!contentOnlyIds.has(id)) return '';
+  const snip = contentMatchSnippets[id];
+  const tip = snip ? esc(snip) : 'Matched in the page text';
+  return `<span class="content-badge" title="${tip}"><i class="ti ti-file-search"></i> in page</span>`;
+}
+// A one-line excerpt of where the query hit the page text, with the term(s)
+// highlighted. Only shown for content-only matches (title/url/tag hits already
+// speak for themselves) and only in grid cards, which have room for it.
+function contentSnippet(id) {
+  if (!contentOnlyIds.has(id)) return '';
+  const snip = contentMatchSnippets[id];
+  return snip ? `<div class="content-snippet"><i class="ti ti-file-search"></i> ${highlight(snip, highlightTerms)}</div>` : '';
 }
 // Card folder badge ("A / B / C") + left-border color, from the link's path.
 function folderBadgeHtml(l, extraStyle = '') {
@@ -194,7 +207,7 @@ function cardHtml(l) {
       ${folderBadgeHtml(l)}
     </div>`;
   const top = `<div class="card-top"><div class="favicon">${fi}</div>
-      <div style="min-width:0"><div class="card-title" title="${esc(l.title)}">${esc(l.title)}</div><div class="card-url">${esc(getDomain(l.url))}</div>${l.lastVisited ? `<div style="font-size:11px;color:var(--text2);margin-top:1px">${timeAgo(l.lastVisited)}</div>` : ''}</div>
+      <div style="min-width:0"><div class="card-title" title="${esc(l.title)}">${highlight(l.title, highlightTerms)}</div><div class="card-url">${highlight(getDomain(l.url), highlightTerms)}</div>${l.lastVisited ? `<div style="font-size:11px;color:var(--text2);margin-top:1px">${timeAgo(l.lastVisited)}</div>` : ''}</div>
     </div>`;
   const statusBadge = (linkStatus[l.id] === 'broken' || linkStatus[l.id] === 'timeout')
     ? `<div class="status-badge" title="${linkStatus[l.id] === 'timeout' ? 'Link timed out' : 'Link appears broken'}"><i class="ti ti-alert-triangle"></i></div>`
@@ -205,7 +218,8 @@ function cardHtml(l) {
       <div class="card-check${checked ? ' checked' : ''}"><i class="ti ti-check"></i></div>
       ${statusBadge}
       ${top}
-      ${l.desc ? `<div class="card-desc">${esc(l.desc)}</div>` : ''}
+      ${l.desc ? `<div class="card-desc">${highlight(l.desc, highlightTerms)}</div>` : ''}
+      ${contentSnippet(l.id)}
       ${footer}
     </div>`;
   }
@@ -219,7 +233,8 @@ function cardHtml(l) {
     </div>
     ${statusBadge}
     ${top}
-    ${l.desc ? `<div class="card-desc">${esc(l.desc)}</div>` : ''}
+    ${l.desc ? `<div class="card-desc">${highlight(l.desc, highlightTerms)}</div>` : ''}
+    ${contentSnippet(l.id)}
     ${footer}
   </div>`;
 }
@@ -236,8 +251,8 @@ function cardListHtml(l) {
       <div class="card-check${checked ? ' checked' : ''}" style="position:static;flex-shrink:0"><i class="ti ti-check"></i></div>
       <div class="favicon">${fi}</div>
       ${statusBadge}
-      <span class="card-row-title" title="${esc(l.title)}">${esc(l.title)}</span>
-      <span class="card-row-domain">${esc(getDomain(l.url))}</span>
+      <span class="card-row-title" title="${esc(l.title)}">${highlight(l.title, highlightTerms)}</span>
+      <span class="card-row-domain">${highlight(getDomain(l.url), highlightTerms)}</span>
       <div class="card-row-tags">${(l.tags || []).map(tagHtml).join('')}</div>
       ${folderBadgeHtml(l, 'margin-left:0')}
     </div>`;
@@ -245,8 +260,8 @@ function cardListHtml(l) {
   return `<div class="card-row" data-id="${esc(l.id)}" data-url="${esc(l.url)}"${cardBorderStyle(l)}>
     <div class="favicon">${fi}</div>
     ${statusBadge}
-    <span class="card-row-title" title="${esc(l.title)}">${esc(l.title)}</span>
-    <span class="card-row-domain">${esc(getDomain(l.url))}</span>
+    <span class="card-row-title" title="${esc(l.title)}">${highlight(l.title, highlightTerms)}</span>
+    <span class="card-row-domain">${highlight(getDomain(l.url), highlightTerms)}</span>
     ${l.lastVisited ? `<span style="font-size:11px;color:var(--text2);flex-shrink:0">${timeAgo(l.lastVisited)}</span>` : ''}
     <div class="card-row-tags">${(l.tags || []).map(tagHtml).join('')}</div>
     ${contentBadge(l.id)}

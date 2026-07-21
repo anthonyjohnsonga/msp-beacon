@@ -383,6 +383,11 @@ select:focus { outline: none; border-color: var(--g4); }
 .ctx-sep { height: 1px; background: var(--border0); margin: 4px 6px; }
 .content-badge { font-size: 10px; padding: 2px 7px; border-radius: 20px; background: var(--bg3); color: var(--text1); border: 1px solid var(--border0); display: inline-flex; align-items: center; gap: 3px; }
 .content-badge i { font-size: 11px; color: var(--accent-icon); }
+/* Search-term highlight in card title/url/desc and content snippets. */
+mark { background: rgba(var(--g5-rgb),.45); color: var(--text0); border-radius: 3px; padding: 0 1px; }
+/* Page-text excerpt shown under content-only search matches (grid cards). */
+.content-snippet { font-size: 12px; color: var(--text2); line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.content-snippet i { font-size: 12px; color: var(--accent-icon); }
 
 /* ============================================================================
    RESPONSIVE — narrow desktop windows, tablets, and phones.
