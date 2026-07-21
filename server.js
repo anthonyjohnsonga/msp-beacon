@@ -1209,17 +1209,23 @@ app.post('/api/snapshot', async (req, res) => {
   }
 });
 
-// Build a one-line excerpt around the first occurrence of `q` (lowercased) in
+// Build a one-line excerpt around the EARLIEST-occurring `term` (lowercased) in
 // `text`, trimmed to word boundaries with ellipses. `text` keeps its original
-// case for display; matching is case-insensitive.
+// case for display; matching is case-insensitive. With multiple terms the window
+// centers on whichever appears first, so the excerpt lands on a real hit.
 const SNIPPET_RADIUS = 90;
-function makeSnippet(text, q) {
-  const i = text.toLowerCase().indexOf(q);
+function makeSnippet(text, terms) {
+  const lower = text.toLowerCase();
+  let i = -1, mlen = 0;
+  for (const t of terms) {
+    const idx = lower.indexOf(t);
+    if (idx !== -1 && (i === -1 || idx < i)) { i = idx; mlen = t.length; }
+  }
   if (i === -1) return '';
   let start = Math.max(0, i - SNIPPET_RADIUS);
-  let end = Math.min(text.length, i + q.length + SNIPPET_RADIUS);
+  let end = Math.min(text.length, i + mlen + SNIPPET_RADIUS);
   if (start > 0) { const sp = text.indexOf(' ', start); if (sp !== -1 && sp < i) start = sp + 1; }
-  if (end < text.length) { const sp = text.lastIndexOf(' ', end); if (sp > i + q.length) end = sp; }
+  if (end < text.length) { const sp = text.lastIndexOf(' ', end); if (sp > i + mlen) end = sp; }
   let snip = text.slice(start, end).replace(/\s+/g, ' ').trim();
   if (start > 0) snip = '…' + snip;
   if (end < text.length) snip += '…';
@@ -1231,9 +1237,12 @@ const SNIPPET_LIMIT = 60; // cap snapshot reads per query; more than enough for 
 app.get('/api/search-content', async (req, res) => {
   const q = String(req.query.q || '').trim().toLowerCase();
   if (q.length < 2) return res.json({ ids: [], snippets: {} });
+  // Multi-term: every whitespace-separated term must appear in the page text
+  // (AND), mirroring the client's metadata search — not just the exact phrase.
+  const terms = q.split(/\s+/).filter(Boolean);
   const ids = [];
   for (const [id, text] of contentIndex) {
-    if (text.includes(q)) ids.push(id);
+    if (terms.every(t => text.includes(t))) ids.push(id);
   }
   // Snippets come from the original-case snapshot on disk (the in-memory index is
   // lowercased for matching). Read only the first SNIPPET_LIMIT matches; fall
@@ -1243,7 +1252,7 @@ app.get('/api/search-content', async (req, res) => {
     let text;
     try { text = await fsp.readFile(path.join(SNAPSHOT_DIR, id + '.txt'), 'utf8'); }
     catch { text = contentIndex.get(id) || ''; }
-    const snip = makeSnippet(text, q);
+    const snip = makeSnippet(text, terms);
     if (snip) snippets[id] = snip;
   }));
   res.json({ ids, snippets });

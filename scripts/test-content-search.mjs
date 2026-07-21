@@ -128,6 +128,14 @@ async function main() {
     check('server: snippet contains the term (original case)', typeof api.snippets[SNAP_ID] === 'string' && api.snippets[SNAP_ID].toLowerCase().includes(TERM), api.snippets && api.snippets[SNAP_ID]);
     check('server: snippet is a trimmed excerpt (not the whole page)', api.snippets[SNAP_ID].length < SNAP_TEXT.length, api.snippets[SNAP_ID]?.length);
 
+    // multi-term AND (v1.0.29): "summary" and "latency" both appear in the page
+    // text but are NOT adjacent — the old phrase-only match would miss this.
+    const multi = await D.eval(`fetch('/api/search-content?q=summary%20latency').then(r => r.json())`);
+    check('server: multi-term (non-adjacent) AND matches', multi.ids.includes(SNAP_ID), multi.ids);
+    check('server: multi-term snippet centers on earliest term', typeof multi.snippets[SNAP_ID] === 'string' && multi.snippets[SNAP_ID].toLowerCase().includes('summary'), multi.snippets && multi.snippets[SNAP_ID]);
+    const missing = await D.eval(`fetch('/api/search-content?q=latency%20unicorn').then(r => r.json())`);
+    check('server: multi-term AND rejects when a term is absent', !missing.ids.includes(SNAP_ID), missing.ids);
+
     // inject the client fixture + force grid view (snippet renders on grid cards)
     await D.eval(`(async () => {
       const m = await import('/js/app.js');
@@ -175,6 +183,17 @@ async function main() {
       return { cardShown: !!card, hasBadge: card ? !!card.querySelector('.content-badge') : false };
     })()`);
     check('client: title match is NOT flagged "in page"', titleQuery.cardShown && titleQuery.hasBadge === false, titleQuery);
+
+    // client: a multi-term content-only query (both page-text terms) still flags it
+    await D.eval(`
+      document.getElementById('search').value = 'summary latency';
+      window.onSearchInput('summary latency');`);
+    await sleep(1000);
+    const multiClient = await D.eval(`(() => {
+      const card = document.querySelector('#content .card[data-id="${SNAP_ID}"]');
+      return { cardShown: !!card, hasBadge: card ? !!card.querySelector('.content-badge') : false };
+    })()`);
+    check('client: multi-term content match flagged "in page"', multiClient.cardShown && multiClient.hasBadge === true, multiClient);
 
     check('zero console errors/exceptions', D.errors.length === 0, D.errors);
   } finally {
