@@ -33,10 +33,11 @@ function isPrivateIP(ip) {
 //   • Trusted, user-saved targets (/api/favicon, /api/check-links,
 //     /api/snapshot) and allowlisted feeds (/api/rss) DELIBERATELY fetch
 //     private/homelab IPs — that's the point of a self-hosted dashboard.
-// /api/weather + /api/geocode are outside both tiers: the server builds those
-// URLs itself against fixed hosts (Open-Meteo, and zippopotam.us for US zip
-// lookups — the zip path segment is regex-constrained to 5 digits), so no
-// user-controlled target.
+// /api/weather + /api/geocode + /api/m365 are outside both tiers: the server
+// builds those URLs itself against fixed hosts (Open-Meteo; zippopotam.us for US
+// zip lookups — the zip path segment is regex-constrained to 5 digits; and
+// mc.merill.net for the Microsoft 365 updates index), so no user-controlled
+// target.
 // Change the policy here, not at each call site.
 function parseHttpUrl(str) {
   let u;
@@ -59,6 +60,10 @@ const SNAPSHOT_PRUNE_GRACE_MS = 5 * 60 * 1000; // never GC a snapshot newer than
 const RSS_FETCH_MAX = 2 * 1024 * 1024; // 2MB cap on a fetched feed
 const RSS_TTL = 15 * 60 * 1000; // serve cached feed for 15 min before refetching
 const RSS_ITEMS_MAX = 30; // keep up to 30 items per feed
+const M365_URL = 'https://mc.merill.net/messages-index.json'; // fixed host, see the outbound-fetch policy
+const M365_TTL = 60 * 60 * 1000; // the source publishes a 60-min ttl — respect it
+const M365_FETCH_MAX = 16 * 1024 * 1024; // index was ~5MB in Aug 2026 and grows; leave headroom
+const M365_ITEMS_MAX = 50; // newest N kept in memory + served to the widget
 
 // 10mb matches what /api/restore accepts — a lower cap here would let you
 // restore a backup too big to ever re-save (every edit would 413).
@@ -1023,6 +1028,76 @@ app.get('/api/rss', async (req, res) => {
   if (!allowedFeedUrls.has(url)) return res.status(403).json({ error: 'feed not configured' });
   const feed = await getFeed(url);
   res.json({ url, title: feed.title, items: feed.items, error: feed.error });
+});
+
+// --- Microsoft 365 updates widget --------------------------------------------
+// Serves the homepage M365 widget from mc.merill.net's machine-readable index of
+// Message Center + Roadmap posts (an MIT-licensed aggregator that explicitly
+// publishes this file for programmatic use). The server builds the URL itself
+// against a fixed host — no user-controlled target, like /api/weather (see the
+// outbound-fetch policy up top). The full index is several MB, so it is fetched
+// at most once per M365_TTL and only the trimmed newest M365_ITEMS_MAX are sent
+// to the client. Fetched live at runtime and never bundled into the repo/image.
+
+let m365Cache = null;    // { items, fetchedAt, error }
+let m365InFlight = null; // dedupe concurrent fetches (the index is big)
+
+// Normalize the upstream records to the small shape the widget renders. Upstream
+// `Source` has used both 'mc' and 'messageCenter' for Message Center posts, so it
+// collapses to a stable 'mc' | 'roadmap' here rather than in the client.
+function parseM365(json) {
+  const raw = JSON.parse(json);
+  if (!Array.isArray(raw)) throw new Error('unexpected payload');
+  const items = [];
+  for (const it of raw) {
+    if (!it || typeof it !== 'object') continue;
+    const url = typeof it.Url === 'string' ? it.Url : '';
+    if (!parseHttpUrl(url)) continue; // the widget turns this into a link — http(s) only
+    const ts = Date.parse(it.LastModifiedDateTime || it.StartDateTime || '');
+    const strs = (v, n, len) => (Array.isArray(v) ? v : [])
+      .filter(s => typeof s === 'string' && s.trim()).slice(0, n).map(s => s.trim().slice(0, len));
+    items.push({
+      id: String(it.Id || '').slice(0, 40),
+      title: String(it.Title || '').replace(/\s+/g, ' ').trim().slice(0, 300) || '(untitled)',
+      url,
+      source: it.Source === 'roadmap' ? 'roadmap' : 'mc',
+      services: strs(it.Services, 3, 60),
+      tags: strs(it.Tags, 3, 40),
+      major: it.IsMajorChange === true,
+      summary: String(it.Summary || '').replace(/\s+/g, ' ').trim().slice(0, 400),
+      ts: Number.isNaN(ts) ? null : ts,
+    });
+  }
+  items.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  return items.slice(0, M365_ITEMS_MAX);
+}
+
+async function getM365() {
+  if (m365Cache && Date.now() - m365Cache.fetchedAt < M365_TTL) return m365Cache;
+  if (m365InFlight) return m365InFlight;
+  const stale = m365Cache;
+  m365InFlight = (async () => {
+    try {
+      const page = await httpGetBuffer(M365_URL, 3, M365_FETCH_MAX, 'application/json');
+      if (!page) throw new Error('fetch failed');
+      m365Cache = { items: parseM365(page.buf.toString('utf8')), fetchedAt: Date.now(), error: null };
+      return m365Cache;
+    } catch {
+      // Keep serving the last good copy, but bump its timestamp so a flapping
+      // source honors the same TTL backoff instead of refetching every request.
+      if (stale) { stale.fetchedAt = Date.now(); m365Cache = stale; return stale; }
+      m365Cache = { items: [], fetchedAt: Date.now(), error: 'unreachable' };
+      return m365Cache;
+    } finally {
+      m365InFlight = null;
+    }
+  })();
+  return m365InFlight;
+}
+
+app.get('/api/m365', async (req, res) => {
+  const entry = await getM365();
+  res.json({ items: entry.items, error: entry.error });
 });
 
 // --- Weather widget (Open-Meteo proxy) ----------------------------------------

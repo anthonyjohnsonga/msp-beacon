@@ -328,6 +328,16 @@ select:focus { outline: none; border-color: var(--g4); }
 .feed-item-meta { flex-shrink: 0; font-size: 11.5px; color: var(--text2); display: flex; align-items: baseline; gap: 8px; }
 .feed-item-src { color: var(--accent-label); max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .home-feed-msg { font-size: 13px; color: var(--text2); padding: 8px 10px; }
+/* Microsoft 365 updates widget — a feed-item stacked into title/summary/meta */
+.m365-item { flex-direction: column; align-items: stretch; gap: 4px; }
+.m365-item .feed-item-title { white-space: normal; overflow: visible; line-height: 1.35; }
+.m365-summary { font-size: 12.5px; color: var(--text2); line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.m365-item .feed-item-meta { flex-wrap: wrap; gap: 6px; }
+.m365-kind { color: var(--accent-label); }
+.m365-svc { padding: 1px 7px; border-radius: 999px; background: var(--bg1); border: 1px solid var(--g5); color: var(--text2); font-size: 11px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m365-major { display: inline-flex; align-items: center; gap: 3px; margin-right: 6px; padding: 1px 6px; border-radius: 999px; background: rgba(226,75,74,.14); border: 1px solid rgba(226,75,74,.45); color: #E24B4A; font-size: 10.5px; font-weight: 600; vertical-align: 1px; }
+.m365-foot { font-size: 11px; color: var(--text2); padding: 6px 10px 0; }
+.m365-foot a { color: var(--accent-label); }
 .home-tile[draggable="true"] { cursor: grab; }
 .home-tile.dragging { opacity: 0.35; cursor: grabbing; }
 .home-tile.drag-over { border-color: var(--g3) !important; box-shadow: 0 0 0 2px var(--g4-glow); background: var(--bg1); }

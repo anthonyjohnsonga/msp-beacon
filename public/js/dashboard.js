@@ -37,22 +37,23 @@ export function setLastHomeStatusAt(v) { lastHomeStatusAt = v; }
 // SECTION_WIDGETS = every addable singleton section type (drives the Add-widget
 // chips + sanitize acceptance). DEFAULT_WIDGETS = the subset new/unconfigured
 // layouts start with — bigclock/weather are deliberately opt-in, not default.
-const SECTION_WIDGETS = ['clock', 'search', 'favorites', 'readlater', 'recent', 'most-visited', 'recently-added', 'folders', 'latest', 'bigclock', 'weather'];
+const SECTION_WIDGETS = ['clock', 'search', 'favorites', 'readlater', 'recent', 'most-visited', 'recently-added', 'folders', 'latest', 'bigclock', 'weather', 'm365'];
 const DEFAULT_WIDGETS = ['clock', 'search', 'favorites', 'readlater', 'recent', 'most-visited', 'recently-added', 'folders', 'latest'];
 const WIDGET_LABELS = {
   clock: 'Clock & greeting', search: 'Search box', favorites: 'Favorites',
   readlater: 'Read later', recent: 'Recent', 'most-visited': 'Most visited',
   'recently-added': 'Recently added', folders: 'Folders', latest: 'Latest (RSS)',
-  bigclock: 'Big clock', weather: 'Weather',
+  bigclock: 'Big clock', weather: 'Weather', m365: 'Microsoft 365 updates',
   linkgroup: 'Link group', notes: 'Note'
 };
 const WIDGET_ICONS = {
   clock: 'ti-clock', search: 'ti-search', favorites: 'ti-star-filled',
   readlater: 'ti-bookmark', recent: 'ti-history', 'most-visited': 'ti-flame',
   'recently-added': 'ti-clock-plus', folders: 'ti-folders', latest: 'ti-rss',
-  bigclock: 'ti-clock-hour-3', weather: 'ti-cloud',
+  bigclock: 'ti-clock-hour-3', weather: 'ti-cloud', m365: 'ti-brand-windows',
   linkgroup: 'ti-apps', notes: 'ti-note'
 };
+const M365_SHOWN = 10; // rows rendered in the widget (the API serves more)
 const DEFAULT_DASHBOARD = DEFAULT_WIDGETS.map(type => ({ id: type, type, enabled: true }));
 const LINKGROUP_MAX_ITEMS = 50;
 const NOTE_MAX_LEN = 10000;
@@ -299,6 +300,11 @@ function widgetInner(w, data) {
       // a sticky note. Text saves on blur; no re-render so focus/caret survive.
       return `<div class="home-section"><div class="home-section-head"><i class="ti ti-note" style="font-size:14px;color:var(--accent-icon)"></i><span class="home-section-title">${esc(w.title || 'Note')}</span></div><textarea class="home-note" placeholder="Write a note…" maxlength="${NOTE_MAX_LEN}" onblur="noteSave('${w.id}',this)">${esc(w.text || '')}</textarea></div>`;
     }
+    case 'm365':
+      // Disabled-in-edit-mode shows a static preview (same lesson as 'latest' —
+      // never render the live container that loadM365() won't fill).
+      if (!w.enabled) return sectionShell('Microsoft 365 updates', 'ti-brand-windows', '<div class="home-widget-empty">Message Center &amp; Roadmap posts</div>');
+      return `<div class="home-section"><div class="home-section-head"><i class="ti ti-brand-windows" style="font-size:14px;color:var(--accent-icon)"></i><span class="home-section-title">Microsoft 365 updates</span></div><div class="home-feed" id="m365Feed"><div class="home-feed-msg"><i class="ti ti-loader" style="animation:spin 1s linear infinite"></i> Loading updates…</div></div><div class="m365-foot">via <a href="https://mc.merill.net" target="_blank" rel="noopener noreferrer">mc.merill.net</a> — verify applicability in your own tenant's Message Center.</div></div>`;
     case 'bigclock':
       return `<div class="home-section home-bigclock"><div class="bigclock-time" id="bigClockTime"></div><div class="bigclock-date" id="bigClockDate"></div></div>`;
     case 'weather': {
@@ -375,6 +381,7 @@ export function renderHome() {
   clearInterval(homeClockTimer);
   homeClockTimer = setInterval(updateClock, 1000);
   if (rssFeeds.length && list.some(w => w.type === 'latest' && w.enabled)) loadHomeFeeds();
+  if (list.some(w => w.type === 'm365' && w.enabled)) loadM365();
   const ww = list.find(w => w.type === 'weather' && w.enabled);
   if (ww && Number.isFinite(ww.lat) && Number.isFinite(ww.lon)) loadHomeWeather(ww);
   loadHomeStatus();
@@ -525,6 +532,39 @@ async function loadHomeFeeds() {
 }
 
 function openFeedItem(url) { window.open(url, '_blank', 'noopener'); }
+
+// --- Microsoft 365 updates widget --------------------------------------------
+// Data comes from /api/m365 (server-side mc.merill.net proxy, cached 60 min).
+// Rows reuse the feed-item click path; each title links to the canonical post.
+let m365LoadToken = 0;
+
+async function loadM365() {
+  const token = ++m365LoadToken;
+  let data = null;
+  try {
+    const r = await fetch('/api/m365');
+    if (r.ok) data = await r.json();
+  } catch { /* rendered as unavailable below */ }
+  if (token !== m365LoadToken) return; // a newer load superseded us
+  const el = document.getElementById('m365Feed');
+  if (!el) return;
+  const items = (data && Array.isArray(data.items)) ? data.items.slice(0, M365_SHOWN) : [];
+  if (!items.length) {
+    el.innerHTML = `<div class="home-feed-msg">${data && data.error ? 'Could not reach the update feed.' : 'No updates yet.'}</div>`;
+    return;
+  }
+  el.innerHTML = items.map(it => {
+    const badges = (it.services || []).map(s => `<span class="m365-svc">${esc(s)}</span>`).join('');
+    const major = it.major ? '<span class="m365-major"><i class="ti ti-alert-triangle"></i> Major</span>' : '';
+    const kind = `<span class="m365-kind">${it.source === 'roadmap' ? 'Roadmap' : 'Message center'}</span>`;
+    const summary = it.summary ? `<div class="m365-summary">${esc(it.summary)}</div>` : '';
+    return `<div class="feed-item m365-item" data-url="${esc(it.url)}" title="${esc(it.title)}" onclick="openFeedItem(this.dataset.url)">`
+      + `<span class="feed-item-title">${major}${esc(it.title)}</span>`
+      + summary
+      + `<span class="feed-item-meta">${kind}${badges}<span>${esc(timeAgo(it.ts))}</span></span>`
+      + `</div>`;
+  }).join('');
+}
 
 // --- Weather widget ----------------------------------------------------------
 // Data comes from /api/weather (server-side Open-Meteo proxy, cached 15 min).
