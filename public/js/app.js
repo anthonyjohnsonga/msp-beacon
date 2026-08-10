@@ -1,6 +1,6 @@
 import { getFavicon, getDomain, esc, isHexColor, isWebUrl, hexToRgb, hexToHsl, hslToHex, deriveAccent, timeAgo, linkPath, pathKey, MAX_FOLDER_DEPTH } from './utils.js';
 import { ui } from './state.js';
-import { applyDensity, cycleDensity, idOrder, sortLinks } from './view.js';
+import { applyDensity, applyThumbs, cycleDensity, idOrder, sortLinks } from './view.js';
 import { applyMode, applyTheme, previewCustomAccent, setCustomAccent, THEMES } from './theme.js';
 import { showToast, showUndoToast } from './toast.js';
 import { confirmDialog } from './dialog.js';
@@ -263,6 +263,10 @@ function onSortChange() {
   ui.sort = document.getElementById('sortSelect').value;
   localStorage.setItem('msp-sort', ui.sort);
   updateFilterBadge();
+  render();
+}
+function toggleThumbs() {
+  applyThumbs(!ui.thumbs);
   render();
 }
 
@@ -999,7 +1003,7 @@ Object.assign(window, {
   indexAllContent, lgAddSubmit, lgStartRename, linkgroupRemoveItem, noteSave, onBulkFolderChange, onSearchInput,
   onSortChange, onTagInput, onTagKeydown, openArchive, openFeedItem, openFeedManager,
   openFolderColorPicker, openFolderIconPicker, openFolderManager, openImport, openModal, openRestore,
-  openShortcuts, openStatLink, openStats, openTagManager, openTheme, openTrash,
+  openShortcuts, openStatLink, openStats, openTagManager, openTheme, openTrash, toggleThumbs,
   previewCustomAccent, render, renderStats, resetPickerColor, resetStats, saveLink,
   saveSearchTerm, scanLinksForStats, selectAllVisible, selectFolderIcon, selectPickerColor, setBgBlur,
   setBgDim, setBgPreset, setBgType, setBgUrl, setCustomAccent, showSearchHistory,
@@ -1020,6 +1024,7 @@ if (window.matchMedia) {
   window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => { if (ui.mode === 'auto') applyMode('auto', false); });
 }
 applyDensity(ui.density);
+applyThumbs(ui.thumbs); // paints the Settings label from the stored preference
 document.getElementById('viewToggleIcon').className = ui.view === 'grid' ? 'ti ti-layout-list' : 'ti ti-layout-grid';
 updateDefaultViewLabel();
 setupCardListeners();

@@ -8,7 +8,7 @@
 // Inline handlers in the template strings below are bridged in app.js, guarded by
 // `npm run check`.
 // ============================================================================
-import { esc, linkPath, pathKey, isWebUrl, hexToRgb, getFavicon, getDomain, timeAgo, highlight } from './utils.js';
+import { esc, linkPath, pathKey, isWebUrl, hexToRgb, getFavicon, getThumb, getDomain, timeAgo, highlight } from './utils.js';
 import { ui } from './state.js';
 import { sortLinks } from './view.js';
 import { parseSearch, linkMatchesFlag, linkMatchesTerm, contentMatchIds, contentMatchQuery, contentMatchSnippets, scoreTextMatch, fuzzyScoreTextMatch } from './search.js';
@@ -228,6 +228,16 @@ function cardBorderStyle(l) {
   const p = linkPath(l);
   return p.length ? ` style="border-left:3px solid ${getFolderColor(p)}"` : '';
 }
+// Opt-in page preview strip at the top of a grid card. Loads lazily, so only
+// cards actually scrolled into view cost a page fetch. Pages with no og:image
+// 404 — the handler drops the whole strip so the card closes up cleanly instead
+// of leaving a broken-image gap.
+function cardThumbHtml(l) {
+  if (!ui.thumbs) return '';
+  const t = getThumb(l.url);
+  if (!t) return '';
+  return `<div class="card-thumb"><img src="${esc(t)}" alt="" loading="lazy" decoding="async" onerror="this.closest('.card-thumb').remove()"></div>`;
+}
 function cardHtml(l) {
   const fav = getFavicon(l.url);
   const fi = fav ? `<img src="${fav}" alt="" onerror="this.style.display='none';this.nextSibling.style.display='flex'"><span style="display:none"><i class="ti ti-world"></i></span>` : `<i class="ti ti-world"></i>`;
@@ -251,6 +261,7 @@ function cardHtml(l) {
     return `<div class="card select-mode${checked ? ' selected' : ''}" data-id="${esc(l.id)}">
       <div class="card-check${checked ? ' checked' : ''}"><i class="ti ti-check"></i></div>
       ${statusBadge}
+      ${cardThumbHtml(l)}
       ${top}
       ${l.desc ? `<div class="card-desc">${highlight(l.desc, highlightTerms)}</div>` : ''}
       ${contentSnippet(l.id)}
@@ -266,6 +277,7 @@ function cardHtml(l) {
       <button class="icon-btn" title="Delete" data-action="delete" data-id="${esc(l.id)}"><i class="ti ti-trash"></i></button>
     </div>
     ${statusBadge}
+    ${cardThumbHtml(l)}
     ${top}
     ${l.desc ? `<div class="card-desc">${highlight(l.desc, highlightTerms)}</div>` : ''}
     ${contentSnippet(l.id)}

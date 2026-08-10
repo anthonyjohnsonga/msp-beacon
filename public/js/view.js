@@ -32,6 +32,16 @@ export function cycleDensity() {
   applyDensity(next);
 }
 
+// Card preview images (og:image). Device-local like density — a phone on mobile
+// data shouldn't inherit the desktop's choice — so this is localStorage only and
+// deliberately NOT in saveConfig(). The caller re-renders.
+export function applyThumbs(on) {
+  ui.thumbs = !!on;
+  localStorage.setItem('msp-thumbs', ui.thumbs ? '1' : '0');
+  const el = document.getElementById('thumbsLabel');
+  if (el) el.textContent = ui.thumbs ? 'On' : 'Off';
+}
+
 // Numeric creation-order key from a link id. Ids are `Date.now().toString(36)`
 // plus a random base36 suffix. We parse ONLY the leading timestamp portion: the
 // random suffix has a variable length (trailing base36 zeros get dropped), so

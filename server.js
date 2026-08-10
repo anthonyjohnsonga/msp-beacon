@@ -31,8 +31,8 @@ function isPrivateIP(ip) {
 //     against isPrivateIP() and refused if it resolves to a private/internal
 //     address. Currently only /api/fetch-title.
 //   • Trusted, user-saved targets (/api/favicon, /api/check-links,
-//     /api/snapshot) and allowlisted feeds (/api/rss) DELIBERATELY fetch
-//     private/homelab IPs — that's the point of a self-hosted dashboard.
+//     /api/snapshot, /api/thumb) and allowlisted feeds (/api/rss) DELIBERATELY
+//     fetch private/homelab IPs — that's the point of a self-hosted dashboard.
 // /api/weather + /api/geocode + /api/m365 are outside both tiers: the server
 // builds those URLs itself against fixed hosts (Open-Meteo; zippopotam.us for US
 // zip lookups — the zip path segment is regex-constrained to 5 digits; and
@@ -53,6 +53,10 @@ const FAVICON_DIR = path.join('/data', 'favicons');
 const FAVICON_TTL = 30 * 24 * 60 * 60 * 1000; // re-fetch cached icons after 30 days
 const WALLPAPER_FILE = path.join('/data', 'wallpaper'); // single uploaded homepage background
 const FAVICON_MAX = 250 * 1024; // 250KB cap per icon
+const THUMB_DIR = path.join('/data', 'thumbs'); // per-link cached og:image preview
+const THUMB_TTL = 30 * 24 * 60 * 60 * 1000; // re-fetch cached previews after 30 days, like favicons
+const THUMB_MAX = 2 * 1024 * 1024; // 2MB cap per preview image
+const THUMB_PAGE_MAX = 300 * 1024; // only the <head> matters, so cap the HTML we scan
 const SNAPSHOT_DIR = path.join('/data', 'snapshots'); // per-link extracted page text for full-text search
 const SNAPSHOT_FETCH_MAX = 1024 * 1024; // 1MB cap on fetched HTML
 const SNAPSHOT_TEXT_MAX = 40000; // store up to 40k chars of extracted text per link
@@ -740,6 +744,107 @@ app.get('/api/favicon', async (req, res) => {
     return res.status(404).end();
   } catch (e) {
     console.error('GET /api/favicon error:', e);
+    return res.status(404).end();
+  }
+});
+
+// --- Card preview thumbnails (og:image) --------------------------------------
+// Cards can show the page's own social-preview image. The page HTML is already
+// something we fetch for titles/snapshots; here we read its og:image (or
+// twitter:image) meta tag, then cache the referenced image under /data/thumbs
+// keyed by the FULL url (unlike favicons, which are per-host — a preview is
+// per-page). Trusted, user-saved targets, so private/homelab IPs are allowed:
+// see the outbound-fetch policy up top. Same disk-cache + negative-cache +
+// in-flight dedupe shape as /api/favicon.
+
+// First matching <meta property|name="..."> content value, in key priority order.
+function metaContent(html, keys) {
+  const found = new Map();
+  const re = /<meta\b[^>]*>/gi;
+  let m;
+  while ((m = re.exec(html))) {
+    const tag = m[0];
+    const k = (tag.match(/(?:property|name)=["']?([^"'\s>]+)/i) || [])[1];
+    if (!k) continue;
+    const v = (tag.match(/content=["']([^"']*)["']/i) || [])[1];
+    const key = k.toLowerCase();
+    if (v && !found.has(key)) found.set(key, decodeHtmlEntities(v).trim());
+  }
+  for (const key of keys) { const v = found.get(key); if (v) return v; }
+  return '';
+}
+
+async function resolveThumbUrl(pageUrl) {
+  const page = await httpGetBuffer(pageUrl, 3, THUMB_PAGE_MAX, 'text/html');
+  if (!page || !/text\/html/i.test(page.contentType)) return null;
+  const raw = metaContent(page.buf.toString('utf8'), [
+    'og:image', 'og:image:secure_url', 'og:image:url', 'twitter:image', 'twitter:image:src',
+  ]);
+  if (!raw) return null;
+  let abs;
+  try { abs = new URL(raw, pageUrl).toString(); } catch { return null; }
+  return parseHttpUrl(abs) ? abs : null;
+}
+
+const thumbInflight = new Map(); // hash -> Promise (many cards can render at once)
+function fetchThumbBuffer(pageUrl, hash) {
+  if (thumbInflight.has(hash)) return thumbInflight.get(hash);
+  const p = (async () => {
+    const imgUrl = await resolveThumbUrl(pageUrl);
+    if (!imgUrl) return null;
+    const img = await httpGetBuffer(imgUrl, 3, THUMB_MAX, 'image/*');
+    const type = img && sniffImageType(img.buf);
+    return type ? { buf: img.buf, type } : null;
+  })().catch(() => null).finally(() => thumbInflight.delete(hash));
+  thumbInflight.set(hash, p);
+  return p;
+}
+
+app.get('/api/thumb', async (req, res) => {
+  const rawUrl = String(req.query.url || '');
+  if (!parseHttpUrl(rawUrl)) return res.status(400).end();
+
+  const hash = crypto.createHash('sha1').update(rawUrl).digest('hex');
+  const cachePath = path.join(THUMB_DIR, hash);
+  const nonePath = path.join(THUMB_DIR, hash + '.none');
+  const fresh = (st) => (Date.now() - st.mtimeMs) < THUMB_TTL;
+
+  try {
+    await fsp.mkdir(THUMB_DIR, { recursive: true });
+
+    try {
+      const st = await fsp.stat(cachePath);
+      if (fresh(st)) {
+        const buf = await fsp.readFile(cachePath);
+        res.setHeader('Content-Type', sniffImageType(buf) || 'application/octet-stream');
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        return res.end(buf);
+      }
+    } catch { /* not cached */ }
+
+    // Negative cache: most pages have no og:image, and a 404 here is the normal
+    // outcome — never re-fetch a whole page for them on every render.
+    try {
+      const st = await fsp.stat(nonePath);
+      if (fresh(st)) { res.setHeader('Cache-Control', 'public, max-age=3600'); return res.status(404).end(); }
+    } catch { /* no negative marker */ }
+
+    const result = await fetchThumbBuffer(rawUrl, hash);
+    if (result) {
+      const tmp = path.join(THUMB_DIR, `.${hash}-${Date.now()}`);
+      await fsp.writeFile(tmp, result.buf);
+      await fsp.rename(tmp, cachePath);
+      try { await fsp.unlink(nonePath); } catch { /* none */ }
+      res.setHeader('Content-Type', result.type);
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      return res.end(result.buf);
+    }
+
+    try { await fsp.writeFile(nonePath, ''); } catch { /* ignore */ }
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    return res.status(404).end();
+  } catch (e) {
+    console.error('GET /api/thumb error:', e);
     return res.status(404).end();
   }
 });

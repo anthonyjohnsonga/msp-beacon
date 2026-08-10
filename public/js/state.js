@@ -11,4 +11,7 @@ export const ui = {
   mode:    localStorage.getItem('msp-mode')    || 'dark',
   theme:   localStorage.getItem('msp-theme')   || 'Green',
   accent:  localStorage.getItem('msp-accent')  || '#1D9E75',
+  // Card preview images are opt-in: turning them on makes every visible card
+  // fetch its page for an og:image, so it stays off until the user asks for it.
+  thumbs:  localStorage.getItem('msp-thumbs') === '1',
 };

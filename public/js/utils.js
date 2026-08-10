@@ -4,6 +4,9 @@
 // ============================================================================
 
 export function getFavicon(u) { try { new URL(u); return '/api/favicon?url=' + encodeURIComponent(u); } catch { return null; } }
+// Page preview image (og:image). Keyed by the full URL, not the host — unlike a
+// favicon, the preview belongs to the page. 404s when the page has none.
+export function getThumb(u) { try { new URL(u); return '/api/thumb?url=' + encodeURIComponent(u); } catch { return null; } }
 export function getDomain(u) { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return u; } }
 export function esc(s) { if (!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 // Escape-then-highlight: HTML-escapes `text` and wraps any occurrence of the
