@@ -26,6 +26,7 @@ import { ensureAuth, handleUnauthorized, logout } from './auth.js';
 import {
   addLinkGroup, addNote, addSectionWidget, homeSearchInput, homeShowAll, lgAddSubmit,
   lgStartRename, linkgroupRemoveItem, noteSave, openFeedItem, toggleDashboardEdit,
+  m365ClearFilters, m365PickService, m365SetSource, m365ToggleFilters, m365ToggleMajor,
   weatherChangeLocation, weatherPickLocation, weatherSearchSubmit, weatherToggleUnit,
   widgetRemove, widgetToggle,
   renderHome, takeHomeFolderFilter, exitHomeMode, dashboardEditMode, dashboard,
@@ -1001,6 +1002,7 @@ Object.assign(window, {
   emptyTrash, esc, exitSelectMode, expandAll, exportLinks, fetchPageTitle, goHome,
   goManager, handleDrop, handleFile, handleRestoreFile, hideSearchHistory, hideTagSuggest, homeSearchInput, homeShowAll, logout,
   indexAllContent, lgAddSubmit, lgStartRename, linkgroupRemoveItem, noteSave, onBulkFolderChange, onSearchInput,
+  m365ClearFilters, m365PickService, m365SetSource, m365ToggleFilters, m365ToggleMajor,
   onSortChange, onTagInput, onTagKeydown, openArchive, openFeedItem, openFeedManager,
   openFolderColorPicker, openFolderIconPicker, openFolderManager, openImport, openModal, openRestore,
   openShortcuts, openStatLink, openStats, openTagManager, openTheme, openTrash, toggleThumbs,

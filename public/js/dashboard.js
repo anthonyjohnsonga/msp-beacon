@@ -54,6 +54,8 @@ const WIDGET_ICONS = {
   linkgroup: 'ti-apps', notes: 'ti-note'
 };
 const M365_SHOWN = 10; // rows rendered in the widget (the API serves more)
+const M365_SERVICES_MAX = 12; // mirrors the server's cap on filtered services
+const M365_SERVICE_LEN = 60;  // mirrors the server's per-name cap
 const DEFAULT_DASHBOARD = DEFAULT_WIDGETS.map(type => ({ id: type, type, enabled: true }));
 const LINKGROUP_MAX_ITEMS = 50;
 const NOTE_MAX_LEN = 10000;
@@ -120,6 +122,19 @@ function sanitizeDashboard(arr) {
         lat: located ? lat : null, lon: located ? lon : null,
         place: (typeof w.place === 'string' ? w.place : '').slice(0, 60),
         unit: w.unit === 'f' ? 'f' : 'c',
+      });
+    } else if (type === 'm365') {
+      // Section singleton like the generic branch, but it carries the saved
+      // filter. Service names are upstream display text — they are esc'd at
+      // render and picked by index in handlers, so bounding count/length is all
+      // they need. source is a closed set; anything else means "both kinds".
+      if (seenSection.has(type)) continue;
+      seenSection.add(type);
+      out.push({
+        id: 'm365', type, enabled,
+        services: m365CleanServices(w.services),
+        major: w.major === true,
+        source: w.source === 'mc' || w.source === 'roadmap' ? w.source : null,
       });
     } else if (SECTION_WIDGETS.includes(type)) {
       if (seenSection.has(type)) continue; // one of each section
@@ -300,11 +315,14 @@ function widgetInner(w, data) {
       // a sticky note. Text saves on blur; no re-render so focus/caret survive.
       return `<div class="home-section"><div class="home-section-head"><i class="ti ti-note" style="font-size:14px;color:var(--accent-icon)"></i><span class="home-section-title">${esc(w.title || 'Note')}</span></div><textarea class="home-note" placeholder="Write a note…" maxlength="${NOTE_MAX_LEN}" onblur="noteSave('${w.id}',this)">${esc(w.text || '')}</textarea></div>`;
     }
-    case 'm365':
+    case 'm365': {
       // Disabled-in-edit-mode shows a static preview (same lesson as 'latest' —
       // never render the live container that loadM365() won't fill).
       if (!w.enabled) return sectionShell('Microsoft 365 updates', 'ti-brand-windows', '<div class="home-widget-empty">Message Center &amp; Roadmap posts</div>');
-      return `<div class="home-section"><div class="home-section-head"><i class="ti ti-brand-windows" style="font-size:14px;color:var(--accent-icon)"></i><span class="home-section-title">Microsoft 365 updates</span></div><div class="home-feed" id="m365Feed"><div class="home-feed-msg"><i class="ti ti-loader" style="animation:spin 1s linear infinite"></i> Loading updates…</div></div><div class="m365-foot">via <a href="https://mc.merill.net" target="_blank" rel="noopener noreferrer">mc.merill.net</a> — verify applicability in your own tenant's Message Center.</div></div>`;
+      // The filter panel is left empty here and filled by paintM365Filters() —
+      // the service list it offers only exists once /api/m365 has answered.
+      return `<div class="home-section"><div class="home-section-head"><i class="ti ti-brand-windows" style="font-size:14px;color:var(--accent-icon)"></i><span class="home-section-title">Microsoft 365 updates</span>${m365FilterBtnHtml(w)}</div><div class="m365-filters" id="m365Filters" style="display:none"></div><div class="home-feed" id="m365Feed"><div class="home-feed-msg"><i class="ti ti-loader" style="animation:spin 1s linear infinite"></i> Loading updates…</div></div><div class="m365-foot">via <a href="https://mc.merill.net" target="_blank" rel="noopener noreferrer">mc.merill.net</a> — verify applicability in your own tenant's Message Center.</div></div>`;
+    }
     case 'bigclock':
       return `<div class="home-section home-bigclock"><div class="bigclock-time" id="bigClockTime"></div><div class="bigclock-date" id="bigClockDate"></div></div>`;
     case 'weather': {
@@ -421,6 +439,7 @@ function addSectionWidget(type) {
   if (d.some(w => w.type === type)) return;
   const w = { id: type, type, enabled: true };
   if (type === 'weather') Object.assign(w, { lat: null, lon: null, place: '', unit: 'f' });
+  if (type === 'm365') Object.assign(w, { services: [], major: false, source: null });
   d.push(w);
   persistDashboard(); render();
 }
@@ -536,21 +555,145 @@ function openFeedItem(url) { window.open(url, '_blank', 'noopener'); }
 // --- Microsoft 365 updates widget --------------------------------------------
 // Data comes from /api/m365 (server-side mc.merill.net proxy, cached 60 min).
 // Rows reuse the feed-item click path; each title links to the canonical post.
+//
+// The widget object carries a filter — {services[], major, source} — that is
+// applied SERVER-side: the source publishes thousands of posts across ~64
+// services, so filtering here would only ever narrow the newest 50 and a "major
+// only" view would come back nearly empty. Each response also carries the list
+// of services still available under the current kind/major filter, with counts,
+// which is what the picker below offers.
 let m365LoadToken = 0;
+let m365ServiceList = []; // [{name, count}] from the last response; picked by index
+let m365FiltersOpen = false; // panel visibility is ephemeral — never persisted
+
+function m365Widget() { return ensureDashboard().find(x => x.type === 'm365'); }
+
+// Read a widget's filter defensively. A layout saved before filtering existed
+// (or restored straight from localStorage, which skips sanitizeDashboard) has
+// none of these fields, so every reader goes through here.
+function m365Cfg(w) {
+  return {
+    services: Array.isArray(w && w.services) ? w.services : [],
+    major: !!(w && w.major),
+    source: (w && (w.source === 'mc' || w.source === 'roadmap')) ? w.source : null,
+  };
+}
+function m365CleanServices(list) {
+  if (!Array.isArray(list)) return [];
+  const out = [];
+  for (const s of list) {
+    if (typeof s !== 'string' || !s.trim()) continue;
+    const name = s.trim().slice(0, M365_SERVICE_LEN);
+    if (!out.some(x => x.toLowerCase() === name.toLowerCase())) out.push(name);
+    if (out.length >= M365_SERVICES_MAX) break;
+  }
+  return out;
+}
+function m365ActiveCount(w) {
+  const c = m365Cfg(w);
+  return c.services.length + (c.major ? 1 : 0) + (c.source ? 1 : 0);
+}
+function m365FilterBtnHtml(w) {
+  const n = m365ActiveCount(w);
+  return `<button class="home-section-all${n ? ' active' : ''}" id="m365FilterBtn" onclick="m365ToggleFilters()" title="Filter updates"><i class="ti ti-filter"></i> Filter${n ? ` (${n})` : ''}</button>`;
+}
+function m365Query(c) {
+  const p = new URLSearchParams();
+  for (const s of c.services) p.append('services', s); // repeated, not comma-joined
+  if (c.major) p.set('major', '1');
+  if (c.source) p.set('source', c.source);
+  const q = p.toString();
+  return q ? `?${q}` : '';
+}
+
+// Repaint the filter panel + the head button in place. Called before a fetch (so
+// a click responds immediately, from the previous service list) and again after
+// it (so the counts match what was just served) — never via render(), which
+// would collapse the panel and lose the page's scroll position.
+function paintM365Filters() {
+  const w = m365Widget();
+  const btn = document.getElementById('m365FilterBtn');
+  if (btn && w) btn.outerHTML = m365FilterBtnHtml(w);
+  const box = document.getElementById('m365Filters');
+  if (!box || !w) return;
+  if (!m365FiltersOpen) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  const c = m365Cfg(w);
+  // Each onclick is written out literally rather than passed through a helper —
+  // scripts/check-bridge.js only sees handler names inside a real on*="…"
+  // attribute, and these buttons must stay covered by that guard.
+  const cls = on => `class="m365-chip${on ? ' on' : ''}"`;
+  const kinds = [['all', 'All'], ['mc', 'Message center'], ['roadmap', 'Roadmap']]
+    .map(([v, label]) => `<button ${cls((c.source || 'all') === v)} onclick="m365SetSource('${v}')">${label}</button>`).join('');
+  const services = m365ServiceList.map((s, i) => {
+    const on = c.services.some(x => x.toLowerCase() === s.name.toLowerCase());
+    return `<button ${cls(on)} onclick="m365PickService(${i})" title="${esc(s.name)}">${esc(s.name)} <span class="m365-chip-n">${s.count}</span></button>`;
+  }).join('');
+  box.style.display = '';
+  box.innerHTML = `<div class="m365-filter-row"><span class="m365-filter-label">Show</span>${kinds}`
+    + `<button ${cls(c.major)} onclick="m365ToggleMajor()"><i class="ti ti-alert-triangle"></i> Major only</button>`
+    + (m365ActiveCount(w) ? `<button ${cls(false)} onclick="m365ClearFilters()"><i class="ti ti-x"></i> Clear</button>` : '')
+    + `</div>`
+    + (services
+      ? `<div class="m365-filter-row m365-filter-services"><span class="m365-filter-label">Service</span>${services}</div>`
+      : '');
+}
+
+function m365ToggleFilters() { m365FiltersOpen = !m365FiltersOpen; paintM365Filters(); }
+
+// Every filter change funnels through here: mutate the config, persist it, show
+// the change at once, then refetch under the new filter.
+function m365ApplyFilter(mutate) {
+  const w = m365Widget();
+  if (!w) return;
+  const c = m365Cfg(w);
+  mutate(c);
+  Object.assign(w, {
+    services: m365CleanServices(c.services), major: !!c.major,
+    source: c.source === 'mc' || c.source === 'roadmap' ? c.source : null,
+  });
+  persistDashboard();
+  loadM365(); // repaints the panel synchronously before it fetches
+}
+function m365PickService(i) {
+  const s = m365ServiceList[i];
+  if (!s) return;
+  const picked = m365Cfg(m365Widget()).services;
+  if (!picked.some(x => x.toLowerCase() === s.name.toLowerCase()) && picked.length >= M365_SERVICES_MAX) {
+    showToast(`Up to ${M365_SERVICES_MAX} services at a time`);
+    return;
+  }
+  m365ApplyFilter(c => {
+    const on = c.services.some(x => x.toLowerCase() === s.name.toLowerCase());
+    c.services = on
+      ? c.services.filter(x => x.toLowerCase() !== s.name.toLowerCase())
+      : c.services.concat(s.name);
+  });
+}
+function m365SetSource(v) { m365ApplyFilter(c => { c.source = v; }); }
+function m365ToggleMajor() { m365ApplyFilter(c => { c.major = !c.major; }); }
+function m365ClearFilters() { m365ApplyFilter(c => { c.services = []; c.major = false; c.source = null; }); }
 
 async function loadM365() {
   const token = ++m365LoadToken;
+  const w = m365Widget();
+  const c = m365Cfg(w);
+  paintM365Filters();
   let data = null;
   try {
-    const r = await fetch('/api/m365');
+    const r = await fetch('/api/m365' + m365Query(c));
     if (r.ok) data = await r.json();
   } catch { /* rendered as unavailable below */ }
   if (token !== m365LoadToken) return; // a newer load superseded us
+  if (data && Array.isArray(data.services)) {
+    m365ServiceList = data.services.filter(s => s && typeof s.name === 'string');
+    paintM365Filters();
+  }
   const el = document.getElementById('m365Feed');
   if (!el) return;
   const items = (data && Array.isArray(data.items)) ? data.items.slice(0, M365_SHOWN) : [];
   if (!items.length) {
-    el.innerHTML = `<div class="home-feed-msg">${data && data.error ? 'Could not reach the update feed.' : 'No updates yet.'}</div>`;
+    const empty = m365ActiveCount(w) ? 'No updates match this filter.' : 'No updates yet.';
+    el.innerHTML = `<div class="home-feed-msg">${data && data.error ? 'Could not reach the update feed.' : empty}</div>`;
     return;
   }
   el.innerHTML = items.map(it => {
@@ -708,6 +851,7 @@ async function loadHomeStatus() {
 export {
   addLinkGroup, addNote, addSectionWidget, homeSearchInput, homeShowAll, lgAddSubmit,
   lgStartRename, linkgroupRemoveItem, noteSave, openFeedItem, toggleDashboardEdit,
+  m365ClearFilters, m365PickService, m365SetSource, m365ToggleFilters, m365ToggleMajor,
   weatherChangeLocation, weatherPickLocation, weatherSearchSubmit, weatherToggleUnit,
   widgetRemove, widgetToggle, sanitizeDashboard, migrateDashboard,
 };

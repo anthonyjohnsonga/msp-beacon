@@ -343,6 +343,18 @@ select:focus { outline: none; border-color: var(--g4); }
 .m365-major { display: inline-flex; align-items: center; gap: 3px; margin-right: 6px; padding: 1px 6px; border-radius: 999px; background: rgba(226,75,74,.14); border: 1px solid rgba(226,75,74,.45); color: #E24B4A; font-size: 10.5px; font-weight: 600; vertical-align: 1px; }
 .m365-foot { font-size: 11px; color: var(--text2); padding: 6px 10px 0; }
 .m365-foot a { color: var(--accent-label); }
+/* Filter panel — toggled open from the section head, painted in place */
+.m365-filters { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px 10px; }
+.m365-filter-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.m365-filter-label { font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: .04em; margin-right: 2px; }
+/* ~50 services fit here, so the list scrolls rather than pushing the feed down */
+.m365-filter-services { align-items: flex-start; max-height: 108px; overflow-y: auto; }
+.m365-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 999px; background: var(--bg1); border: 1px solid var(--g5); color: var(--text1); font-size: 11.5px; font-family: inherit; cursor: pointer; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m365-chip:hover { border-color: var(--g3); color: var(--text0); }
+.m365-chip.on { background: rgba(var(--g5-rgb), .18); border-color: var(--accent-icon); color: var(--accent-text); }
+.m365-chip-n { color: var(--text2); font-size: 10.5px; }
+.m365-chip.on .m365-chip-n { color: inherit; opacity: .75; }
+.home-section-all.active { color: var(--accent-text); }
 .home-tile[draggable="true"] { cursor: grab; }
 .home-tile.dragging { opacity: 0.35; cursor: grabbing; }
 .home-tile.drag-over { border-color: var(--g3) !important; box-shadow: 0 0 0 2px var(--g4-glow); background: var(--bg1); }

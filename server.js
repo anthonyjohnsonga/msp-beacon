@@ -67,7 +67,15 @@ const RSS_ITEMS_MAX = 30; // keep up to 30 items per feed
 const M365_URL = 'https://mc.merill.net/messages-index.json'; // fixed host, see the outbound-fetch policy
 const M365_TTL = 60 * 60 * 1000; // the source publishes a 60-min ttl — respect it
 const M365_FETCH_MAX = 16 * 1024 * 1024; // index was ~5MB in Aug 2026 and grows; leave headroom
-const M365_ITEMS_MAX = 50; // newest N kept in memory + served to the widget
+const M365_ITEMS_MAX = 50; // newest N served to the widget for a given filter
+// Filters are applied server-side over a pool of the newest posts, not over the
+// served slice — filtering after the trim would leave a narrow filter nearly
+// empty. Measured against the live index on 2026-08-14 (5825 posts, 62 distinct
+// services): the newest 1500 reach ~100 days back and cover 46 of those services,
+// where the newest 50 alone cover only 19. Costs a few MB of heap.
+const M365_POOL_MAX = 1500;
+const M365_SERVICES_MAX = 12; // most services one client may filter on at once
+const M365_SERVICE_LEN = 60;  // per-name cap, shared by the parser and the filter
 
 // 10mb matches what /api/restore accepts — a lower cap here would let you
 // restore a backup too big to ever re-save (every edit would 413).
@@ -1141,8 +1149,9 @@ app.get('/api/rss', async (req, res) => {
 // publishes this file for programmatic use). The server builds the URL itself
 // against a fixed host — no user-controlled target, like /api/weather (see the
 // outbound-fetch policy up top). The full index is several MB, so it is fetched
-// at most once per M365_TTL and only the trimmed newest M365_ITEMS_MAX are sent
-// to the client. Fetched live at runtime and never bundled into the repo/image.
+// at most once per M365_TTL, kept as the newest M365_POOL_MAX posts, and served
+// as at most M365_ITEMS_MAX once the caller's filter has been applied to that
+// pool. Fetched live at runtime and never bundled into the repo/image.
 
 let m365Cache = null;    // { items, fetchedAt, error }
 let m365InFlight = null; // dedupe concurrent fetches (the index is big)
@@ -1166,7 +1175,7 @@ function parseM365(json) {
       title: String(it.Title || '').replace(/\s+/g, ' ').trim().slice(0, 300) || '(untitled)',
       url,
       source: it.Source === 'roadmap' ? 'roadmap' : 'mc',
-      services: strs(it.Services, 3, 60),
+      services: strs(it.Services, 3, M365_SERVICE_LEN),
       tags: strs(it.Tags, 3, 40),
       major: it.IsMajorChange === true,
       summary: String(it.Summary || '').replace(/\s+/g, ' ').trim().slice(0, 400),
@@ -1174,7 +1183,50 @@ function parseM365(json) {
     });
   }
   items.sort((a, b) => (b.ts || 0) - (a.ts || 0));
-  return items.slice(0, M365_ITEMS_MAX);
+  return items.slice(0, M365_POOL_MAX);
+}
+
+// Read the widget's filter off the query string. Everything is clamped here so
+// the pool scan below can never be driven into doing unbounded work.
+function m365Filter(query) {
+  const one = v => (Array.isArray(v) ? v[0] : v);
+  // Repeated `services=` params rather than one comma-joined value: upstream
+  // service names are free text and a comma in one would split it in half.
+  const raw = query.services;
+  const services = (Array.isArray(raw) ? raw : raw == null ? [] : [raw])
+    .filter(s => typeof s === 'string')
+    .map(s => s.trim().toLowerCase().slice(0, M365_SERVICE_LEN))
+    .filter(Boolean).slice(0, M365_SERVICES_MAX);
+  const source = one(query.source);
+  return {
+    services,
+    major: String(one(query.major) || '') === '1',
+    source: source === 'mc' || source === 'roadmap' ? source : null,
+  };
+}
+
+function m365Matches(it, f) {
+  if (f.major && !it.major) return false;
+  if (f.source && it.source !== f.source) return false;
+  return true;
+}
+
+// Distinct services in a set of posts, most-used first — this is what populates
+// the widget's service picker, so it is computed AFTER the kind/major filters but
+// BEFORE the service filter. That way the counts say what each service would
+// actually return, and picking one doesn't hide the others.
+// Keyed case-insensitively (the filter compares that way too) while keeping the
+// first spelling seen for display.
+function m365Services(items) {
+  const counts = new Map();
+  for (const it of items) {
+    for (const s of it.services) {
+      const entry = counts.get(s.toLowerCase());
+      if (entry) entry.count++;
+      else counts.set(s.toLowerCase(), { name: s, count: 1 });
+    }
+  }
+  return [...counts.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 }
 
 async function getM365() {
@@ -1202,7 +1254,13 @@ async function getM365() {
 
 app.get('/api/m365', async (req, res) => {
   const entry = await getM365();
-  res.json({ items: entry.items, error: entry.error });
+  const f = m365Filter(req.query);
+  const pool = entry.items.filter(it => m365Matches(it, f));
+  const services = m365Services(pool);
+  const items = (f.services.length
+    ? pool.filter(it => it.services.some(s => f.services.includes(s.toLowerCase())))
+    : pool).slice(0, M365_ITEMS_MAX);
+  res.json({ items, services, error: entry.error });
 });
 
 // --- Weather widget (Open-Meteo proxy) ----------------------------------------
