@@ -5,10 +5,13 @@
 // calls persistDashboard()/saveConfig() — the widget is injected with the
 // exported setDashboard() setter — so the test writes NOTHING to /data.
 //
-// Covers: the server /api/m365 proxy shape + trimming + cache; the widget being
-// opt-in (absent from the default dashboard but offered as an Add-widget chip);
-// live rows rendering with title/summary/service/kind/major badges + the
-// attribution footer; canonical links; and the disabled-in-edit-mode preview.
+// Covers: the server /api/m365 proxy shape + trimming + cache; server-side
+// filtering by service / kind / major-only (including that it runs over the pool
+// rather than the served slice); the widget being opt-in (absent from the default
+// dashboard but offered as an Add-widget chip); live rows rendering with
+// title/summary/service/kind/major badges + the attribution footer; canonical
+// links; the disabled-in-edit-mode preview; the filter panel's chips, request
+// mapping, and persistence; and sanitizeDashboard's bounds on the saved filter.
 //
 // Needs network access to mc.merill.net (the widget is a live proxy by design).
 //
@@ -127,6 +130,78 @@ async function main() {
     await D.eval(`fetch('/api/m365').then(r => r.json())`);
     const warmMs = Date.now() - t1;
     check('server: second call is served from cache (faster)', warmMs < coldMs, { coldMs, warmMs });
+
+    // --- server: filtering ------------------------------------------------------
+    // Filters run over the 1500-item pool, not the served 50, so a narrow filter
+    // still fills the widget. Every assertion below is derived from the live data
+    // it just fetched, so it holds whatever Microsoft published today.
+    const q = async qs => D.eval(`fetch('/api/m365${qs}').then(r => r.json())`);
+
+    check('server: unfiltered response carries a services list',
+      Array.isArray(api.services) && api.services.length > 0
+      && api.services.every(s => typeof s.name === 'string' && s.name && Number.isInteger(s.count) && s.count > 0),
+      api.services?.slice(0, 3));
+    check('server: services are ranked by count, descending',
+      api.services.every((s, n) => n === 0 || api.services[n - 1].count >= s.count),
+      api.services.slice(0, 5));
+    check('server: service counts come from the pool, not the served slice',
+      api.services.reduce((n, s) => n + s.count, 0) > api.items.length,
+      { total: api.services.reduce((n, s) => n + s.count, 0), served: api.items.length });
+
+    const majorOnly = await q('?major=1');
+    check('server: major=1 returns only major changes',
+      majorOnly.items.length > 0 && majorOnly.items.every(i => i.major === true),
+      { n: majorOnly.items.length, nonMajor: majorOnly.items.filter(i => !i.major).length });
+    check('server: major=1 reaches past the newest 50 (filter precedes the trim)',
+      majorOnly.items.length > api.items.filter(i => i.major).length,
+      { filtered: majorOnly.items.length, inNewest50: api.items.filter(i => i.major).length });
+
+    const roadmap = await q('?source=roadmap');
+    const mc = await q('?source=mc');
+    check('server: source=roadmap returns only roadmap items',
+      roadmap.items.length > 0 && roadmap.items.every(i => i.source === 'roadmap'),
+      [...new Set(roadmap.items.map(i => i.source))]);
+    check('server: source=mc returns only message-center items',
+      mc.items.length > 0 && mc.items.every(i => i.source === 'mc'),
+      [...new Set(mc.items.map(i => i.source))]);
+    const bogus = await q('?source=bogus');
+    check('server: an unknown source is ignored, not applied',
+      bogus.items.length === api.items.length && bogus.items[0]?.id === api.items[0]?.id,
+      { bogus: bogus.items.length, unfiltered: api.items.length });
+
+    const top = api.services[0].name;
+    const svc = await q('?services=' + encodeURIComponent(top));
+    check('server: services= returns only posts touching that service',
+      svc.items.length > 0 && svc.items.every(i => i.services.some(s => s.toLowerCase() === top.toLowerCase())),
+      { service: top, n: svc.items.length });
+    check('server: the picker still offers every service while one is selected',
+      svc.services.length === api.services.length,
+      { withFilter: svc.services.length, without: api.services.length });
+
+    // Two services are a union (OR), so the result is a superset of either alone.
+    const second = api.services.find(s => s.name.toLowerCase() !== top.toLowerCase());
+    const both = await q(`?services=${encodeURIComponent(top)}&services=${encodeURIComponent(second.name)}`);
+    const bothIds = new Set(both.items.map(i => i.id));
+    check('server: repeated services= params union (OR), not intersect',
+      both.items.length >= svc.items.length
+      && both.items.every(i => i.services.some(s => [top, second.name].some(f => f.toLowerCase() === s.toLowerCase())))
+      && svc.items.slice(0, 5).every(i => bothIds.has(i.id)),
+      { one: svc.items.length, two: both.items.length });
+
+    // Beyond the 12-service cap the extras are dropped — 12 junk names first means
+    // the real service that follows them never gets applied, so nothing matches.
+    const junk = Array.from({ length: 12 }, (_, n) => `services=nosuchservice${n}`).join('&');
+    const capped = await q(`?${junk}&services=${encodeURIComponent(top)}`);
+    check('server: at most 12 services are honored (the 13th is dropped)',
+      capped.items.length === 0, { n: capped.items.length, service: top });
+
+    const combo = await q('?major=1&source=mc');
+    check('server: filters combine (major + source)',
+      combo.items.every(i => i.major === true && i.source === 'mc'),
+      { n: combo.items.length });
+    check('server: filtered responses stay capped at 50 items',
+      [majorOnly, roadmap, mc, svc, both].every(r => r.items.length <= 50),
+      [majorOnly, roadmap, mc, svc, both].map(r => r.items.length));
 
     // --- widget is OPT-IN ------------------------------------------------------
     // Fresh profile => no saved layout => DEFAULT_DASHBOARD, which must not carry it.
@@ -264,6 +339,187 @@ async function main() {
     check('stub: title is escaped (no injected <script>)', stub.injectedScript === false && stub.titleText.includes('<script>'), stub);
     check('stub: empty summary renders no summary block', stub.noSummaryBlock === true, stub);
     check('stub: empty services render no badges', stub.noSvcBadges === true, stub);
+
+    // --- filter UI (deterministic, stubbed response) ---------------------------
+    // Also stubbed: the service picker's contents must be exactly known, and the
+    // handlers call persistDashboard() -> saveConfig(), whose POST this stub
+    // swallows so /data stays untouched (asserted at the end). Every query the
+    // widget issues is recorded, which is how the filter -> request mapping is
+    // pinned down. One fixture service name carries & and " to prove escaping.
+    const SVC_ODD = 'SharePoint & "Online"';
+    const FSTUB = {
+      items: [
+        { id: 'MC100001', title: 'Filtered result', url: 'https://mc.merill.net/message/MC100001',
+          source: 'mc', services: ['Microsoft Teams'], tags: [], major: true,
+          summary: 'Only shown under the active filter.', ts: Date.now() - 3600e3 },
+      ],
+      services: [
+        { name: 'Microsoft Teams', count: 40 },
+        { name: SVC_ODD, count: 12 },
+        { name: 'Exchange', count: 3 },
+      ],
+      error: null,
+    };
+    await D.eval(`(async () => {
+      window.__m365Calls = []; window.__cfgSaves = 0; window.__m365Empty = false;
+      const realFetch = window.fetch;
+      const json = body => new Response(body, { headers: { 'Content-Type': 'application/json' } });
+      window.fetch = (u, o) => {
+        const s = String(u);
+        if (s.startsWith('/api/m365')) {
+          window.__m365Calls.push(s);
+          const body = ${JSON.stringify(JSON.stringify(FSTUB))};
+          if (window.__m365Empty) { const d = JSON.parse(body); d.items = []; return Promise.resolve(json(JSON.stringify(d))); }
+          return Promise.resolve(json(body));
+        }
+        if (s.startsWith('/api/config')) { window.__cfgSaves++; return Promise.resolve(json('{}')); }
+        return realFetch(u, o);
+      };
+      const d = await import('/js/dashboard.js');
+      const m = await import('/js/app.js');
+      d.setDashboardEditMode(false);
+      d.setDashboard([{ id: 'm365', type: 'm365', enabled: true, services: [], major: false, source: null }]);
+      m.setMode('home');
+    })()`);
+    await sleep(700);
+
+    const readPanel = `(() => {
+      const box = document.getElementById('m365Filters');
+      const btn = document.getElementById('m365FilterBtn');
+      const rows = [...box.querySelectorAll('.m365-filter-row')];
+      const chips = r => [...(rows[r]?.querySelectorAll('.m365-chip') || [])]
+        .map(b => ({ label: b.textContent.trim(), on: b.classList.contains('on'), title: b.getAttribute('title') }));
+      return {
+        btnLabel: btn ? btn.textContent.trim() : null,
+        btnActive: btn ? btn.classList.contains('active') : null,
+        hidden: box.style.display === 'none',
+        empty: box.innerHTML === '',
+        kinds: chips(0),
+        services: chips(1),
+        serviceRow: !!box.querySelector('.m365-filter-services'),
+        lastCall: window.__m365Calls[window.__m365Calls.length - 1],
+        callCount: window.__m365Calls.length,
+        cfgSaves: window.__cfgSaves,
+        feedText: document.getElementById('m365Feed')?.textContent.trim() || '',
+      };
+    })()`;
+    const clickChip = (row, label) => D.eval(`(() => {
+      const rows = [...document.querySelectorAll('#m365Filters .m365-filter-row')];
+      const b = [...(rows[${row}]?.querySelectorAll('.m365-chip') || [])].find(x => x.textContent.trim().startsWith(${JSON.stringify(label)}));
+      if (!b) return false;
+      b.click(); return true;
+    })()`);
+
+    let p = await D.eval(readPanel);
+    check('filter: head shows an unbadged Filter button', p.btnLabel === 'Filter' && p.btnActive === false, p);
+    check('filter: panel starts closed and empty', p.hidden === true && p.empty === true, p);
+    check('filter: unfiltered widget requests /api/m365 with no query',
+      p.callCount === 1 && p.lastCall === '/api/m365', { calls: p.callCount, last: p.lastCall });
+
+    await D.eval(`document.getElementById('m365FilterBtn').click()`);
+    await sleep(200);
+    p = await D.eval(readPanel);
+    check('filter: the Filter button opens the panel', p.hidden === false && p.empty === false, p);
+    check('filter: kind chips are All / Message center / Roadmap with All selected',
+      p.kinds.slice(0, 3).map(c => c.label).join('|') === 'All|Message center|Roadmap' && p.kinds[0].on === true,
+      p.kinds);
+    check('filter: a Major only chip is offered', p.kinds.some(c => /Major only/.test(c.label) && !c.on), p.kinds);
+    check('filter: no Clear chip while nothing is filtered', !p.kinds.some(c => /Clear/.test(c.label)), p.kinds);
+    check('filter: service chips carry the response counts',
+      p.services.map(c => c.label).join('|') === `Microsoft Teams 40|${SVC_ODD} 12|Exchange 3`, p.services);
+    check('filter: service names with & and " survive escaping',
+      p.services[1].title === SVC_ODD && p.services[1].label.startsWith(SVC_ODD), p.services[1]);
+    check('filter: opening the panel does not refetch', p.callCount === 1, p.callCount);
+    check('filter: opening the panel does not persist anything', p.cfgSaves === 0, p.cfgSaves);
+
+    const savesBefore = p.cfgSaves;
+    await clickChip(1, 'Microsoft Teams');
+    await sleep(500);
+    p = await D.eval(readPanel);
+    check('filter: picking a service requests it as a repeated services= param',
+      p.lastCall === '/api/m365?services=Microsoft+Teams', p.lastCall);
+    check('filter: the picked service chip is marked on', p.services[0].on === true && p.services[1].on === false, p.services);
+    check('filter: the head button counts the active filter', p.btnLabel === 'Filter (1)' && p.btnActive === true, p);
+    check('filter: the panel stays open across a change', p.hidden === false, p);
+    check('filter: a Clear chip appears once something is filtered', p.kinds.some(c => /Clear/.test(c.label)), p.kinds);
+    check('filter: the change is persisted exactly once', p.cfgSaves === savesBefore + 1, { before: savesBefore, after: p.cfgSaves });
+
+    await clickChip(0, 'Major only');
+    await sleep(500);
+    p = await D.eval(readPanel);
+    check('filter: Major only adds major=1 alongside the service',
+      p.lastCall === '/api/m365?services=Microsoft+Teams&major=1', p.lastCall);
+    check('filter: the head button counts both filters', p.btnLabel === 'Filter (2)', p.btnLabel);
+
+    await clickChip(0, 'Roadmap');
+    await sleep(500);
+    p = await D.eval(readPanel);
+    check('filter: picking a kind adds source=roadmap',
+      p.lastCall === '/api/m365?services=Microsoft+Teams&major=1&source=roadmap', p.lastCall);
+    check('filter: the Roadmap chip is selected and All is not',
+      p.kinds[2].on === true && p.kinds[0].on === false, p.kinds);
+    check('filter: the head button counts all three filters', p.btnLabel === 'Filter (3)', p.btnLabel);
+
+    // A filtered view that comes back empty must say so, not read as "no updates".
+    await D.eval(`window.__m365Empty = true`);
+    await clickChip(1, 'Exchange');
+    await sleep(500);
+    p = await D.eval(readPanel);
+    check('filter: an empty filtered result says no updates MATCH',
+      /No updates match this filter/i.test(p.feedText), p.feedText);
+    await D.eval(`window.__m365Empty = false`);
+
+    await clickChip(0, 'Clear');
+    await sleep(500);
+    p = await D.eval(readPanel);
+    check('filter: Clear drops every filter from the request', p.lastCall === '/api/m365', p.lastCall);
+    check('filter: Clear resets the head button', p.btnLabel === 'Filter' && p.btnActive === false, p);
+    check('filter: Clear deselects every chip and re-selects All',
+      p.kinds[0].on === true && p.services.every(c => c.on === false), { kinds: p.kinds, services: p.services });
+
+    // Deselecting is a toggle: pick twice and the filter is gone again.
+    await clickChip(1, 'Exchange');
+    await sleep(400);
+    await clickChip(1, 'Exchange');
+    await sleep(400);
+    p = await D.eval(readPanel);
+    check('filter: clicking a selected service unpicks it', p.lastCall === '/api/m365', p.lastCall);
+
+    // The panel is view state, not layout — it must never reach the saved config.
+    const saved = await D.eval(`(async () => {
+      const d = await import('/js/dashboard.js');
+      const w = d.dashboard.find(x => x.type === 'm365');
+      return { keys: Object.keys(w).sort().join(','), services: w.services, major: w.major, source: w.source };
+    })()`);
+    check('filter: the widget persists only {services, major, source}',
+      saved.keys === 'enabled,id,major,services,source,type', saved.keys);
+    check('filter: a cleared filter is stored as empty, not left stale',
+      Array.isArray(saved.services) && saved.services.length === 0 && saved.major === false && saved.source === null, saved);
+
+    // --- sanitizeDashboard bounds the saved filter -----------------------------
+    // Pure function, no persistence — a restored or hand-edited config must not be
+    // able to smuggle a longer/dirtier filter past the caps the server enforces.
+    const san = await D.eval(`(async () => {
+      const d = await import('/js/dashboard.js');
+      const many = Array.from({ length: 20 }, (_, n) => 'svc' + n);
+      const [a] = d.sanitizeDashboard([{ id: 'm365', type: 'm365', enabled: true, services: many, major: 1, source: 'bogus' }]);
+      const [b] = d.sanitizeDashboard([{ id: 'm365', type: 'm365', enabled: true,
+        services: ['  Teams  ', 'TEAMS', 42, '', null, 'x'.repeat(200)], major: true, source: 'roadmap' }]);
+      const [c] = d.sanitizeDashboard([{ id: 'm365', type: 'm365', enabled: true }]);
+      const dup = d.sanitizeDashboard([{ id: 'm365', type: 'm365' }, { id: 'm365', type: 'm365' }]);
+      return { a, b, c, dupCount: dup.length };
+    })()`);
+    check('sanitize: services are capped at 12', san.a.services.length === 12, san.a.services.length);
+    check('sanitize: a non-boolean major becomes false, an unknown source becomes null',
+      san.a.major === false && san.a.source === null, san.a);
+    check('sanitize: names are trimmed, deduped case-insensitively, and non-strings dropped',
+      san.b.services.length === 2 && san.b.services[0] === 'Teams', san.b.services);
+    check('sanitize: an over-long service name is truncated to 60 chars',
+      san.b.services[1].length === 60, san.b.services[1].length);
+    check('sanitize: a valid source and major survive', san.b.major === true && san.b.source === 'roadmap', san.b);
+    check('sanitize: a widget saved before filtering existed gets safe defaults',
+      Array.isArray(san.c.services) && san.c.services.length === 0 && san.c.major === false && san.c.source === null, san.c);
+    check('sanitize: m365 stays a singleton', san.dupCount === 1, san.dupCount);
 
     // --- nothing was persisted to /data ---------------------------------------
     // The injected layouts must never reach the server. localStorage is NOT the
