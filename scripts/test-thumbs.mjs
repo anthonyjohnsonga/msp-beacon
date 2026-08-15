@@ -9,9 +9,15 @@
 // Covers: og:image + twitter:image extraction, relative/absolute URL
 // resolution, non-image rejection, the disk + negative cache, the separate
 // short-lived backoff for a page that could not be READ (vs. one that genuinely
-// has no preview) plus stale-on-error and recovery, input validation, and the
-// client side -- previews off by default, the Settings toggle, lazy loading,
-// and the drop-the-strip-on-404 fallback.
+// has no preview) plus stale-on-error and recovery, garbage collection of
+// orphaned previews, input validation, and the client side -- previews off by
+// default, the Settings toggle, lazy loading, and the drop-the-strip-on-404
+// fallback.
+//
+// ONE part of this suite writes to /data: the GC section needs a real save to
+// run. It backs up links.json, only ever posts the user's real array (plus a
+// throwaway link or two), and restores it byte-for-byte -- read the comment
+// there before changing it, the constraint is not obvious.
 //
 // Run: node scripts/test-thumbs.mjs   (needs Chrome; env: CHROME, PORT)
 
@@ -238,6 +244,64 @@ async function main() {
       healed.status === 200 && healed.bytes === PNG.length, healed);
     check('server: a successful refetch clears the error marker',
       !fs.existsSync(path.join(THUMB_DIR, relHash + '.err')), relHash);
+
+    // --- server: orphaned previews are garbage-collected ---------------------
+    // The GC runs off POST /api/links, so this is the one part of the suite that
+    // writes to /data. It posts the REAL links array plus two throwaway links,
+    // then the real array plus one of them — NEVER a synthetic subset, because
+    // the same handler also prunes snapshots by link id and a short array would
+    // make it delete the user's whole content-search index. links.json is backed
+    // up first and restored byte-for-byte, asserted below.
+    const LINKS_FILE = path.join('/data', 'links.json');
+    const realBytes = fs.existsSync(LINKS_FILE) ? fs.readFileSync(LINKS_FILE) : null;
+    if (!realBytes) {
+      check('gc: SKIPPED — no /data/links.json on this machine', true, LINKS_FILE);
+    } else {
+      const aged = () => { const t = new Date(Date.now() - 10 * 60 * 1000); return [t, t]; };
+      const goneHash2 = hashOf('/og-absolute'); // dummy dropped by the second save
+      const keptHash = hashOf('/twitter');      // dummy still present -> must survive
+      const youngOrphan = path.join(THUMB_DIR, 'a'.repeat(40));
+      const staleTemp = path.join(THUMB_DIR, '.deadbeef-1');
+      const notOurs = path.join(THUMB_DIR, 'readme-not-a-hash');
+      try {
+        const realLinks = JSON.parse(realBytes.toString('utf8'));
+        const stamp = Date.now().toString(36);
+        const d1 = { id: 'zzgc1' + stamp, url: `${FIX}/og-absolute`, title: 'thumb GC fixture 1' };
+        const d2 = { id: 'zzgc2' + stamp, url: `${FIX}/twitter`, title: 'thumb GC fixture 2' };
+        const post = body => D.eval(`fetch('/api/links', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: ${JSON.stringify(JSON.stringify(body))} }).then(r => r.status)`);
+
+        check('gc: setup save accepted', (await post([...realLinks, d1, d2])) === 200, 'add');
+
+        // Age both fixture previews past the grace window, then plant a young
+        // orphan, an abandoned temp file, and a non-hash file alongside them.
+        fs.utimesSync(path.join(THUMB_DIR, goneHash2), ...aged());
+        fs.utimesSync(path.join(THUMB_DIR, keptHash), ...aged());
+        fs.writeFileSync(youngOrphan, 'x');
+        fs.writeFileSync(notOurs, 'x');
+        fs.writeFileSync(staleTemp, 'x');
+        const longAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+        fs.utimesSync(staleTemp, longAgo, longAgo);
+        fs.utimesSync(notOurs, ...aged());
+
+        check('gc: teardown save accepted', (await post([...realLinks, d2])) === 200, 'remove');
+        // The prune is fire-and-forget after the response — wait for it to land.
+        for (let i = 0; i < 50 && fs.existsSync(path.join(THUMB_DIR, goneHash2)); i++) await sleep(100);
+
+        check('gc: the removed link\'s preview is reclaimed',
+          !fs.existsSync(path.join(THUMB_DIR, goneHash2)), goneHash2);
+        check('gc: a preview whose link still exists is kept',
+          fs.existsSync(path.join(THUMB_DIR, keptHash)), keptHash);
+        check('gc: an orphan younger than the grace window is kept (stale-client guard)',
+          fs.existsSync(youngOrphan), youngOrphan);
+        check('gc: an abandoned temp file is reclaimed', !fs.existsSync(staleTemp), staleTemp);
+        check('gc: a file that is not a url hash is left alone', fs.existsSync(notOurs), notOurs);
+      } finally {
+        fs.writeFileSync(LINKS_FILE, realBytes);
+        for (const f of [youngOrphan, notOurs, staleTemp]) { try { fs.unlinkSync(f); } catch { /* gone */ } }
+      }
+      check('gc: links.json restored byte-for-byte', fs.readFileSync(LINKS_FILE).equals(realBytes), 'restored');
+    }
 
     // --- client: off by default ----------------------------------------------
     await D.eval(`(async () => {

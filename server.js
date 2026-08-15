@@ -59,6 +59,8 @@ const THUMB_TTL = 30 * 24 * 60 * 60 * 1000; // re-fetch cached previews after 30
 // "We couldn't read the page" is not — it may be a timeout or a blip — so it only
 // backs off for an hour, matching the Cache-Control we send with the 404.
 const THUMB_ERR_TTL = 60 * 60 * 1000;
+const THUMB_PRUNE_GRACE_MS = 5 * 60 * 1000; // never GC a preview newer than this
+const THUMB_TEMP_MAX_AGE_MS = 60 * 60 * 1000; // reclaim temp files abandoned mid-write
 const THUMB_MAX = 2 * 1024 * 1024; // 2MB cap per preview image
 const THUMB_PAGE_MAX = 300 * 1024; // only the <head> matters, so cap the HTML we scan
 const SNAPSHOT_DIR = path.join('/data', 'snapshots'); // per-link extracted page text for full-text search
@@ -390,6 +392,16 @@ app.post('/api/links', (req, res) => {
     let orphaned = false;
     for (const id of contentIndex.keys()) { if (!validIds.has(id)) { orphaned = true; break; } }
     if (orphaned) pruneSnapshots(validIds);
+
+    // Same for orphaned preview thumbnails, keyed by URL rather than id. Reading
+    // the whole thumbs dir on every save would be wasteful — most saves delete
+    // nothing — so it only runs when a URL present on the previous save is gone
+    // from this one, which covers both deletions and edited URLs.
+    const thumbKeys = thumbKeysOf(links);
+    let urlGone = false;
+    if (lastThumbKeys) for (const k of lastThumbKeys) { if (!thumbKeys.has(k)) { urlGone = true; break; } }
+    if (urlGone) pruneThumbs(thumbKeys);
+    lastThumbKeys = thumbKeys;
   }).catch(e => {
     console.error('Write failed:', e);
     if (!res.headersSent) res.status(500).json({ error: 'Failed to save links' });
@@ -817,6 +829,50 @@ function fetchThumbBuffer(pageUrl, hash) {
   })().catch(() => ({ error: true })).finally(() => thumbInflight.delete(hash));
   thumbInflight.set(hash, p);
   return p;
+}
+
+function thumbKey(url) { return crypto.createHash('sha1').update(String(url)).digest('hex'); }
+
+// Set of thumbKey()s seen on the previous save, so a save can tell whether any
+// link URL has actually gone away. Seeded from disk at boot (see the bottom of
+// this file) so the FIRST deletion after a restart is still caught.
+let lastThumbKeys = null;
+
+// Best-effort GC of orphaned previews. Unlike snapshots (keyed by link id), the
+// thumb cache is keyed by URL, so a deleted link AND an edited URL both orphan a
+// file — up to THUMB_MAX each, forever, without this. Same stale-client caution
+// as pruneSnapshots: validKeys comes from whatever array the client just saved,
+// which may be out of date, so anything newer than THUMB_PRUNE_GRACE_MS is left
+// alone and reclaimed on a later save once it ages past the window. Everything
+// here is a regenerable cache, so a wrong guess only costs one refetch.
+async function pruneThumbs(validKeys) {
+  try {
+    const files = await fsp.readdir(THUMB_DIR);
+    for (const f of files) {
+      const full = path.join(THUMB_DIR, f);
+      let st;
+      try { st = await fsp.stat(full); } catch { continue; }
+      // Temp files from a write that died mid-flight. Aged well past any
+      // plausible in-flight write before reclaiming, so we never race one.
+      if (f.startsWith('.')) {
+        if (Date.now() - st.mtimeMs > THUMB_TEMP_MAX_AGE_MS) await fsp.unlink(full).catch(() => {});
+        continue;
+      }
+      const key = f.endsWith('.none') ? f.slice(0, -5) : f.endsWith('.err') ? f.slice(0, -4) : f;
+      if (!/^[0-9a-f]{40}$/.test(key)) continue; // not something this route wrote
+      if (validKeys.has(key)) continue;
+      if (Date.now() - st.mtimeMs < THUMB_PRUNE_GRACE_MS) continue;
+      await fsp.unlink(full).catch(() => {});
+    }
+  } catch { /* dir may not exist yet */ }
+}
+
+// Every link URL currently known, including archived and trashed ones — those
+// come back, and their previews should survive with them.
+function thumbKeysOf(links) {
+  const keys = new Set();
+  for (const l of links) if (l && typeof l.url === 'string') keys.add(thumbKey(l.url));
+  return keys;
 }
 
 app.get('/api/thumb', async (req, res) => {
@@ -1538,9 +1594,15 @@ app.get('/api/content-status', (req, res) => {
 
 // Load the content index and RSS allowlist before accepting requests, so the
 // first request after a restart doesn't hit an empty allowlist (403s on valid
-// feeds) or an empty search index. Both helpers swallow their own errors, so
-// the server still starts if a load fails.
-Promise.all([loadContentIndex(), loadAllowedFeeds(), initAuth(), loadHealthCache()]).finally(() => {
+// feeds) or an empty search index. Each helper swallows its own errors, so the
+// server still starts if a load fails.
+// Seed the thumb-GC baseline from disk so the first deletion after a restart is
+// recognised as one. Swallows its own errors like the other loaders.
+async function loadThumbKeys() {
+  try { lastThumbKeys = thumbKeysOf(await readLinks()); } catch { /* first save seeds it instead */ }
+}
+
+Promise.all([loadContentIndex(), loadAllowedFeeds(), initAuth(), loadHealthCache(), loadThumbKeys()]).finally(() => {
   app.listen(PORT, () => {
     console.log(`MSP Beacon running on http://0.0.0.0:${PORT}`);
     console.log(`Data file: ${DATA_FILE}`);
