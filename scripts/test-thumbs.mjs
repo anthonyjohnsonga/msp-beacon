@@ -7,9 +7,11 @@
 // allow (same tier as /api/favicon).
 //
 // Covers: og:image + twitter:image extraction, relative/absolute URL
-// resolution, non-image rejection, the disk + negative cache, input
-// validation, and the client side -- previews off by default, the Settings
-// toggle, lazy loading, and the drop-the-strip-on-404 fallback.
+// resolution, non-image rejection, the disk + negative cache, the separate
+// short-lived backoff for a page that could not be READ (vs. one that genuinely
+// has no preview) plus stale-on-error and recovery, input validation, and the
+// client side -- previews off by default, the Settings toggle, lazy loading,
+// and the drop-the-strip-on-404 fallback.
 //
 // Run: node scripts/test-thumbs.mjs   (needs Chrome; env: CHROME, PORT)
 
@@ -50,9 +52,11 @@ const ROUTES = {
   '/not-an-image': ['text/plain', 'this is not an image'],
 };
 let fixtureHits = 0;
+let fixtureDown = false; // flipped to simulate an origin we cannot read right now
 const fixture = http.createServer((req, res) => {
   const url = req.url.split('?')[0];
   fixtureHits++;
+  if (fixtureDown) { res.writeHead(503); return res.end(); }
   if (url === '/img.png') { res.writeHead(200, { 'Content-Type': 'image/png' }); return res.end(PNG); }
   const r = ROUTES[url];
   if (!r) { res.writeHead(404); return res.end(); }
@@ -117,18 +121,24 @@ const FIXTURE_LINKS = [
 
 // thumb() returns {status, type} for a fixture path, from inside the page so the
 // request carries the session cookie.
-const thumb = (D, p) => D.eval(`fetch('/api/thumb?url=' + encodeURIComponent('${FIX}${p}'))
+// cache:'no-store' matters: /api/thumb answers with Cache-Control max-age, so
+// without it the browser would satisfy repeat calls from its own cache and the
+// server-side cache assertions below would pass without reaching the server.
+const thumb = (D, p) => D.eval(`fetch('/api/thumb?url=' + encodeURIComponent('${FIX}${p}'), { cache: 'no-store' })
   .then(r => ({ status: r.status, type: r.headers.get('content-type') }))`);
+const thumbBody = (D, p) => D.eval(`fetch('/api/thumb?url=' + encodeURIComponent('${FIX}${p}'), { cache: 'no-store' })
+  .then(async r => ({ status: r.status, type: r.headers.get('content-type'), bytes: (await r.arrayBuffer()).byteLength }))`);
+const THUMB_TTL_DAYS = 30; // mirrors THUMB_TTL in server.js
 
 async function main() {
   await new Promise(r => fixture.listen(FIXTURE_PORT, '127.0.0.1', r));
   // Clear ONLY this run's fixture entries, so the cache assertions can't pass on
   // a stale file. Never wipe the directory -- it holds the user's real previews.
   const THUMB_DIR = path.join('/data', 'thumbs');
-  const fixtureHashes = [...Object.keys(ROUTES), '/img.png'].map(p =>
+  const fixtureHashes = [...Object.keys(ROUTES), '/img.png', '/gone'].map(p =>
     crypto.createHash('sha1').update(FIX + p).digest('hex'));
   for (const h of fixtureHashes) {
-    for (const f of [h, h + '.none']) {
+    for (const f of [h, h + '.none', h + '.err']) {
       try { fs.unlinkSync(path.join(THUMB_DIR, f)); } catch { /* not cached */ }
     }
   }
@@ -188,6 +198,46 @@ async function main() {
     check('server: image cached to /data/thumbs under the url hash',
       fs.existsSync(cachedImg) && fs.readFileSync(cachedImg).equals(PNG), fs.existsSync(cachedImg));
     check('server: negative marker written for a page with no og:image', fs.existsSync(cachedNone), cachedNone);
+
+    // --- server: a failed read is NOT the same as "no preview" ---------------
+    // A page we could not READ must not be written off for the full 30-day TTL
+    // the way a page with genuinely no og:image is; it gets a short .err backoff
+    // so a timeout or a blip heals within the hour.
+    const goneHash = hashOf('/gone'); // not in ROUTES -> the fixture 404s it
+    const gone = await thumb(D, '/gone');
+    check('server: an unreadable page 404s', gone.status === 404, gone);
+    check('server: a failed read writes the short .err marker, not .none',
+      fs.existsSync(path.join(THUMB_DIR, goneHash + '.err'))
+      && !fs.existsSync(path.join(THUMB_DIR, goneHash + '.none')), goneHash);
+    const errBefore = fixtureHits;
+    await thumb(D, '/gone');
+    check('server: the .err backoff still prevents a refetch per render',
+      fixtureHits === errBefore, { errBefore, after: fixtureHits });
+
+    // --- server: stale-on-error ----------------------------------------------
+    // Age a cached preview past THUMB_TTL and take the origin down: the stale
+    // image must still be served rather than collapsing to a 404.
+    const relHash = hashOf('/og-relative');
+    const aged = new Date(Date.now() - (THUMB_TTL_DAYS + 1) * 86400e3);
+    fs.utimesSync(path.join(THUMB_DIR, relHash), aged, aged);
+    fixtureDown = true;
+    const staleServe = await thumbBody(D, '/og-relative');
+    check('server: a stale preview is served when the page cannot be re-read',
+      staleServe.status === 200 && staleServe.bytes === PNG.length, staleServe);
+    check('server: the stale serve records .err and never .none',
+      fs.existsSync(path.join(THUMB_DIR, relHash + '.err'))
+      && !fs.existsSync(path.join(THUMB_DIR, relHash + '.none')), relHash);
+
+    // Recovery — clearing the backoff with the origin healthy refreshes the
+    // preview and drops the marker. (Also restores this fixture page for the
+    // client section below, which renders it.)
+    fs.unlinkSync(path.join(THUMB_DIR, relHash + '.err'));
+    fixtureDown = false;
+    const healed = await thumbBody(D, '/og-relative');
+    check('server: the preview refreshes once the origin recovers',
+      healed.status === 200 && healed.bytes === PNG.length, healed);
+    check('server: a successful refetch clears the error marker',
+      !fs.existsSync(path.join(THUMB_DIR, relHash + '.err')), relHash);
 
     // --- client: off by default ----------------------------------------------
     await D.eval(`(async () => {

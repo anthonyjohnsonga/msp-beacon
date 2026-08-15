@@ -55,6 +55,10 @@ const WALLPAPER_FILE = path.join('/data', 'wallpaper'); // single uploaded homep
 const FAVICON_MAX = 250 * 1024; // 250KB cap per icon
 const THUMB_DIR = path.join('/data', 'thumbs'); // per-link cached og:image preview
 const THUMB_TTL = 30 * 24 * 60 * 60 * 1000; // re-fetch cached previews after 30 days, like favicons
+// "This page has no preview" is a durable fact, so it is cached for the full TTL.
+// "We couldn't read the page" is not — it may be a timeout or a blip — so it only
+// backs off for an hour, matching the Cache-Control we send with the 404.
+const THUMB_ERR_TTL = 60 * 60 * 1000;
 const THUMB_MAX = 2 * 1024 * 1024; // 2MB cap per preview image
 const THUMB_PAGE_MAX = 300 * 1024; // only the <head> matters, so cap the HTML we scan
 const SNAPSHOT_DIR = path.join('/data', 'snapshots'); // per-link extracted page text for full-text search
@@ -782,28 +786,35 @@ function metaContent(html, keys) {
   return '';
 }
 
+// Three outcomes, deliberately distinguished — see THUMB_ERR_TTL. `{url}` found,
+// `{none:true}` the page was read and genuinely has no preview, `{error:true}` we
+// never got to look. httpGetBuffer resolves null for every failure alike (timeout,
+// non-2xx, oversize, bad host), so a null there always means "learned nothing".
 async function resolveThumbUrl(pageUrl) {
   const page = await httpGetBuffer(pageUrl, 3, THUMB_PAGE_MAX, 'text/html');
-  if (!page || !/text\/html/i.test(page.contentType)) return null;
+  if (!page) return { error: true };
+  if (!/text\/html/i.test(page.contentType)) return { none: true }; // no meta tags to find, ever
   const raw = metaContent(page.buf.toString('utf8'), [
     'og:image', 'og:image:secure_url', 'og:image:url', 'twitter:image', 'twitter:image:src',
   ]);
-  if (!raw) return null;
+  if (!raw) return { none: true };
   let abs;
-  try { abs = new URL(raw, pageUrl).toString(); } catch { return null; }
-  return parseHttpUrl(abs) ? abs : null;
+  try { abs = new URL(raw, pageUrl).toString(); } catch { return { none: true }; }
+  return parseHttpUrl(abs) ? { url: abs } : { none: true };
 }
 
 const thumbInflight = new Map(); // hash -> Promise (many cards can render at once)
 function fetchThumbBuffer(pageUrl, hash) {
   if (thumbInflight.has(hash)) return thumbInflight.get(hash);
   const p = (async () => {
-    const imgUrl = await resolveThumbUrl(pageUrl);
-    if (!imgUrl) return null;
-    const img = await httpGetBuffer(imgUrl, 3, THUMB_MAX, 'image/*');
-    const type = img && sniffImageType(img.buf);
-    return type ? { buf: img.buf, type } : null;
-  })().catch(() => null).finally(() => thumbInflight.delete(hash));
+    const resolved = await resolveThumbUrl(pageUrl);
+    if (!resolved.url) return resolved; // {none} or {error}, passed straight through
+    const img = await httpGetBuffer(resolved.url, 3, THUMB_MAX, 'image/*');
+    if (!img) return { error: true }; // the page named an image we couldn't fetch
+    const type = sniffImageType(img.buf);
+    // Downloaded fine but isn't an image — that IS a definitive answer.
+    return type ? { buf: img.buf, type } : { none: true };
+  })().catch(() => ({ error: true })).finally(() => thumbInflight.delete(hash));
   thumbInflight.set(hash, p);
   return p;
 }
@@ -815,42 +826,67 @@ app.get('/api/thumb', async (req, res) => {
   const hash = crypto.createHash('sha1').update(rawUrl).digest('hex');
   const cachePath = path.join(THUMB_DIR, hash);
   const nonePath = path.join(THUMB_DIR, hash + '.none');
-  const fresh = (st) => (Date.now() - st.mtimeMs) < THUMB_TTL;
+  const errPath = path.join(THUMB_DIR, hash + '.err');
+  const fresh = (st, ttl = THUMB_TTL) => (Date.now() - st.mtimeMs) < ttl;
+  const sendImage = (buf, type, maxAge) => {
+    res.setHeader('Content-Type', type || sniffImageType(buf) || 'application/octet-stream');
+    res.setHeader('Cache-Control', `public, max-age=${maxAge}`);
+    return res.end(buf);
+  };
+  const sendNone = (maxAge) => {
+    res.setHeader('Cache-Control', `public, max-age=${maxAge}`);
+    return res.status(404).end();
+  };
 
   try {
     await fsp.mkdir(THUMB_DIR, { recursive: true });
 
+    // Read the cached image even when it has aged out: if the refetch below
+    // can't reach the page, a stale preview beats no preview (same stale-on-
+    // error stance as the RSS and M365 caches).
+    let stalePreview = null;
     try {
       const st = await fsp.stat(cachePath);
-      if (fresh(st)) {
-        const buf = await fsp.readFile(cachePath);
-        res.setHeader('Content-Type', sniffImageType(buf) || 'application/octet-stream');
-        res.setHeader('Cache-Control', 'public, max-age=86400');
-        return res.end(buf);
-      }
+      const buf = await fsp.readFile(cachePath);
+      if (fresh(st)) return sendImage(buf, null, 86400);
+      stalePreview = buf;
     } catch { /* not cached */ }
 
     // Negative cache: most pages have no og:image, and a 404 here is the normal
     // outcome — never re-fetch a whole page for them on every render.
     try {
       const st = await fsp.stat(nonePath);
-      if (fresh(st)) { res.setHeader('Cache-Control', 'public, max-age=3600'); return res.status(404).end(); }
+      if (fresh(st)) return sendNone(3600);
     } catch { /* no negative marker */ }
 
+    // Short backoff after a failed read, so an unreachable page is retried
+    // within the hour instead of being written off for THUMB_TTL — but is not
+    // re-fetched on every single card render either.
+    try {
+      const st = await fsp.stat(errPath);
+      if (fresh(st, THUMB_ERR_TTL)) {
+        return stalePreview ? sendImage(stalePreview, null, 3600) : sendNone(3600);
+      }
+    } catch { /* no error marker */ }
+
     const result = await fetchThumbBuffer(rawUrl, hash);
-    if (result) {
+    if (result.buf) {
       const tmp = path.join(THUMB_DIR, `.${hash}-${Date.now()}`);
       await fsp.writeFile(tmp, result.buf);
       await fsp.rename(tmp, cachePath);
-      try { await fsp.unlink(nonePath); } catch { /* none */ }
-      res.setHeader('Content-Type', result.type);
-      res.setHeader('Cache-Control', 'public, max-age=86400');
-      return res.end(result.buf);
+      for (const p of [nonePath, errPath]) { try { await fsp.unlink(p); } catch { /* none */ } }
+      return sendImage(result.buf, result.type, 86400);
     }
 
+    if (result.error) {
+      try { await fsp.writeFile(errPath, ''); } catch { /* ignore */ }
+      return stalePreview ? sendImage(stalePreview, null, 3600) : sendNone(3600);
+    }
+
+    // Definitive: the page was read and has no usable preview.
     try { await fsp.writeFile(nonePath, ''); } catch { /* ignore */ }
-    res.setHeader('Cache-Control', 'public, max-age=3600');
-    return res.status(404).end();
+    try { await fsp.unlink(errPath); } catch { /* none */ }
+    return sendNone(3600);
   } catch (e) {
     console.error('GET /api/thumb error:', e);
     return res.status(404).end();
